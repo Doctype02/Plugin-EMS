@@ -1,0 +1,372 @@
+[
+  {
+    "id": "ems_tab",
+    "type": "tab",
+    "label": "EMS Edificio (Proyecto 2)",
+    "disabled": false,
+    "info": "Reglas EMS: ocupación + histéresis + luz natural + limitador de demanda.\nFuente: nodered/src/*.js — regenerar con `python nodered/build_flows.py`.\nContrato de tópicos: docs/CONTRATO.md"
+  },
+  {
+    "id": "ems_broker",
+    "type": "mqtt-broker",
+    "name": "Mosquitto",
+    "broker": "${MQTT_HOST}",
+    "port": "${MQTT_PORT}",
+    "clientid": "nodered-ems",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "30",
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "ems/edificio1/nodered/estado",
+    "birthQos": "0",
+    "birthRetain": "true",
+    "birthPayload": "{\"en_linea\":true}",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "ems/edificio1/nodered/estado",
+    "willQos": "0",
+    "willRetain": "true",
+    "willPayload": "{\"en_linea\":false}",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
+  },
+  {
+    "id": "c_info",
+    "type": "comment",
+    "z": "ems_tab",
+    "name": "Telemetría de zonas → contexto",
+    "info": "",
+    "x": 170,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "in_zona",
+    "type": "mqtt in",
+    "z": "ems_tab",
+    "name": "telemetría zonas",
+    "topic": "ems/+/zona/+/telemetria",
+    "qos": "0",
+    "datatype": "json",
+    "broker": "ems_broker",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 150,
+    "y": 80,
+    "wires": [
+      [
+        "fn_zona"
+      ]
+    ]
+  },
+  {
+    "id": "fn_zona",
+    "type": "function",
+    "z": "ems_tab",
+    "name": "Guardar telemetría de zona",
+    "func": "// Nodo función \"Guardar telemetría de zona\" — entrada: ems/<edif>/zona/<Z>/telemetria\n// Guarda el último valor por zona en el contexto del flujo para que la lógica EMS lo use.\nconst z = msg.payload;\nif (!z || !z.zona) { return null; }\nconst zonas = flow.get(\"zonas\") || {};\nz._recibido = Date.now();\nzonas[z.zona] = z;\nflow.set(\"zonas\", zonas);\nreturn null;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 410,
+    "y": 80,
+    "wires": []
+  },
+  {
+    "id": "c_ems",
+    "type": "comment",
+    "z": "ems_tab",
+    "name": "Cada lectura del medidor = 1 paso EMS",
+    "info": "",
+    "x": 190,
+    "y": 160,
+    "wires": []
+  },
+  {
+    "id": "in_med",
+    "type": "mqtt in",
+    "z": "ems_tab",
+    "name": "medidor general",
+    "topic": "ems/+/medidor/general",
+    "qos": "0",
+    "datatype": "json",
+    "broker": "ems_broker",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 150,
+    "y": 200,
+    "wires": [
+      [
+        "fn_ems"
+      ]
+    ]
+  },
+  {
+    "id": "fn_ems",
+    "type": "function",
+    "z": "ems_tab",
+    "name": "EMS: reglas + respuesta a la demanda",
+    "func": "// Nodo función \"EMS: reglas + respuesta a la demanda\" — entrada: ems/<edif>/medidor/general\n// Misma lógica que ems/control.py (clase ReglasDR). Se ejecuta una vez por paso de simulación.\n// Salida 1: comandos por zona (ems/<edif>/zona/<Z>/cmd)\n// Salida 2: estado del EMS (ems/<edif>/ems/estado)\n// Salida 3: alarmas (ems/<edif>/alarma)\n\nconst P = Object.assign({\n    edificio: env.get(\"EMS_EDIFICIO\") || \"edificio1\",\n    banda: 0.5, sp_ocupado: 24.0, sp_desocupado: 27.0, sp_noche: 29.0,\n    precool_min: 60, entrada: 7.5, salida: 17.5,\n    lux_objetivo: 500, lux_artificial: 500,\n    luces_desocupado: 0.0, equipos_desocupado: 0.10, retardo_vacancia_min: 15,\n    limite_kw: 145, dr_hist_kw: 10, dr_luces: 0.70, dr_equipos: 0.85, dr_margen_confort: 0.75,\n    confort_max: 26.0, confort_min: 21.0, alarma_servidor: 27.0, fan_frac: 0.08\n}, flow.get(\"parametros\") || {});\n\n// capacidad térmica (kW) y COP nominal por zona (config/edificio.yaml)\nconst HVAC = {\n    Z01: [24, 3.0], Z02: [30, 3.0], Z03: [30, 3.0], Z04: [30, 3.0], Z05: [30, 3.0],\n    Z06: [18, 3.0], Z07: [26, 3.0], Z08: [24, 3.0], Z09: [30, 2.8], Z10: [10, 3.0]\n};\n\nconst tInicio = Date.now();\nconst med = msg.payload;\nconst zonas = flow.get(\"zonas\") || {};\nconst st = flow.get(\"st\") || { ultimoOcup: {}, hist: {}, cont: {}, activas: {}, drEtapa: 0, drCont: 0, cmdId: 0 };\nconst base = \"ems/\" + P.edificio;\n\n// ---------------------------------------------------------------- tiempo local (Panamá, UTC-5)\nconst d = new Date(med.ts);\nconst loc = new Date(d.getTime() - 5 * 3600 * 1000);\nconst h = loc.getUTCHours() + loc.getUTCMinutes() / 60;\nconst dow = loc.getUTCDay();                // 0 = domingo\nconst laborable = dow >= 1 && dow <= 5;\nconst horarioLaboral = laborable && h >= P.entrada - 0.5 && h < P.salida + 0.5;\nconst precool = laborable && h >= P.entrada - P.precool_min / 60 && h < P.entrada;\n\nconst alarmas = [];\nfunction cond(clave, activa, pasos) {\n    st.cont[clave] = activa ? (st.cont[clave] || 0) + 1 : 0;\n    if (st.cont[clave] >= (pasos || 1) && !st.activas[clave]) { st.activas[clave] = true; return true; }\n    if (!activa) { delete st.activas[clave]; }\n    return false;\n}\nfunction alarma(nivel, codigo, zona, mensaje, valor) {\n    alarmas.push({ ts: med.ts, nivel, codigo, zona, mensaje, valor: valor === undefined ? null : valor, origen: \"nodered\" });\n}\n\n// ---------------------------------------------------------------- validación de sensores + alarmas\nconst invalidos = {};\nfor (const zid of Object.keys(zonas)) {\n    const z = zonas[zid];\n    const hs = st.hist[zid] = (st.hist[zid] || []).concat([z.temp_c]).slice(-6);\n    let motivo = null;\n    if (typeof z.temp_c !== \"number\" || !isFinite(z.temp_c) || z.temp_c < 5 || z.temp_c > 50) motivo = \"SENSOR_FUERA_RANGO\";\n    else if (hs.length === 6 && Math.max(...hs) - Math.min(...hs) < 0.005) motivo = \"SENSOR_CONGELADO\";\n    else if (hs.length >= 4) {\n        let saltos = 0;\n        for (let i = 1; i < hs.length; i++) if (Math.abs(hs[i] - hs[i - 1]) > 1.2) saltos++;\n        if (saltos >= 3) motivo = \"SENSOR_FUERA_RANGO\";\n    }\n    if (motivo) invalidos[zid] = true;\n    if (cond(zid + \":SENSOR\", !!motivo)) alarma(\"crit\", motivo, zid, `Sensor no confiable (${z.temp_c}) → modo seguro`, z.temp_c);\n    if (motivo) continue;\n    if (cond(zid + \":TEMP_ALTA\", z.ocupado && z.temp_c > P.confort_max, 3))\n        alarma(\"warn\", \"TEMP_ALTA\", zid, `${z.temp_c.toFixed(1)} °C > ${P.confort_max} °C con ocupación`, z.temp_c);\n    if (cond(zid + \":TEMP_BAJA\", z.ocupado && z.temp_c < P.confort_min, 3))\n        alarma(\"info\", \"TEMP_BAJA\", zid, `${z.temp_c.toFixed(1)} °C < ${P.confort_min} °C con ocupación`, z.temp_c);\n    if (z.tipo === \"servidores\" && cond(zid + \":SRV\", z.temp_c > P.alarma_servidor, 2))\n        alarma(\"crit\", \"SERVIDOR_TEMP\", zid, `Cuarto de servidores a ${z.temp_c.toFixed(1)} °C`, z.temp_c);\n    if (!z.critica && cond(zid + \":HVAC_SIN_OCUP\", z.hvac_on && !z.ocupado, 12))\n        alarma(\"info\", \"HVAC_ON_SIN_OCUPACION\", zid, \"HVAC encendido > 60 min sin ocupación\");\n}\nif (cond(\"EDIF:PICO\", med.demanda_15min_kw > P.limite_kw))\n    alarma(\"warn\", \"PICO_DEMANDA\", \"EDIF\", `Demanda 15 min ${med.demanda_15min_kw.toFixed(1)} kW > ${P.limite_kw} kW`, med.demanda_15min_kw);\n\n// ---------------------------------------------------------------- reglas por zona\nconst cmds = {};\nconst tMs = d.getTime();\nfor (const zid of Object.keys(zonas)) {\n    const z = zonas[zid];\n    if (z.critica) continue;\n    if (z.ocupado) st.ultimoOcup[zid] = tMs;\n    const ocup = z.ocupado || (st.ultimoOcup[zid] !== undefined && tMs - st.ultimoOcup[zid] <= P.retardo_vacancia_min * 60000);\n    let sp, en;\n    if (ocup || precool) { sp = P.sp_ocupado; en = true; }\n    else if (horarioLaboral) { sp = P.sp_desocupado; en = true; }\n    else { sp = P.sp_noche; en = z.temp_c > P.sp_noche + P.banda; }\n    let luces, equipos;\n    if (ocup) {\n        const luxDia = Math.max(z.lux - P.lux_artificial * z.luces_nivel, 0);\n        luces = Math.min(Math.max((P.lux_objetivo - luxDia) / P.lux_artificial, 0.1), 1.0);\n        luces = Math.round(Math.round(luces / 0.05) * 0.05 * 100) / 100;\n        equipos = 1.0;\n    } else { luces = P.luces_desocupado; equipos = P.equipos_desocupado; }\n    cmds[zid] = { hvac_enable: en, setpoint_c: sp, ventilacion: \"dcv\", luces_nivel: luces, equipos_nivel: equipos, hvac_mod: null };\n}\n\n// ---------------------------------------------------------------- limitador de demanda (rotación de compresores)\nlet pCompActual = 0;\nconst sol = [];\nfor (const zid of Object.keys(cmds)) {\n    const z = zonas[zid], c = cmds[zid];\n    if (invalidos[zid]) continue;\n    const [cap, copN] = HVAC[zid] || [20, 3.0];\n    const cop = Math.max(copN * (1 - 0.015 * (med.t_ext_c - 30)), 1);\n    const fan = z.hvac_enable && (z.ocupado || z.hvac_on) ? P.fan_frac * cap * 0.6 : 0;\n    if (z.hvac_on) pCompActual += Math.max(z.p_hvac_kw - fan, 0);\n    if (!c.hvac_enable) continue;\n    const pide = z.temp_c > c.setpoint_c + P.banda || (z.hvac_on && z.temp_c > c.setpoint_c - P.banda);\n    if (pide) sol.push({ zid, urg: z.temp_c - c.setpoint_c, kw: cap / cop, emerg: z.temp_c > P.confort_max - P.dr_margen_confort });\n}\nlet presupuesto = P.limite_kw - 3 - (med.p_total_kw - pCompActual);\nlet forzadas = 0;\nsol.sort((a, b) => (a.emerg === b.emerg ? b.urg - a.urg : (a.emerg ? -1 : 1)));\nfor (const s of sol) {\n    if (s.emerg || s.kw <= presupuesto) { presupuesto -= s.kw; continue; }\n    cmds[s.zid].hvac_mod = 0.0;\n    forzadas++;\n}\nconst dem = med.demanda_15min_kw;\nif (dem > P.limite_kw) { st.drEtapa = 2; st.drCont = 0; }\nelse if (st.drEtapa === 2 && dem < P.limite_kw - P.dr_hist_kw) { st.drCont++; if (st.drCont >= 3) { st.drEtapa = 0; st.drCont = 0; } }\nif (st.drEtapa < 2) st.drEtapa = forzadas ? 1 : 0;\nif (st.drEtapa >= 2) {\n    for (const zid of Object.keys(cmds)) {\n        cmds[zid].luces_nivel = Math.round(cmds[zid].luces_nivel * P.dr_luces * 1000) / 1000;\n        cmds[zid].equipos_nivel = Math.min(cmds[zid].equipos_nivel, P.dr_equipos);\n    }\n}\nconst drActivo = st.drEtapa > 0;\nif (cond(\"EDIF:DR\", drActivo)) alarma(\"info\", \"DR_ACTIVO\", \"EDIF\", \"Respuesta a la demanda activada\");\n\n// ---------------------------------------------------------------- modo seguro\nfor (const zid of Object.keys(invalidos)) {\n    const crit = zonas[zid] && zonas[zid].critica;\n    cmds[zid] = Object.assign(cmds[zid] || {}, { hvac_enable: true, hvac_mod: crit ? 1.0 : 0.55, setpoint_c: P.sp_ocupado });\n}\nfor (const zid of Object.keys(zonas)) {\n    if (zonas[zid].critica && !invalidos[zid]) cmds[zid] = { hvac_mod: null };\n}\n\n// ---------------------------------------------------------------- salidas\nconst ahora = Date.now();\nconst salidaCmd = Object.keys(cmds).map(zid => ({\n    topic: `${base}/zona/${zid}/cmd`,\n    payload: Object.assign({ cmd_id: ++st.cmdId, wall_ms: ahora }, cmds[zid])\n}));\nconst estado = {\n    topic: `${base}/ems/estado`,\n    payload: {\n        ts: med.ts, origen: \"nodered\", modo: \"reglas_dr\", dr_activo: drActivo, dr_etapa: st.drEtapa,\n        limite_kw: P.limite_kw, n_alarmas: Object.keys(st.activas).length,\n        modo_seguro: Object.keys(invalidos), latencia_ms: Date.now() - tInicio, zonas_forzadas: forzadas\n    }\n};\nflow.set(\"st\", st);\nconst salidaAl = alarmas.map(a => ({ topic: `${base}/alarma`, payload: a }));\nreturn [salidaCmd, estado, salidaAl];\n",
+    "outputs": 3,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 440,
+    "y": 200,
+    "wires": [
+      [
+        "out_cmd"
+      ],
+      [
+        "out_estado",
+        "dbg_estado"
+      ],
+      [
+        "out_alarma",
+        "dbg_alarma"
+      ]
+    ]
+  },
+  {
+    "id": "out_cmd",
+    "type": "mqtt out",
+    "z": "ems_tab",
+    "name": "comandos zonas",
+    "topic": "",
+    "qos": "0",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "ems_broker",
+    "x": 760,
+    "y": 160,
+    "wires": []
+  },
+  {
+    "id": "out_estado",
+    "type": "mqtt out",
+    "z": "ems_tab",
+    "name": "estado EMS",
+    "topic": "",
+    "qos": "0",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "ems_broker",
+    "x": 750,
+    "y": 200,
+    "wires": []
+  },
+  {
+    "id": "out_alarma",
+    "type": "mqtt out",
+    "z": "ems_tab",
+    "name": "alarmas",
+    "topic": "",
+    "qos": "0",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "ems_broker",
+    "x": 740,
+    "y": 260,
+    "wires": []
+  },
+  {
+    "id": "dbg_estado",
+    "type": "debug",
+    "z": "ems_tab",
+    "name": "estado",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload.dr_etapa",
+    "targetType": "msg",
+    "statusVal": "payload.dr_etapa",
+    "statusType": "auto",
+    "x": 740,
+    "y": 300,
+    "wires": []
+  },
+  {
+    "id": "dbg_alarma",
+    "type": "debug",
+    "z": "ems_tab",
+    "name": "alarmas",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 740,
+    "y": 340,
+    "wires": []
+  },
+  {
+    "id": "c_par",
+    "type": "comment",
+    "z": "ems_tab",
+    "name": "Parámetros en vivo (demo / sensibilidad)",
+    "info": "",
+    "x": 200,
+    "y": 400,
+    "wires": []
+  },
+  {
+    "id": "in_par",
+    "type": "mqtt in",
+    "z": "ems_tab",
+    "name": "parámetros",
+    "topic": "ems/+/ems/parametros",
+    "qos": "0",
+    "datatype": "json",
+    "broker": "ems_broker",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 140,
+    "y": 440,
+    "wires": [
+      [
+        "fn_par"
+      ]
+    ]
+  },
+  {
+    "id": "inj_lim135",
+    "type": "inject",
+    "z": "ems_tab",
+    "name": "límite 135 kW",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{\"limite_kw\":135}",
+    "payloadType": "json",
+    "x": 140,
+    "y": 480,
+    "wires": [
+      [
+        "fn_par"
+      ]
+    ]
+  },
+  {
+    "id": "inj_lim145",
+    "type": "inject",
+    "z": "ems_tab",
+    "name": "límite 145 kW (defecto)",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": 0.5,
+    "topic": "",
+    "payload": "{\"limite_kw\":145}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 520,
+    "wires": [
+      [
+        "fn_par"
+      ]
+    ]
+  },
+  {
+    "id": "inj_sp25",
+    "type": "inject",
+    "z": "ems_tab",
+    "name": "setpoint ocupado 25 °C",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{\"sp_ocupado\":25}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 560,
+    "wires": [
+      [
+        "fn_par"
+      ]
+    ]
+  },
+  {
+    "id": "fn_par",
+    "type": "function",
+    "z": "ems_tab",
+    "name": "Cambiar parámetros EMS",
+    "func": "// Nodo función \"Cambiar parámetros EMS\" — entrada: inject o ems/<edif>/ems/parametros\n// payload ej.: {\"limite_kw\": 135, \"sp_ocupado\": 24.5}. Permite variar parámetros en vivo (demo).\nconst actual = flow.get(\"parametros\") || {};\nconst nuevos = Object.assign({}, actual, msg.payload || {});\nflow.set(\"parametros\", nuevos);\nnode.status({ fill: \"green\", shape: \"dot\", text: JSON.stringify(nuevos).slice(0, 60) });\nmsg.payload = nuevos;\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 450,
+    "y": 480,
+    "wires": [
+      [
+        "dbg_par"
+      ]
+    ]
+  },
+  {
+    "id": "dbg_par",
+    "type": "debug",
+    "z": "ems_tab",
+    "name": "parámetros",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 690,
+    "y": 480,
+    "wires": []
+  }
+]
