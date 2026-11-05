@@ -1,0 +1,11 @@
+zona,nombre,tipo,critica,e_hvac_kwh,e_luces_kwh,e_equipos_kwh,e_total_kwh,area_m2,eui_kwh_m2_anio,participacion_pct,clasificacion,p_max_kw
+Z01,Lobby,lobby,False,660.847,150.15,58.26,869.252,220,206.024,5.151,no crítica (gestionable),12.676
+Z02,Oficinas P1 Norte,oficina,False,894.959,227.5,361.98,1484.44,300,258.01,8.797,no crítica (gestionable),19.202
+Z03,Oficinas P1 Sur,oficina,False,903.275,227.5,361.98,1492.756,300,259.455,8.847,no crítica (gestionable),19.193
+Z04,Oficinas P2 Norte,oficina,False,898.998,227.5,361.632,1488.129,300,258.651,8.819,no crítica (gestionable),19.218
+Z05,Oficinas P2 Sur,oficina,False,903.282,227.5,362.123,1492.903,300,259.481,8.847,no crítica (gestionable),19.182
+Z06,Sala de conferencias,conferencia,False,475.567,87.23,58.639,621.437,120,270.029,3.683,no crítica (gestionable),9.601
+Z07,Laboratorio,laboratorio,False,695.121,160.2,426.685,1282.004,180,371.374,7.598,no crítica (gestionable),17.595
+Z08,Cafeteria,cafeteria,False,706.442,108.96,410.116,1225.51,160,399.385,7.263,no crítica (gestionable),16.314
+Z09,Cuarto de servidores,servidores,True,1783.809,80.64,3024.0,4888.451,60,4248.297,28.971,crítica,30.846
+Z10,Seguridad UPS emergencia,soporte,True,454.357,80.64,470.4,1005.397,80,655.303,5.958,crítica,7.173

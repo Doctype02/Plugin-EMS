@@ -1,0 +1,14 @@
+# Mapa zonas EMS ⇄ objetos del IDF de EnergyPlus (modelo de 10 zonas del edificio).
+# Ajuste los nombres a los de su IDF. var_enfriamiento: variable de carga de enfriamiento por zona.
+anio: 2026
+zonas:
+  Z01: {zona_ep: Z01, luces: Z01 Lights, equipos: Z01 ElecEq, personas: Z01 People}  # Lobby
+  Z02: {zona_ep: Z02, luces: Z02 Lights, equipos: Z02 ElecEq, personas: Z02 People}  # Oficinas P1 Norte
+  Z03: {zona_ep: Z03, luces: Z03 Lights, equipos: Z03 ElecEq, personas: Z03 People}  # Oficinas P1 Sur
+  Z04: {zona_ep: Z04, luces: Z04 Lights, equipos: Z04 ElecEq, personas: Z04 People}  # Oficinas P2 Norte
+  Z05: {zona_ep: Z05, luces: Z05 Lights, equipos: Z05 ElecEq, personas: Z05 People}  # Oficinas P2 Sur
+  Z06: {zona_ep: Z06, luces: Z06 Lights, equipos: Z06 ElecEq, personas: Z06 People}  # Sala de conferencias
+  Z07: {zona_ep: Z07, luces: Z07 Lights, equipos: Z07 ElecEq, personas: Z07 People}  # Laboratorio
+  Z08: {zona_ep: Z08, luces: Z08 Lights, equipos: Z08 ElecEq, personas: Z08 People}  # Cafeteria
+  Z09: {zona_ep: Z09, luces: Z09 Lights, equipos: Z09 ElecEq, personas: Z09 People}  # Cuarto de servidores
+  Z10: {zona_ep: Z10, luces: Z10 Lights, equipos: Z10 ElecEq, personas: Z10 People}  # Seguridad UPS emergencia

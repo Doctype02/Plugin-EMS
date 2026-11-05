@@ -183,7 +183,7 @@ def sensibilidad(cfg: dict, controlador: str = "reglas_dr", dias: float = 7) -> 
     tecnicos = [
         ("ems.setpoint_ocupado_c", [23.0, 25.0]),
         ("ems.limite_demanda_kw", [135, 160]),
-        ("ems.equipos_desocupado_ems", [0.0, 0.3]),
+        ("ems.equipos_desocupado_ems", [0.2, 0.4]),
         ("clima.t_max_c", [29.5, 33.5]),
     ]
     for clave, valores in tecnicos:

@@ -1,0 +1,12 @@
+{
+  "area_m2": 2020.0,
+  "energia_semana_kwh": 16873.812416666668,
+  "energia_anual_mwh": 879.8487902976192,
+  "eui_kwh_m2_anio": 435.56870806812833,
+  "demanda_max_15min_kw": 178.149,
+  "factor_carga": 0.5637941252716314,
+  "fp_medio": 0.906980753968254,
+  "costo_anual_usd": 225593.94058720238,
+  "co2_anual_t": 272.7531249922619,
+  "confort_pct": 96.88785548202469
+}

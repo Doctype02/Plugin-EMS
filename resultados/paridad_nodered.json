@@ -1,0 +1,8 @@
+{
+  "pasos": 2016,
+  "pasos_distintos": 0,
+  "max_dif_kw": 0.0,
+  "alarmas_python": 85,
+  "alarmas_nodered": 85,
+  "latencia_media_nodered_ms": 1.0831499667498294
+}

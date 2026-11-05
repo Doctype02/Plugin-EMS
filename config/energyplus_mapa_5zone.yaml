@@ -1,0 +1,9 @@
+# Mapa de prueba sobre el ejemplo 5ZoneAirCooled.idf que trae EnergyPlus (ExampleFiles).
+# Sirve para verificar el puente sin tener aún el IDF de 10 zonas.
+anio: 2026
+zonas:
+  Z02: {zona_ep: SPACE1-1, luces: SPACE1-1 Lights 1, equipos: SPACE1-1 ElecEq 1, personas: SPACE1-1 People 1}
+  Z03: {zona_ep: SPACE2-1, luces: SPACE2-1 Lights 1, equipos: SPACE2-1 ElecEq 1, personas: SPACE2-1 People 1}
+  Z04: {zona_ep: SPACE3-1, luces: SPACE3-1 Lights 1, equipos: SPACE3-1 ElecEq 1, personas: SPACE3-1 People 1}
+  Z05: {zona_ep: SPACE4-1, luces: SPACE4-1 Lights 1, equipos: SPACE4-1 ElecEq 1, personas: SPACE4-1 People 1}
+  Z06: {zona_ep: SPACE5-1, luces: SPACE5-1 Lights 1, equipos: SPACE5-1 ElecEq 1, personas: SPACE5-1 People 1}
