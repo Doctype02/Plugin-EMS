@@ -9,7 +9,7 @@ Este archivo es la fuente de verdad. Cambios aquí primero, luego en el código 
 | Mosquitto | `mosquitto` | 1883 | anónimo permitido en red interna (demo) |
 | Node-RED | `nodered` | 1880 | monta `nodered/flows.json` del repo en `/data/flows.json` |
 | InfluxDB 2.x | `influxdb` | 8086 | org `utp`, bucket `ems`, retención ≥ 30 d |
-| Grafana | `grafana` | 3000 | datasource InfluxDB **Flux**, uid `ems-influx` |
+| Grafana | `grafana` | 3000 | datasource InfluxDB **Flux**, uid `ems-influx`; plugin `doctype02-ems-panel` (sin firmar) montado desde `grafana-ems-panel/dist` |
 | Simulador | `simulador` | — | `docker build .` en la raíz del repo |
 
 Variables que lee el simulador (todas opcionales; sin `INFLUX_URL` no escribe a la BD):

@@ -33,6 +33,13 @@ ocupac.├─► gemelo digital ──MQTT┤
 | `ems/live.py` | Modo en vivo por MQTT (+ InfluxDB) |
 | `ems/energyplus_bridge.py` | Puente Python–EnergyPlus (pyenergyplus) con el mismo controlador |
 | `nodered/src/*.js` → `flows.json` | Las mismas reglas en Node-RED; `ems/nodered.py` verifica paridad exacta con Python |
+| `grafana-ems-panel/` | Panel de Grafana propio: edificio inteligente en 3D isométrico (3 niveles, 10 zonas, azotea), 6 vistas, alarmas, medidor y detalle por zona; modo demostración o datos de InfluxDB |
+
+## Panel 3D de Grafana
+
+![Panel EMS 3D](grafana-ems-panel/docs/vista_estado_oscuro.png)
+
+Ver [`grafana-ems-panel/README.md`](grafana-ems-panel/README.md) (compilar con `npm ci && npm run build`).
 
 ## Uso rápido
 

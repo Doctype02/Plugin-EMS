@@ -44,6 +44,7 @@ Dos modos de operación:
 | — | Pronóstico día siguiente (regresión + SARIMA) con MAE / RMSE / MAPE | Pronóstico validado |
 | 6 | Escenarios, perfiles anómalos, KPIs, ROI, sensibilidad, escalamiento Panamá | Evaluación energía y confort |
 | — | Escritor a InfluxDB según el contrato; `Dockerfile` del simulador | Datos en la BD |
+| 5 | Panel de Grafana propio `grafana-ems-panel/`: edificio inteligente en 3D (10 zonas, 6 vistas, alarmas, medidor) | Dashboard 3D |
 
 ### Agente de infraestructura (carpeta `infra/`)
 
@@ -74,7 +75,7 @@ Dos modos de operación:
 | Pronóstico día siguiente + MAE/RMSE | `ems pronostico` → `resultados/pronostico_*.csv` |
 | Control on/off con histéresis, ocupación, MPC simplificado | `ems/control.py`, `nodered/flows.json` |
 | Modelo digital de sensores, ocupación, actuadores y cargas | `ems/edificio.py`, `ems/ocupacion.py`, `ems/energyplus_bridge.py` |
-| Dashboard con variables eléctricas, estado de cargas, alarmas, resultados | Grafana (infra) sobre el esquema del contrato |
+| Dashboard con variables eléctricas, estado de cargas, alarmas, resultados | Panel 3D `grafana-ems-panel/` (código) + dashboards de Grafana (infra) sobre el esquema del contrato |
 | Ahorro %, reducción de demanda máxima, ROI, sensibilidad | `ems escenarios`, `ems sensibilidad` |
 | Pruebas con perfiles normales y anómalos | `ems pruebas` (ola de calor, ocupación fuera de horario, sensor congelado/ruidoso, pérdida de comandos, pico de carga) |
 | Reducción %, kW pico evitado, kWh ahorrados | `resultados/kpi_escenarios.csv` |

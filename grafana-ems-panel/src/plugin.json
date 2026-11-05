@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
+  "type": "panel",
+  "name": "EMS Edificio",
+  "id": "doctype02-ems-panel",
+  "info": {
+    "keywords": ["panel", "ems", "energy", "smart building", "3d"],
+    "description": "Edificio inteligente en 3D con el estado de las 10 zonas, cargas, alarmas y resultados del EMS",
+    "author": {
+      "name": "Doctype02"
+    },
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "links": [],
+    "screenshots": [],
+    "version": "%VERSION%",
+    "updated": "%TODAY%"
+  },
+  "dependencies": {
+    "grafanaDependency": ">=13.2.0",
+    "plugins": []
+  }
+}

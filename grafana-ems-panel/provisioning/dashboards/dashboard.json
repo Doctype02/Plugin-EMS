@@ -1,0 +1,64 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 1,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "gridPos": {
+        "h": 24,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "demoMode": true,
+        "demoSpeed": 60,
+        "refreshSeconds": 2,
+        "limitKw": 145,
+        "defaultView": "status",
+        "azimuth": 0,
+        "exploded": true,
+        "showSummary": true,
+        "showSidebar": true
+      },
+      "title": "Edificio inteligente - EMS",
+      "type": "doctype02-ems-panel"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": ["ems"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "EMS - Edificio inteligente",
+  "uid": "ems-edificio-3d",
+  "version": 1,
+  "weekStart": ""
+}

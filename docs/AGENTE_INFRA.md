@@ -14,11 +14,12 @@ Copia este documento completo como instrucción para la sesión de infraestructu
    - `mosquitto` (eclipse-mosquitto:2): puerto 1883, `allow_anonymous true` en `infra/mosquitto/mosquitto.conf`, volumen para datos.
    - `nodered` (nodered/node-red:4.x): puerto 1880, monta `../nodered/flows.json` → `/data/flows.json`, env `MQTT_HOST=mosquitto`, `MQTT_PORT=1883`, `EMS_EDIFICIO=edificio1`. No hace falta instalar nodos extra (el flujo sólo usa nodos del núcleo).
    - `influxdb` (influxdb:2.7): puerto 8086, inicialización automática con `DOCKER_INFLUXDB_INIT_*` (org `utp`, bucket `ems`, retención 30 d, token admin desde `.env`).
-   - `grafana` (grafana/grafana:11.x): puerto 3000, aprovisionamiento en `infra/grafana/provisioning/` (datasource + dashboards).
+   - `grafana` (grafana/grafana:13.2.x, el plugin pide ≥ 13.2): puerto 3000, aprovisionamiento en `infra/grafana/provisioning/` (datasource + dashboards). Debe cargar el **panel 3D del edificio** `grafana-ems-panel/` (plugin propio, sin firmar): compílalo con `npm ci && npm run build` dentro de `grafana-ems-panel/` (o en una etapa de build con node:22), monta `grafana-ems-panel/dist` en `/var/lib/grafana/plugins/doctype02-ems-panel` y define `GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=doctype02-ems-panel`.
    - `simulador`: `build: ..` (Dockerfile raíz), env `MQTT_HOST`, `INFLUX_URL=http://influxdb:8086`, `INFLUX_TOKEN`, `INFLUX_ORG`, `INFLUX_BUCKET`, `EMS_CONTROL=externo`, `EMS_VELOCIDAD=300`, `EMS_DIAS=0`. `depends_on` mosquitto, influxdb (healthy) y nodered.
    - Healthchecks y `restart: unless-stopped`.
 2. **Datasource Grafana** InfluxDB en modo **Flux**, `uid: ems-influx`, org `utp`, bucket por defecto `ems`, token desde variable de entorno.
 3. **Dashboards** (JSON aprovisionados, carpeta "EMS Edificio"), con variable `escenario` (consulta `schema.tagValues(bucket: "ems", tag: "escenario")`, por defecto `live`):
+   - **EMS · Edificio 3D** (portada): un panel `doctype02-ems-panel` a pantalla completa con *Datos de demostración* apagado y las 4 consultas Flux de [`grafana-ems-panel/README.md`](../grafana-ems-panel/README.md#modo-en-vivo-influxdb). Es la vista principal para la demo: edificio en 3D, alarmas, medidor y detalle por zona. **No usar el plano del MMROOM del BMS**; del BMS sólo se toma el estilo.
    - **EMS · Tiempo real**: potencia total / crítica / no crítica (series), demanda 15 min vs `limite_kw` (umbral), tensión, corriente, FP, kVA, energía acumulada, temperatura exterior y precio; estado de cargas por zona (state timeline de `hvac_on`, `luces_nivel`, `equipos_nivel`); tabla de las 10 zonas (temp, setpoint, ocupantes, kW); indicador DR activo y modo seguro.
    - **EMS · Zonas**: temperatura de las 10 zonas con banda de confort 21–26 °C, ocupación, lux, potencia por uso; repetir panel por `zona`.
    - **EMS · Alarmas**: tabla de `alarma` (ts, nivel, código, zona, mensaje) con colores por nivel; conteo por código; disponibilidad (`sim/estado` no está en Influx → usar `count` de `medidor` por minuto como pulso del sistema).
@@ -40,4 +41,4 @@ En Grafana (http://localhost:3000) deben verse las 10 zonas en vivo, DR activán
 
 ## No tocar
 
-`ems/`, `nodered/`, `config/`, `tests/`, `Dockerfile` (son del agente de código). Si necesitas un cambio de tópico, campo o medida, primero actualiza `docs/CONTRATO.md` y avisa.
+`ems/`, `nodered/`, `config/`, `tests/`, `grafana-ems-panel/`, `Dockerfile` (son del agente de código). Si necesitas un cambio de tópico, campo o medida, primero actualiza `docs/CONTRATO.md` y avisa.
