@@ -9,6 +9,7 @@ import json
 import os
 import queue
 import signal
+import threading
 import time
 
 import pandas as pd
@@ -27,6 +28,16 @@ def _hoy(tz: str) -> str:
     return pd.Timestamp.now(tz=tz).normalize().strftime("%Y-%m-%d %H:%M")
 
 
+def resolver_inicio(valor: str | None, tz: str, paso_min: int = 5) -> str:
+    """`ahora` = hora actual redondeada al paso (tiempo simulado = reloj real con velocidad 1);
+    vacío = hoy 00:00; cualquier otro valor se interpreta como fecha ISO."""
+    if not valor:
+        return _hoy(tz)
+    if valor.strip().lower() == "ahora":
+        return pd.Timestamp.now(tz=tz).floor(f"{paso_min}min").strftime("%Y-%m-%d %H:%M")
+    return valor
+
+
 class Puente:
     def __init__(self, cfg: dict, control: str | None = None, velocidad: float | None = None,
                  inicio: str | None = None, dias: float | None = None, host: str | None = None,
@@ -37,7 +48,7 @@ class Puente:
         self.tz = cfg["edificio"]["zona_horaria"]
         self.control = control or os.getenv("EMS_CONTROL", "externo")
         self.velocidad = float(velocidad or os.getenv("EMS_VELOCIDAD", 300))
-        self.inicio = inicio or os.getenv("EMS_INICIO") or _hoy(self.tz)
+        self.inicio = resolver_inicio(inicio or os.getenv("EMS_INICIO"), self.tz, cfg["edificio"]["paso_min"])
         self.dias = float(dias if dias is not None else os.getenv("EMS_DIAS", 1))
         self.edif = os.getenv("EMS_EDIFICIO", cfg["edificio"]["nombre"])
         self.base = f"ems/{self.edif}"
@@ -67,6 +78,10 @@ class Puente:
     def _on_connect(self, cli, userdata, flags, rc, props=None):
         cli.subscribe(f"{self.base}/zona/+/cmd")
         cli.subscribe(f"{self.base}/sim/control")
+        if self.control == "externo":
+            # estado y alarmas que publica Node-RED → InfluxDB (el panel en vivo los lee de ahí)
+            cli.subscribe(f"{self.base}/ems/estado")
+            cli.subscribe(f"{self.base}/alarma")
         cli.publish(f"{self.base}/sim/estado", json.dumps({"en_linea": True, "control": self.control,
                                                            "velocidad": self.velocidad}), retain=True)
         print(f"[live] conectado; control={self.control} velocidad={self.velocidad}x inicio={self.inicio}")
@@ -98,6 +113,14 @@ class Puente:
                     lats.append(recibido - float(data["wall_ms"]))
                 self._pub(f"zona/{zid}/ack", {"cmd_id": data.get("cmd_id"), "zona": zid, "ts": t.isoformat(),
                                               "recibido_wall_ms": recibido, "aplicado": True})
+            elif partes[-2:] == ["ems", "estado"] and self.control == "externo":
+                est = dict(data)
+                est.setdefault("modo", "nodered")
+                self.influx.ems(t, est)
+            elif partes[-1] == "alarma" and self.control == "externo":
+                a = {"ts": t, "nivel": data.get("nivel", "warn"), "codigo": data.get("codigo", "ALARMA"),
+                     "zona": data.get("zona", "EDIF"), "mensaje": data.get("mensaje", ""), "valor": data.get("valor")}
+                self.influx.alarma(a)
             elif partes[-1] == "control":
                 acc = data.get("accion")
                 if acc == "pausa":
@@ -127,7 +150,8 @@ class Puente:
             print(f"[live] pronóstico omitido: {exc}")
 
     def correr(self):
-        signal.signal(signal.SIGTERM, lambda *a: setattr(self, "activo", False))
+        if threading.current_thread() is threading.main_thread():
+            signal.signal(signal.SIGTERM, lambda *a: setattr(self, "activo", False))
         self.publicar_pronostico()
         cfg = self.cfg
         paso = cfg["edificio"]["paso_min"]

@@ -9,7 +9,8 @@ y plataforma IoT (MQTT + Node-RED + InfluxDB + Grafana).
 
 - Plan y división del trabajo: [`docs/PLAN.md`](docs/PLAN.md)
 - Contrato de interfaces (MQTT / InfluxDB / variables): [`docs/CONTRATO.md`](docs/CONTRATO.md)
-- Brief del agente de infraestructura: [`docs/AGENTE_INFRA.md`](docs/AGENTE_INFRA.md)
+- Encargo del agente de infraestructura: [`docs/AGENTE_INFRA.md`](docs/AGENTE_INFRA.md)
+- Despliegue en Arch Linux (systemd): [`docs/DESPLIEGUE_ARCH.md`](docs/DESPLIEGUE_ARCH.md) · plantillas en `deploy/arch/`
 - Resultados generados: [`resultados/RESUMEN.md`](resultados/RESUMEN.md)
 
 ## Arquitectura
@@ -53,7 +54,7 @@ python -m ems todo          # todo el análisis → resultados/ (≈1 min)
 ```
 
 ```bash
-pytest -q                   # 21 pruebas
+pytest -q                   # 23 pruebas
 ```
 
 Comandos individuales: `auditoria`, `pronostico`, `escenarios`, `pruebas`, `sensibilidad`, `paridad`,

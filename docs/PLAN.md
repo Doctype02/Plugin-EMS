@@ -46,16 +46,16 @@ Dos modos de operación:
 | — | Escritor a InfluxDB según el contrato; `Dockerfile` del simulador | Datos en la BD |
 | 5 | Panel de Grafana propio `grafana-ems-panel/`: edificio inteligente en 3D (10 zonas, 6 vistas, alarmas, medidor) | Dashboard 3D |
 
-### Agente de infraestructura (carpeta `infra/`)
+### Agente de infraestructura (servidor Arch Linux, servicios systemd, Grafana ya instalado)
+
+Procedimiento: [`DESPLIEGUE_ARCH.md`](DESPLIEGUE_ARCH.md) · encargo: [`AGENTE_INFRA.md`](AGENTE_INFRA.md) · plantillas: `deploy/arch/`.
 
 | Etapa | Trabajo | Resultado |
 |---|---|---|
-| 1 | `docker-compose` con Mosquitto, Node-RED, InfluxDB 2, Grafana y el servicio `simulador` (build del `Dockerfile` raíz) | Comunicación MQTT |
-| 1 | Node-RED montando `nodered/flows.json`, variables `MQTT_HOST`, `MQTT_PORT` | Reglas cargadas |
-| 5 | InfluxDB inicializado (org `utp`, bucket `ems`, token por `.env`) | BD corriendo |
-| 5 | Grafana: datasource Flux aprovisionado + dashboards (guiarse del BMS existente) | Monitoreo de las 10 zonas |
-| 5 | Panel de alarmas, estado de cargas, variables eléctricas, KPIs y pronóstico | Dashboard funcional |
-| — | Script `infra/up.sh` / instrucciones, healthchecks, persistencia de volúmenes | Despliegue reproducible |
+| 1 | Mosquitto + Node-RED (flujo del repo, endpoint `/ems/control`) | Comunicación MQTT y control |
+| 5 | InfluxDB 2 (org `utp`, bucket `ems`, tokens) + simulador como servicio | BD con datos en vivo |
+| 5 | Plugin `doctype02-ems-panel` en Grafana + datasource `ems-influx` + dashboards | Monitoreo de las diez zonas |
+| 6 | `ems exportar` y prueba de aceptación | Comparación de escenarios en Grafana |
 
 **Frontera:** el contrato está en [`CONTRATO.md`](CONTRATO.md). Si alguno necesita cambiar un tópico, medida o campo, se cambia primero ahí.
 

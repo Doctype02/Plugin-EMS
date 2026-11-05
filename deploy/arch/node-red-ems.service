@@ -1,0 +1,19 @@
+# /etc/systemd/system/node-red-ems.service
+[Unit]
+Description=Node-RED — reglas del EMS (Proyecto 2)
+After=network-online.target mosquitto.service
+Wants=mosquitto.service
+
+[Service]
+Type=simple
+User=ems
+Group=ems
+EnvironmentFile=/etc/ems/ems.env
+WorkingDirectory=/var/lib/node-red-ems
+# El flujo se lee del repositorio; los cambios hechos desde el editor se guardan en ese mismo archivo.
+ExecStart=/usr/bin/node-red --userDir /var/lib/node-red-ems /opt/Plugin-EMS/nodered/flows.json
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

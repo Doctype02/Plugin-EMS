@@ -1,0 +1,19 @@
+# /etc/systemd/system/ems-simulador.service
+[Unit]
+Description=Gemelo digital del edificio (EMS Proyecto 2) — modo live MQTT + InfluxDB
+After=network-online.target mosquitto.service influxdb.service node-red-ems.service
+Wants=mosquitto.service influxdb.service node-red-ems.service
+
+[Service]
+Type=simple
+User=ems
+Group=ems
+EnvironmentFile=/etc/ems/ems.env
+WorkingDirectory=/opt/Plugin-EMS
+Environment=MPLBACKEND=Agg PYTHONUNBUFFERED=1
+ExecStart=/opt/Plugin-EMS/.venv/bin/python -m ems live
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

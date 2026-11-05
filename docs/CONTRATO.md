@@ -25,7 +25,7 @@ Variables que lee el simulador (todas opcionales; sin `INFLUX_URL` no escribe a 
 | `INFLUX_BUCKET` | `ems` | |
 | `EMS_CONTROL` | `externo` | `externo` = obedece a Node-RED; `interno` = reglas Python; `baseline` = sin EMS |
 | `EMS_VELOCIDAD` | `300` | segundos simulados por segundo real (300 → 1 paso de 5 min por segundo) |
-| `EMS_INICIO` | hoy 00:00 (America/Panama) | inicio del tiempo simulado, ISO-8601 |
+| `EMS_INICIO` | hoy 00:00 (America/Panama) | inicio del tiempo simulado: ISO-8601, o `ahora` (con `EMS_VELOCIDAD=1` el tiempo simulado coincide con el reloj: recomendado para despliegue permanente) |
 | `EMS_DIAS` | `1` | días a simular en modo live (`0` = infinito, reinicia cada día) |
 
 Node-RED necesita `MQTT_HOST` y `MQTT_PORT` (el nodo broker usa `${MQTT_HOST}`/`${MQTT_PORT}`).
@@ -65,7 +65,7 @@ Códigos de alarma: `TEMP_ALTA`, `TEMP_BAJA`, `PICO_DEMANDA`, `DR_ACTIVO`, `SENS
 
 ## 3. Esquema InfluxDB (bucket `ems`)
 
-Timestamp = tiempo simulado. Precisión: segundos.
+Timestamp = tiempo simulado. Precisión: segundos. En modo `externo` el simulador también guarda en `ems` y `alarma` lo que Node-RED publica en `ems/<edif>/ems/estado` y `ems/<edif>/alarma` (con el tiempo simulado del paso en curso).
 
 | Measurement | Tags | Fields |
 |---|---|---|

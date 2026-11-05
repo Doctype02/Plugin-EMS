@@ -1,0 +1,10 @@
+# <provisioning>/dashboards/ems.yaml
+apiVersion: 1
+providers:
+  - name: ems
+    folder: EMS Edificio
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    options:
+      path: /opt/Plugin-EMS/deploy/arch/grafana/dashboards
