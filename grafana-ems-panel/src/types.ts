@@ -12,4 +12,9 @@ export interface EmsOptions {
   exploded: boolean;
   showSummary: boolean;
   showSidebar: boolean;
+  /** Permite enviar comandos (overrides y parámetros) desde el panel. */
+  allowControl: boolean;
+  /** Endpoint HTTP de Node-RED que recibe los comandos en modo en vivo. */
+  controlUrl: string;
+  animations: boolean;
 }

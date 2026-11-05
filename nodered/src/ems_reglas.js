@@ -96,8 +96,24 @@ for (const zid of Object.keys(zonas)) {
     cmds[zid] = { hvac_enable: en, setpoint_c: sp, ventilacion: "dcv", luces_nivel: luces, equipos_nivel: equipos, hvac_mod: null };
 }
 
+// ---------------------------------------------------------------- overrides del operador (prioridad sobre las reglas)
+const ovs = flow.get("overrides") || {};
+const manual = {};
+for (const zid of Object.keys(ovs)) {
+    const o = ovs[zid];
+    if (!o || o.hasta <= Date.now()) { delete ovs[zid]; continue; }
+    if (!cmds[zid]) continue; // zonas críticas o sin telemetría
+    manual[zid] = true;
+    if (o.setpoint_c !== undefined) { cmds[zid].setpoint_c = o.setpoint_c; cmds[zid].hvac_enable = true; }
+    if (o.hvac_enable !== undefined) cmds[zid].hvac_enable = o.hvac_enable;
+    if (o.luces_nivel !== undefined) cmds[zid].luces_nivel = o.luces_nivel;
+    if (o.equipos_nivel !== undefined) cmds[zid].equipos_nivel = o.equipos_nivel;
+}
+flow.set("overrides", ovs);
+
 // ---------------------------------------------------------------- limitador de demanda (rotación de compresores)
 let pCompActual = 0;
+let reservado = 0;
 const sol = [];
 for (const zid of Object.keys(cmds)) {
     const z = zonas[zid], c = cmds[zid];
@@ -107,10 +123,12 @@ for (const zid of Object.keys(cmds)) {
     const fan = z.hvac_enable && (z.ocupado || z.hvac_on) ? P.fan_frac * cap * 0.6 : 0;
     if (z.hvac_on) pCompActual += Math.max(z.p_hvac_kw - fan, 0);
     if (!c.hvac_enable) continue;
+    const pideManual = z.temp_c > c.setpoint_c + P.banda || (z.hvac_on && z.temp_c > c.setpoint_c - P.banda);
+    if (manual[zid]) { if (pideManual) reservado += cap / cop; continue; } // el operador manda: no se deslastra
     const pide = z.temp_c > c.setpoint_c + P.banda || (z.hvac_on && z.temp_c > c.setpoint_c - P.banda);
     if (pide) sol.push({ zid, urg: z.temp_c - c.setpoint_c, kw: cap / cop, emerg: z.temp_c > P.confort_max - P.dr_margen_confort });
 }
-let presupuesto = P.limite_kw - 3 - (med.p_total_kw - pCompActual);
+let presupuesto = P.limite_kw - 3 - (med.p_total_kw - pCompActual) - reservado;
 let forzadas = 0;
 sol.sort((a, b) => (a.emerg === b.emerg ? b.urg - a.urg : (a.emerg ? -1 : 1)));
 for (const s of sol) {
@@ -124,6 +142,7 @@ else if (st.drEtapa === 2 && dem < P.limite_kw - P.dr_hist_kw) { st.drCont++; if
 if (st.drEtapa < 2) st.drEtapa = forzadas ? 1 : 0;
 if (st.drEtapa >= 2) {
     for (const zid of Object.keys(cmds)) {
+        if (manual[zid]) continue;
         cmds[zid].luces_nivel = Math.round(cmds[zid].luces_nivel * P.dr_luces * 1000) / 1000;
         cmds[zid].equipos_nivel = Math.min(cmds[zid].equipos_nivel, P.dr_equipos);
     }
@@ -151,7 +170,7 @@ const estado = {
     payload: {
         ts: med.ts, origen: "nodered", modo: "reglas_dr", dr_activo: drActivo, dr_etapa: st.drEtapa,
         limite_kw: P.limite_kw, n_alarmas: Object.keys(st.activas).length,
-        modo_seguro: Object.keys(invalidos), latencia_ms: Date.now() - tInicio, zonas_forzadas: forzadas
+        modo_seguro: Object.keys(invalidos), manual: Object.keys(manual), latencia_ms: Date.now() - tInicio, zonas_forzadas: forzadas
     }
 };
 flow.set("st", st);

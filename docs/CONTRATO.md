@@ -47,6 +47,19 @@ Prefijo: `ems/{edificio}` (por defecto `ems/edificio1`). Zonas: `Z01` … `Z10`.
 | `ems/edificio1/sim/estado` | sim → (retained, LWT) | `{en_linea, control, velocidad}` — usar para el panel de disponibilidad |
 | `ems/edificio1/nodered/estado` | Node-RED → (retained, LWT) | `{en_linea}` |
 | `ems/edificio1/ems/parametros` | → Node-RED | p. ej. `{limite_kw: 135, sp_ocupado: 25}` (cambio de parámetros en vivo) |
+| `ems/edificio1/ems/override` | panel/operador → Node-RED | control manual temporal: `{zona, setpoint_c?, hvac_enable?, luces_nivel?, equipos_nivel?, duracion_min (1–1440, def. 60), usuario?}` o `{tipo: "liberar", zona: "Z03"\|"*"}`. Prioridad sobre reglas y limitador de demanda; Z09/Z10 se rechazan. `ems/estado` informa `manual: [zonas]` |
+
+### Endpoint HTTP de control (Node-RED, puerto 1880)
+
+`POST /ems/control` con JSON (CORS abierto, `OPTIONS` responde 204). Lo usa el panel de Grafana en modo en vivo:
+
+| `tipo` | Campos | Publica en |
+|---|---|---|
+| `override` | `zona`, `setpoint_c?`, `hvac_enable?`, `luces_nivel?`, `equipos_nivel?`, `duracion_min?`, `usuario?` | `ems/<edif>/ems/override` |
+| `liberar` | `zona` (`Z01`…`Z10` o `*`) | `ems/<edif>/ems/override` |
+| `parametros` | `limite_kw?` (50–400), `sp_ocupado?` (20–28) | `ems/<edif>/ems/parametros` |
+
+Respuesta `{ok, mensaje, …}` con 200, o 400 si el comando no es válido (zona crítica, sin cambios, fuera de rango).
 
 Códigos de alarma: `TEMP_ALTA`, `TEMP_BAJA`, `PICO_DEMANDA`, `DR_ACTIVO`, `SENSOR_CONGELADO`, `SENSOR_FUERA_RANGO`, `HVAC_ON_SIN_OCUPACION`, `SERVIDOR_TEMP`, `COMANDO_PERDIDO`.
 

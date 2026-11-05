@@ -52,3 +52,38 @@ test('la vista exterior apila los pisos', async ({ gotoPanelEditPage, readProvis
   await expect(panel.getByTestId('ems-floor-P2')).toBeVisible();
   await expect(panel.getByText('Azotea · condensadoras')).toHaveCount(0);
 });
+
+test('muestra el interior animado en la vista en corte', async ({ gotoPanelEditPage, readProvisionedDashboard }) => {
+  const dashboard = await readProvisionedDashboard({ fileName: 'dashboard.json' });
+  const panelEditPage = await gotoPanelEditPage({ dashboard, id: '1' });
+  const panel = panelEditPage.panel.locator;
+
+  await expect(panel.getByTestId('ems-building')).toHaveAttribute('data-animated', 'si');
+  await expect(panel.getByTestId('ems-riser')).toBeVisible();
+  await panel.getByTestId('ems-animate').click();
+  await expect(panel.getByTestId('ems-building')).toHaveAttribute('data-animated', 'no');
+});
+
+test('controla una zona en modo demostración', async ({ gotoPanelEditPage, readProvisionedDashboard }) => {
+  const dashboard = await readProvisionedDashboard({ fileName: 'dashboard.json' });
+  const panelEditPage = await gotoPanelEditPage({ dashboard, id: '1' });
+  const panel = panelEditPage.panel.locator;
+
+  await panel.getByTestId('ems-zone-Z02').click();
+  const control = panel.getByTestId('ems-zone-control');
+  await expect(control).toBeVisible();
+  await control.getByRole('radio', { name: 'Apagar' }).check({ force: true });
+  await panel.getByTestId('ems-control-apply').click();
+  await expect(panel.getByTestId('ems-manual-Z02')).toBeVisible();
+  await panel.getByTestId('ems-control-release').click();
+  await expect(panel.getByTestId('ems-manual-Z02')).toHaveCount(0);
+});
+
+test('las zonas críticas no se pueden controlar', async ({ gotoPanelEditPage, readProvisionedDashboard }) => {
+  const dashboard = await readProvisionedDashboard({ fileName: 'dashboard.json' });
+  const panelEditPage = await gotoPanelEditPage({ dashboard, id: '1' });
+  const panel = panelEditPage.panel.locator;
+
+  await panel.getByTestId('ems-zone-Z09').click();
+  await expect(panel.getByTestId('ems-control-locked')).toBeVisible();
+});

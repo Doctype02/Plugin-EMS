@@ -14,6 +14,8 @@ interface Props {
   history: History;
   alarms: EmsAlarm[];
   onClose: () => void;
+  /** Controles manuales de la zona. */
+  control?: React.ReactNode;
 }
 
 interface Metric {
@@ -22,7 +24,7 @@ interface Metric {
   key?: string;
 }
 
-export const ZoneDetail: React.FC<Props> = ({ zone, state, status, history, alarms, onClose }) => {
+export const ZoneDetail: React.FC<Props> = ({ zone, state, status, history, alarms, onClose, control }) => {
   const styles = useStyles2(getStyles);
   const theme = useTheme2();
   const series = history[zone.id] ?? {};
@@ -77,6 +79,12 @@ export const ZoneDetail: React.FC<Props> = ({ zone, state, status, history, alar
           </div>
         );
       })}
+      {control && (
+        <>
+          <div className={styles.section}>Control</div>
+          {control}
+        </>
+      )}
       <div className={styles.section}>Diseño</div>
       <div className={styles.sub}>
         Iluminación {zone.lpd} W/m² · equipos {zone.epd} W/m²{zone.itKw ? ` · TI ${zone.itKw} kW` : ''} · HVAC{' '}

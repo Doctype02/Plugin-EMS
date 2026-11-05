@@ -8,7 +8,7 @@
  * compresores. Además inyecta un incidente diario distinto para que las alarmas se vean en la demo.
  */
 import { ZONES, Zone } from './model';
-import { EmsAlarm, EmsState, History, MeterState, Snapshot, ZoneState } from './telemetry';
+import { EmsAlarm, EmsState, History, MeterState, Overrides, Snapshot, ZoneOverride, ZoneState } from './telemetry';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -17,6 +17,14 @@ const TZ_OFFSET = -5 * HOUR; // America/Panama (sin horario de verano)
 
 export interface SimOptions {
   limitKw: number;
+  /** Setpoint con ocupación (por defecto 24 °C). */
+  spOccupied?: number;
+  overrides?: Overrides;
+}
+
+export function activeOverride(zone: Zone, t: number, opts: SimOptions): ZoneOverride | undefined {
+  const ov = opts.overrides?.[zone.id];
+  return ov && !zone.critical && t >= ov.since && t < ov.until ? ov : undefined;
 }
 
 const ENTRY = 7.5;
@@ -146,7 +154,7 @@ interface ZoneCore extends ZoneState {
   urgency: number;
 }
 
-function zoneCore(z: Zone, t: number): ZoneCore {
+function zoneCore(z: Zone, t: number, opts: SimOptions): ZoneCore {
   const c = clock(t);
   const w = weather(t);
   const inc = incident(t);
@@ -166,7 +174,7 @@ function zoneCore(z: Zone, t: number): ZoneCore {
     setpoint = z.fixedSetpoint;
     hvacEnable = true;
   } else if (occupied || precool) {
-    setpoint = SP_OCC;
+    setpoint = opts.spOccupied ?? SP_OCC;
     hvacEnable = true;
   } else if (workHours) {
     setpoint = SP_UNOCC;
@@ -174,6 +182,17 @@ function zoneCore(z: Zone, t: number): ZoneCore {
   } else {
     setpoint = SP_NIGHT;
     hvacEnable = false;
+  }
+
+  // ---- control manual del operador
+  const ov = activeOverride(z, t, opts);
+  if (ov?.setpoint !== undefined) {
+    setpoint = ov.setpoint;
+  }
+  if (ov?.hvac === 'off') {
+    hvacEnable = false;
+  } else if (ov?.hvac === 'on' || ov?.setpoint !== undefined) {
+    hvacEnable = true;
   }
 
   // ---- carga térmica relativa → ciclo de trabajo del compresor
@@ -201,6 +220,12 @@ function zoneCore(z: Zone, t: number): ZoneCore {
     if (fault?.kind === 'sobreocupacion') {
       temp += Math.min(2.8, (c.h - fault.from) * 3.5);
     }
+  } else if (ov?.hvac === 'off') {
+    // apagado manual: se calienta desde el setpoint previo hacia el exterior
+    const mins = (t - ov.since) / MIN;
+    const target = Math.min(w.tExt, 31) + (occupied ? 1.5 : 0.5);
+    temp = SP_OCC + (target - SP_OCC) * (1 - Math.exp(-mins / 90));
+    hvacOn = false;
   } else {
     // sin HVAC: deriva hacia el equilibrio nocturno
     const hoursOff = c.h >= EXIT ? c.h - EXIT : c.h + 24 - EXIT;
@@ -214,12 +239,13 @@ function zoneCore(z: Zone, t: number): ZoneCore {
 
   // ---- iluminación y enchufes
   const luxDay = (LUX_DAY[z.id] ?? 0) * (w.irr / 850);
-  const lights = occupied
+  const autoLights = occupied
     ? Math.round(Math.min(1, Math.max(0.1, (500 - luxDay) / 500)) * 20) / 20
     : z.critical
       ? 0.3
       : 0;
-  const plugs = occupied || z.critical ? 1 : 0.1;
+  const lights = ov?.lights ?? autoLights;
+  const plugs = ov?.plugs ?? (occupied || z.critical ? 1 : 0.1);
   const use = Math.min(occupants / Math.max(z.occupants, 1), 1);
   const pPlugs =
     ((z.epd * z.area) / 1000) * (use + (1 - use) * STANDBY) * Math.max(plugs, MIN_PLUGS[z.id] ?? 0.1) +
@@ -245,6 +271,7 @@ function zoneCore(z: Zone, t: number): ZoneCore {
     pHvac,
     pTotal: pLights + pPlugs + pHvac,
     sensorFault: fault?.kind === 'sensor',
+    override: !!ov,
     updatedAt: t,
     wantsCooling: hvacOn,
     compressorKw,
@@ -275,7 +302,7 @@ interface Core {
 function core(t: number, opts: SimOptions): Core {
   const zones: Record<string, ZoneCore> = {};
   for (const z of ZONES) {
-    zones[z.id] = zoneCore(z, t);
+    zones[z.id] = zoneCore(z, t, opts);
   }
   const occ = ZONES.filter((z) => !z.critical);
   const fraction = occ.reduce((a, z) => a + zones[z.id].occupants, 0) / occ.reduce((a, z) => a + z.occupants, 0);
@@ -285,7 +312,7 @@ function core(t: number, opts: SimOptions): Core {
   if (total > opts.limitKw - 3) {
     const candidates = occ
       .map((z) => zones[z.id])
-      .filter((s) => s.hvacOn && !s.sensorFault && s.temp < 26 - 0.75)
+      .filter((s) => s.hvacOn && !s.sensorFault && !s.override && s.temp < 26 - 0.75)
       .sort((a, b) => a.urgency - b.urgency);
     for (const s of candidates) {
       if (total <= opts.limitKw - 3) {

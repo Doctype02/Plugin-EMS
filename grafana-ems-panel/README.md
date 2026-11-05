@@ -6,17 +6,32 @@ EMS (ocupación, HVAC, iluminación, potencia, alarmas). Reutiliza la base técn
 (`Doctype02/Plugin-BMS`): scaffolding de Grafana, encabezado de indicadores, insignias de estado,
 sparklines y pantalla completa. El plano y los equipos son propios del edificio del EMS.
 
-![Vista de estado](docs/vista_estado_oscuro.png)
+![Vista en corte con interiores animados](docs/vista_estado_oscuro.png)
 
-| Vista exterior (pisos apilados) | Temperatura respecto al setpoint |
+| Detalle y control de zona | Control del edificio (deslastre manual) |
 |---|---|
-| ![Exterior](docs/vista_exterior_ocupacion.png) | ![Temperatura](docs/vista_temperatura.png) |
+| ![Detalle](docs/vista_detalle_control.png) | ![Control](docs/vista_control_deslastre.png) |
+
+![Vista exterior](docs/vista_exterior_ocupacion.png)
 
 ## Qué muestra
 
-- **Edificio 3D** (SVG, sin dependencias): vista *explotada* (cada piso escalonado para ver su planta
-  completa, con la azotea como nivel propio) o *exterior* (pisos apilados con fachadas y ventanas). Se gira
-  en pasos de 90° y se puede mostrar un solo piso (PB, P1, P2).
+- **Edificio 3D** (SVG, sin dependencias). Dos formas de verlo; se gira en pasos de 90° y se puede mostrar
+  un solo piso (PB, P1, P2):
+  - _En corte_ (vista explotada): cada piso escalonado, con muros de fondo completos y ventanas, fachada de
+    vidrio con antepecho, divisiones bajas y el **interior de cada zona**: escritorios, mesa de reuniones,
+    mesas de cafetería, mesones de laboratorio, filas de racks, gabinetes de UPS, recepción y sofás.
+  - _Exterior_: pisos apilados con fachadas y ventanas.
+- **Animaciones internas**:
+  - personas sentadas en su puesto y ~30 % caminando hacia el pasillo y de regreso;
+  - aire frío que baja de los difusores cuando el compresor enfría (difusor naranja y en pausa si el
+    limitador de demanda lo bloquea);
+  - halo de las luminarias según el nivel de dimerización;
+  - LEDs de los racks parpadeando;
+  - ventiladores de las condensadoras girando;
+  - montante eléctrica con flujo cuya velocidad sigue la potencia total.
+
+  Botón ⏸ para pausarlas; se apagan solas con *prefers-reduced-motion*.
 - **Seis vistas**:
   - _Estado_: verde, naranja, rojo o gris por zona; los críticos sin reconocer parpadean.
   - _Temperatura_: escala divergente respecto al setpoint (gris = dentro de ±0.5 °C).
@@ -32,6 +47,24 @@ sparklines y pantalla completa. El plano y los equipos son propios del edificio 
   - _Alarmas_: se pueden reconocer una a una o todas.
   - _Medidor_: P, Q, S, FP, V, I, barra de demanda frente al límite y desglose por uso.
   - _Detalle de zona_: métricas con tendencias, parámetros de diseño y alarmas de la zona.
+
+## Control del edificio
+
+Requiere rol **Editor** o **Admin** en Grafana y la opción *Permitir control del edificio*.
+
+- **Por zona** (en el detalle): HVAC auto/encender/apagar, setpoint fijo (20–28 °C), nivel de luces y
+  corte de standby de enchufes, durante 30 min, 1 h o 4 h. El control manual tiene prioridad sobre las reglas
+  del EMS y el limitador de demanda hasta que vence; *Volver a automático* lo libera. Las zonas en manual
+  muestran una insignia **M**. Las zonas críticas (Z09, Z10) no se pueden controlar.
+- **Del edificio** (pestaña *Control*): límite de demanda y setpoint con ocupación del EMS. Acciones rápidas:
+  *Pre-enfriar ahora*, *Deslastre manual* y *Cierre nocturno*. Lista de zonas en manual con *Liberar*, y
+  registro de comandos.
+- **Modo demostración**: los comandos se aplican al simulador del navegador y el efecto se ve de inmediato
+  (temperatura, potencia, demanda).
+- **Modo en vivo**: el panel hace `POST` a *URL de control* (por defecto `http://localhost:1880/ems/control`).
+  El flujo de Node-RED valida el comando, lo publica en `ems/edificio1/ems/override` o
+  `…/ems/parametros` y sus reglas lo respetan. El navegador del usuario debe poder llegar a esa URL (CORS
+  habilitado en el flujo). La duración de los overrides se cuenta en tiempo real del servidor.
 
 ## Modo demostración
 
@@ -101,7 +134,7 @@ npm run dev        # webpack en modo watch
 ```
 
 ```bash
-npm run test:ci    # 16 pruebas unitarias (proyección, lectura de data frames, simulador)
+npm run test:ci    # 35 pruebas unitarias (proyección, interiores, data frames, simulador, control)
 ```
 
 ```bash
@@ -127,5 +160,10 @@ requiere reiniciar el servidor de Grafana.
 | `src/building/telemetry.ts` | Tipos, lectura de data frames según el contrato y estado por zona |
 | `src/building/simulator.ts` | Simulador determinista para el modo demostración |
 | `src/building/views.ts` | Escalas de color, leyendas y rótulos por vista |
-| `src/components/Building3D.tsx` | Render SVG del edificio |
+| `src/building/interior.ts` | Mobiliario, puestos, difusores y luminarias de cada zona |
+| `src/building/control.ts` | Comandos del operador: validación, overrides locales y envío a Node-RED |
+| `src/components/Building3D.tsx` | Escena SVG: pisos, vista exterior, montante eléctrica |
+| `src/components/ZoneInterior.tsx` | Zona en corte con interiores y animaciones |
+| `src/components/Rooftop.tsx` | Condensadoras con ventiladores animados |
+| `src/components/ZoneControl.tsx`, `BuildingControl.tsx` | Controles por zona y del edificio |
 | `src/components/EmsPanel.tsx` | Panel: encabezado, controles, panel lateral y tooltip |

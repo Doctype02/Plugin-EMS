@@ -39,7 +39,10 @@
         "azimuth": 0,
         "exploded": true,
         "showSummary": true,
-        "showSidebar": true
+        "showSidebar": true,
+        "animations": true,
+        "allowControl": true,
+        "controlUrl": "http://localhost:1880/ems/control"
       },
       "title": "Edificio inteligente - EMS",
       "type": "doctype02-ems-panel"

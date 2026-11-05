@@ -2,14 +2,18 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GrafanaTheme2, PanelProps } from '@grafana/data';
 import { css, cx } from '@emotion/css';
 import { Button, IconButton, RadioButtonGroup, Tab, TabsBar, useStyles2, useTheme2 } from '@grafana/ui';
+import { config } from '@grafana/runtime';
 import { EmsOptions } from 'types';
 import { BUILDING, FLOORS, ZONES, ZONE_BY_ID, Zone } from 'building/model';
 import { Azimuth, IsoConfig } from 'building/iso';
-import { simulate, simulateHistory } from 'building/simulator';
-import { History, Snapshot, Status, snapshotFromFrames, zoneStatuses } from 'building/telemetry';
+import { SimOptions, simulate, simulateHistory } from 'building/simulator';
+import { EmsParams, History, Overrides, Snapshot, Status, snapshotFromFrames, zoneStatuses } from 'building/telemetry';
+import { Command, LogEntry, applyLocal, describe, prune, sendToNodeRed, validate } from 'building/control';
 import { MAX_POWER_DENSITY, ViewMode, legendFor } from 'building/views';
 import { AlarmList, alarmKey } from './AlarmList';
 import { Building3D } from './Building3D';
+import { BuildingControl } from './BuildingControl';
+import { ZoneControl } from './ZoneControl';
 import { Header, Kpi } from './Header';
 import { Legend } from './Legend';
 import { MeterCard } from './MeterCard';
@@ -32,7 +36,7 @@ export function demoTime(now: number, speed: number): number {
   return dayStart + (((now - dayStart) * speed) % DAY);
 }
 
-function useSnapshot(props: Props): { snapshot: Snapshot; history: History; now: number } {
+function useSnapshot(props: Props, sim: SimOptions): { snapshot: Snapshot; history: History; now: number } {
   const { options, data } = props;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -44,7 +48,6 @@ function useSnapshot(props: Props): { snapshot: Snapshot; history: History; now:
   }, [options.demoMode, options.refreshSeconds]);
 
   const simT = demoTime(now, options.demoSpeed);
-  const sim = useMemo(() => ({ limitKw: options.limitKw }), [options.limitKw]);
   const demo = useMemo(
     () =>
       options.demoMode
@@ -58,6 +61,22 @@ function useSnapshot(props: Props): { snapshot: Snapshot; history: History; now:
   );
   const result = demo ?? real!;
   return { ...result, now: options.demoMode ? simT : result.snapshot.time || now };
+}
+
+/** Sólo Editor/Admin de la organización (o administrador de Grafana) pueden enviar comandos. */
+export function controlPermission(allow: boolean): { canControl: boolean; reason?: string } {
+  if (!allow) {
+    return { canControl: false, reason: 'El control está deshabilitado en las opciones del panel' };
+  }
+  const user = config?.bootData?.user;
+  // sin información de rol (fuera de Grafana: pruebas, vista previa) no se bloquea
+  if (!user || !user.orgRole) {
+    return { canControl: true };
+  }
+  if (user.isGrafanaAdmin || user.orgRole === 'Admin' || user.orgRole === 'Editor') {
+    return { canControl: true };
+  }
+  return { canControl: false, reason: 'Se requiere rol Editor o Admin para controlar el edificio' };
 }
 
 function useFullscreen(ref: React.RefObject<HTMLDivElement | null>) {
@@ -192,9 +211,9 @@ export function buildKpis(
         },
         { label: 'Bloqueados DR', icon: 'pause', value: String(forced), status: forced ? 'warning' : 'ok' },
         {
-          label: 'Demanda 15 min',
+          label: 'Demanda',
           icon: 'tachometer-fast',
-          value: m ? `${m.demand15.toFixed(0)} / ${limit} kW` : '—',
+          value: m ? `${m.demand15.toFixed(0)}/${limit} kW` : '—',
           status: demandStatus,
         },
       ];
@@ -202,9 +221,9 @@ export function buildKpis(
       return [
         { label: 'Potencia', icon: 'bolt', value: fmt(m?.pTotal, 1, 'kW'), status: demandStatus },
         {
-          label: 'Demanda 15 min',
+          label: 'Demanda',
           icon: 'tachometer-fast',
-          value: m ? `${m.demand15.toFixed(0)} / ${limit} kW` : '—',
+          value: m ? `${m.demand15.toFixed(0)}/${limit} kW` : '—',
           status: demandStatus,
         },
         {
@@ -223,7 +242,20 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const styles = useStyles2(getStyles);
   const theme = useTheme2();
   const statusColors = useStatusColors();
-  const { snapshot, history, now } = useSnapshot(props);
+  const [overrides, setOverrides] = useState<Overrides>({});
+  const [params, setParams] = useState<EmsParams>({ limitKw: options.limitKw, spOccupied: 24 });
+  const [log, setLog] = useState<LogEntry[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [animate, setAnimate] = useState(options.animations);
+  const sim = useMemo<SimOptions>(
+    () => ({ limitKw: params.limitKw, spOccupied: params.spOccupied, overrides }),
+    [params, overrides]
+  );
+  const { snapshot, history, now } = useSnapshot(props, sim);
+  const activeOverrides = useMemo(() => prune(overrides, now), [overrides, now]);
+  const manual = useMemo(() => new Set(Object.keys(activeOverrides)), [activeOverrides]);
+  const permission = controlPermission(options.allowControl);
+  const user = config?.bootData?.user?.login;
 
   const [viewMode, setViewMode] = useState<ViewMode>(options.defaultView);
   const [azimuth, setAzimuth] = useState<Azimuth>(options.azimuth);
@@ -232,7 +264,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const [selectedId, setSelectedId] = useState<string>();
   const [hover, setHover] = useState<{ id: string; x: number; y: number }>();
   const [statusFilter, setStatusFilter] = useState<Status>();
-  const [sideTab, setSideTab] = useState<'alarms' | 'meter'>('alarms');
+  const [sideTab, setSideTab] = useState<'alarms' | 'meter' | 'control'>('alarms');
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState<Set<string>>(() => new Set());
 
@@ -264,8 +296,8 @@ export const EmsPanel: React.FC<Props> = (props) => {
     [statuses, statusFilter]
   ) as Record<string, Status>;
   const kpis = useMemo(
-    () => buildKpis(snapshot, statuses, viewMode, options.limitKw),
-    [snapshot, statuses, viewMode, options.limitKw]
+    () => buildKpis(snapshot, statuses, viewMode, params.limitKw),
+    [snapshot, statuses, viewMode, params.limitKw]
   );
   const unacknowledged = useMemo(
     () =>
@@ -299,6 +331,43 @@ export const EmsPanel: React.FC<Props> = (props) => {
     }
   };
 
+  /** Ejecuta uno o varios comandos del operador (simulador local o Node-RED). */
+  const runCommands = async (input: Command | Command[]) => {
+    const commands = Array.isArray(input) ? input : [input];
+    const stamp = () => (options.demoMode ? demoTime(Date.now(), options.demoSpeed) : Date.now());
+    const entries: LogEntry[] = [];
+    let next = activeOverrides;
+    let nextParams = params;
+    setBusy(true);
+    for (const c of commands) {
+      const problem = c.kind === 'override' ? validate(c.cmd) : undefined;
+      if (problem) {
+        entries.push({ at: stamp(), ok: false, text: problem });
+        continue;
+      }
+      try {
+        if (!options.demoMode) {
+          await sendToNodeRed(options.controlUrl, c, user);
+        }
+        next = applyLocal(next, c, stamp(), user);
+        if (c.kind === 'params') {
+          nextParams = { ...nextParams, ...c.params };
+        }
+        entries.push({ at: stamp(), ok: true, text: describe(c) });
+      } catch (err) {
+        entries.push({
+          at: stamp(),
+          ok: false,
+          text: `${describe(c)} — ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    }
+    setOverrides(next);
+    setParams(nextParams);
+    setLog((l) => [...entries.reverse(), ...l].slice(0, 30));
+    setBusy(false);
+  };
+
   const selected = selectedId ? ZONE_BY_ID[selectedId] : undefined;
   const hovered = hover ? ZONE_BY_ID[hover.id] : undefined;
   const rotate = (dir: 1 | -1) => setAzimuth((a) => ((a + dir * 90 + 360) % 360) as Azimuth);
@@ -312,6 +381,18 @@ export const EmsPanel: React.FC<Props> = (props) => {
       history={history}
       alarms={snapshot.alarms}
       onClose={() => setSelectedId(undefined)}
+      control={
+        <ZoneControl
+          key={`${selected.id}-${activeOverrides[selected.id]?.since ?? 0}`}
+          zone={selected}
+          state={snapshot.zones[selected.id]}
+          override={activeOverrides[selected.id]}
+          canControl={permission.canControl}
+          reason={permission.reason}
+          busy={busy}
+          onCommand={runCommands}
+        />
+      }
     />
   ) : (
     <div className={styles.sideContent}>
@@ -323,8 +404,26 @@ export const EmsPanel: React.FC<Props> = (props) => {
           onChangeTab={() => setSideTab('alarms')}
         />
         <Tab label="Medidor" active={sideTab === 'meter'} onChangeTab={() => setSideTab('meter')} />
+        <Tab
+          label="Control"
+          active={sideTab === 'control'}
+          counter={manual.size || null}
+          onChangeTab={() => setSideTab('control')}
+        />
       </TabsBar>
-      {sideTab === 'alarms' ? (
+      {sideTab === 'control' ? (
+        <BuildingControl
+          params={params}
+          overrides={activeOverrides}
+          log={log}
+          canControl={permission.canControl}
+          reason={permission.reason}
+          busy={busy}
+          live={!options.demoMode}
+          onCommand={runCommands}
+          onSelectZone={selectZone}
+        />
+      ) : sideTab === 'alarms' ? (
         <AlarmList
           alarms={snapshot.alarms}
           acknowledged={acknowledged}
@@ -333,7 +432,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
           onAcknowledgeAll={() => setAcknowledged(new Set(snapshot.alarms.map(alarmKey)))}
         />
       ) : (
-        <MeterCard meter={snapshot.meter} ems={snapshot.ems} limitKw={options.limitKw} history={history} />
+        <MeterCard meter={snapshot.meter} ems={snapshot.ems} limitKw={params.limitKw} history={history} />
       )}
     </div>
   );
@@ -342,6 +441,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
     timeZone: 'America/Panama',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   });
   const dr = snapshot.ems?.drActive;
 
@@ -355,7 +455,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
       {options.showSummary && (
         <Header
           title={BUILDING.name}
-          subtitle={`${ZONES.length} zonas · 3 niveles · ${timeLabel}${dr ? ' · DR activo' : ''}`}
+          subtitle={`${ZONES.length} zonas · 3 niveles · ${timeLabel}${dr ? ' · DR activo' : ''}${manual.size ? ` · ${manual.size} en manual` : ''}`}
           demoMode={options.demoMode}
           kpis={kpis}
           showKpis={panelWidth >= 560 && panelHeight >= 360}
@@ -378,6 +478,8 @@ export const EmsPanel: React.FC<Props> = (props) => {
             selectedId={selectedId}
             hoveredId={hover?.id}
             unacknowledged={unacknowledged}
+            manual={manual}
+            animate={animate}
             onHover={onHover}
             onLeave={() => setHover(undefined)}
             onSelect={(z) => setSelectedId((cur) => (cur === z.id ? undefined : z.id))}
@@ -406,6 +508,12 @@ export const EmsPanel: React.FC<Props> = (props) => {
               tooltip={exploded ? 'Vista exterior (pisos unidos)' : 'Vista explotada (ver cada piso)'}
               onClick={() => setExploded((e) => !e)}
               data-testid="ems-explode"
+            />
+            <IconButton
+              name={animate ? 'pause' : 'play'}
+              tooltip={animate ? 'Pausar animaciones' : 'Reanudar animaciones'}
+              onClick={() => setAnimate((a) => !a)}
+              data-testid="ems-animate"
             />
             <RadioButtonGroup
               size="sm"

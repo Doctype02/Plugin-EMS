@@ -154,3 +154,44 @@ export function onTop(p: Prism, u: number, v: number): Pt {
   const [a, b, , d] = p.top;
   return { x: a.x + (b.x - a.x) * u + (d.x - a.x) * v, y: a.y + (b.y - a.y) * u + (d.y - a.y) * v };
 }
+
+/** Proyecta un punto del plano (x, y en metros) a altura z, con el desplazamiento dy del nivel. */
+export function toScreen(x: number, y: number, z: number, cfg: IsoConfig, dy = 0): Pt {
+  const r = rotate(x, y, cfg.azimuth);
+  return project(r.x, r.y + dy, z, cfg.scale);
+}
+
+/**
+ * Matriz SVG que lleva coordenadas del plano (metros) a la pantalla sobre un plano horizontal a
+ * altura z. Permite dibujar círculos, aspas o halos "acostados" que rotan correctamente.
+ */
+export function planeMatrix(z: number, cfg: IsoConfig, dy = 0): string {
+  const o = toScreen(0, 0, z, cfg, dy);
+  const ex = toScreen(1, 0, z, cfg, dy);
+  const ey = toScreen(0, 1, z, cfg, dy);
+  const f = (n: number) => n.toFixed(4);
+  return `matrix(${f(ex.x - o.x)} ${f(ex.y - o.y)} ${f(ey.x - o.x)} ${f(ey.y - o.y)} ${f(o.x)} ${f(o.y)})`;
+}
+
+/** Profundidad de un punto del plano (mayor = más al fondo) para ordenar objetos sueltos. */
+export function pointDepth(x: number, y: number, cfg: IsoConfig, dy = 0): number {
+  const r = rotate(x, y, cfg.azimuth);
+  return r.y + dy - r.x;
+}
+
+/** Cuadrilátero vertical sobre el segmento a→b del plano, entre z0 y z1. */
+export function wallQuad(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  z0: number,
+  z1: number,
+  cfg: IsoConfig,
+  dy = 0
+): Pt[] {
+  return [
+    toScreen(a.x, a.y, z0, cfg, dy),
+    toScreen(b.x, b.y, z0, cfg, dy),
+    toScreen(b.x, b.y, z1, cfg, dy),
+    toScreen(a.x, a.y, z1, cfg, dy),
+  ];
+}

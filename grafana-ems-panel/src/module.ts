@@ -62,6 +62,26 @@ export const plugin = new PanelPlugin<EmsOptions>(EmsPanel).setPanelOptions((bui
       settings: { min: 1, integer: true },
       showIf: (c) => c.demoMode,
     })
+    .addBooleanSwitch({
+      path: 'animations',
+      name: 'Animaciones',
+      description:
+        'Personas, aire de los difusores, ventiladores, LEDs y flujo eléctrico (se apagan si el sistema pide menos movimiento)',
+      defaultValue: true,
+    })
+    .addBooleanSwitch({
+      path: 'allowControl',
+      name: 'Permitir control del edificio',
+      description: 'Overrides por zona y parámetros del EMS (requiere rol Editor o Admin)',
+      defaultValue: true,
+    })
+    .addTextInput({
+      path: 'controlUrl',
+      name: 'URL de control (Node-RED)',
+      description: 'Endpoint HTTP que publica los comandos por MQTT en modo en vivo',
+      defaultValue: 'http://localhost:1880/ems/control',
+      showIf: (c) => c.allowControl && !c.demoMode,
+    })
     .addBooleanSwitch({ path: 'showSummary', name: 'Mostrar encabezado', defaultValue: true })
     .addBooleanSwitch({
       path: 'showSidebar',

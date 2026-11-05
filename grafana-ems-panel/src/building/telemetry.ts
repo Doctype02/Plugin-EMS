@@ -27,7 +27,30 @@ export interface ZoneState {
   /** Compresor bloqueado por el limitador de demanda en este paso (sólo simulación/estado EMS). */
   drForced?: boolean;
   sensorFault?: boolean;
+  /** La zona está en control manual (override del operador). */
+  override?: boolean;
   updatedAt: number;
+}
+
+/** Control manual temporal de una zona (tiene prioridad sobre las reglas del EMS y el limitador). */
+export interface ZoneOverride {
+  setpoint?: number;
+  hvac?: 'on' | 'off';
+  /** Nivel de iluminación 0–1. */
+  lights?: number;
+  /** Fracción de circuitos de enchufes energizados 0–1. */
+  plugs?: number;
+  since: number;
+  until: number;
+  user?: string;
+}
+
+export type Overrides = Record<string, ZoneOverride>;
+
+/** Parámetros globales del EMS que el operador puede cambiar. */
+export interface EmsParams {
+  limitKw: number;
+  spOccupied: number;
 }
 
 export interface MeterState {
