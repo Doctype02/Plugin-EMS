@@ -2,6 +2,7 @@ import { PanelPlugin } from '@grafana/data';
 import { EmsOptions } from './types';
 import { EmsPanel } from './components/EmsPanel';
 import { VIEW_LABELS, ViewMode } from './building/views';
+import { SPEEDS } from './building/clock';
 
 export const plugin = new PanelPlugin<EmsOptions>(EmsPanel).setPanelOptions((builder) =>
   builder
@@ -47,20 +48,21 @@ export const plugin = new PanelPlugin<EmsOptions>(EmsPanel).setPanelOptions((bui
         'Simula el edificio en el navegador. Apagado, usa las consultas del panel (InfluxDB, docs/CONTRATO.md)',
       defaultValue: true,
     })
-    .addNumberInput({
+    .addRadio({
       path: 'demoSpeed',
-      name: 'Velocidad de simulación',
-      description: '1 = hora real de Panamá; 60 = un día cada 24 minutos',
+      name: 'Velocidad inicial de la simulación',
+      description: 'Se cambia en la barra de tiempo del panel; 1 = hora real de Panamá',
       defaultValue: 60,
-      settings: { min: 1, integer: true },
+      settings: {
+        options: SPEEDS.map((s) => ({ value: s.value, label: s.label, description: s.hint })),
+      },
       showIf: (c) => c.demoMode,
     })
-    .addNumberInput({
-      path: 'refreshSeconds',
-      name: 'Intervalo de simulación (s)',
-      defaultValue: 2,
-      settings: { min: 1, integer: true },
-      showIf: (c) => c.demoMode,
+    .addBooleanSwitch({
+      path: 'showTimeBar',
+      name: 'Barra de tiempo',
+      description: 'Elegir día, hora y velocidad de la simulación desde el panel',
+      defaultValue: true,
     })
     .addBooleanSwitch({
       path: 'animations',

@@ -3,9 +3,12 @@ import { ViewMode } from 'building/views';
 
 export interface EmsOptions {
   demoMode: boolean;
-  refreshSeconds: number;
-  /** Veces más rápido que el reloj real para el día simulado (1 = hora real). */
+  /** Obsoleto: el refresco lo decide la velocidad elegida en la barra de tiempo. */
+  refreshSeconds?: number;
+  /** Velocidad inicial de la simulación (veces el reloj real; 1 = hora real). */
   demoSpeed: number;
+  /** Muestra la barra de tiempo (hora, día y velocidad de la simulación). */
+  showTimeBar?: boolean;
   limitKw: number;
   defaultView: ViewMode;
   azimuth: Azimuth;

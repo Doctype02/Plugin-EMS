@@ -100,8 +100,8 @@ def test_endpoint_http_valida_y_publica(h):
     assert ok["mqtt"]["payload"] == {"zona": "Z03", "setpoint_c": 25, "duracion_min": 30, "usuario": "ana"}
     assert h("http", {"tipo": "override", "zona": "Z10", "hvac_enable": False})["status"] == 400
     assert h("http", {"tipo": "override", "zona": "Z03"})["status"] == 400
-    par = h("http", {"tipo": "parametros", "limite_kw": 135, "sp_ocupado": 24.5})
-    assert par["status"] == 200 and par["parametros"]["payload"] == {"limite_kw": 135, "sp_ocupado": 24.5}
+    par = h("http", {"tipo": "parametros", "limite_kw": 32, "sp_ocupado": 24.5})
+    assert par["status"] == 200 and par["parametros"]["payload"] == {"limite_kw": 32, "sp_ocupado": 24.5}
     assert h("http", {"tipo": "parametros", "limite_kw": 5})["status"] == 400
     assert h("http", {"tipo": "otro"})["status"] == 400
     lib = h("http", {"tipo": "liberar", "zona": "*"})
@@ -114,3 +114,17 @@ def test_parametros_en_vivo_cambian_el_setpoint(h, paso):
     cmd = {c["zona"]: c for c in _enviar_paso(h, t, zonas, med)["cmds"]}
     ocupadas = [z["zona"] for z in zonas if z["ocupado"] and not z["critica"]]
     assert ocupadas and all(cmd[z]["setpoint_c"] == 25 for z in ocupadas)
+
+
+def test_endpoint_http_eventos_simulados(h):
+    ev = h("http", {"tipo": "evento", "accion": "iniciar", "id": "e1", "evento": "incendio", "zona": "Z03",
+                    "duracion_min": 45, "usuario": "ana"})
+    assert ev["status"] == 200
+    assert ev["mqtt"]["topic"] == "ems/edificio1/sim/control"
+    assert ev["mqtt"]["payload"] == {"accion": "evento", "operacion": "iniciar", "id": "e1", "evento": "incendio",
+                                     "zona": "Z03", "duracion_min": 45, "usuario": "ana"}
+    assert h("http", {"tipo": "evento", "evento": "meteorito", "duracion_min": 5})["status"] == 400
+    assert h("http", {"tipo": "evento", "evento": "falla_vrf", "unidad": "VRF-Z", "duracion_min": 5})["status"] == 400
+    assert h("http", {"tipo": "evento", "evento": "ola_calor", "duracion_min": 0})["status"] == 400
+    fin = h("http", {"tipo": "evento", "accion": "detener", "id": "e1"})
+    assert fin["status"] == 200 and fin["mqtt"]["payload"]["operacion"] == "detener"

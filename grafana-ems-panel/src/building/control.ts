@@ -5,6 +5,7 @@
  */
 import { ZONE_BY_ID } from './model';
 import { EmsParams, Overrides, ZoneOverride } from './telemetry';
+import { SimEvent, describeEvent } from './events';
 
 export interface ZoneCommand {
   zone: string;
@@ -18,7 +19,10 @@ export interface ZoneCommand {
 export type Command =
   | { kind: 'override'; cmd: ZoneCommand }
   | { kind: 'release'; zone: string | '*' }
-  | { kind: 'params'; params: Partial<EmsParams> };
+  | { kind: 'params'; params: Partial<EmsParams> }
+  /** Simulación de un evento (falla, accidente, condición extrema) en el gemelo digital. */
+  | { kind: 'event'; event: SimEvent }
+  | { kind: 'event_stop'; id: string | '*' };
 
 export interface LogEntry {
   at: number;
@@ -26,7 +30,9 @@ export interface LogEntry {
   text: string;
 }
 
-export const DURATIONS = [30, 60, 240];
+export const DURATIONS = [5, 15, 30, 60, 240];
+
+export const durationLabel = (d: number) => (d < 60 ? `${d} min` : `${d / 60} h`);
 
 /** Valida un comando de zona; devuelve el motivo si no se puede aplicar. */
 export function validate(cmd: ZoneCommand): string | undefined {
@@ -120,6 +126,22 @@ export function toPayload(command: Command, user?: string): Record<string, unkno
     }
     case 'release':
       return { tipo: 'liberar', zona: command.zone, usuario: user };
+    case 'event': {
+      const e = command.event;
+      return {
+        tipo: 'evento',
+        accion: 'iniciar',
+        id: e.id,
+        evento: e.kind,
+        zona: e.zone,
+        unidad: e.unit,
+        duracion_min: Math.round((e.end - e.start) / 60_000),
+        intensidad: e.intensity,
+        usuario: user,
+      };
+    }
+    case 'event_stop':
+      return { tipo: 'evento', accion: 'detener', id: command.id, usuario: user };
     default: {
       const body: Record<string, unknown> = { tipo: 'parametros', usuario: user };
       if (command.params.limitKw !== undefined) {
@@ -147,6 +169,10 @@ export function describe(command: Command): string {
     }
     case 'release':
       return command.zone === '*' ? 'Todas las zonas vuelven a automático' : `${command.zone} vuelve a automático`;
+    case 'event':
+      return `Simulación: ${describeEvent(command.event)} por ${durationLabel(Math.round((command.event.end - command.event.start) / 60_000))}`;
+    case 'event_stop':
+      return command.id === '*' ? 'Fin de todas las simulaciones de eventos' : 'Fin de la simulación del evento';
     default:
       return [
         command.params.limitKw !== undefined ? `límite de demanda ${command.params.limitKw} kW` : undefined,

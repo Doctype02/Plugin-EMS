@@ -3,7 +3,7 @@ import { GrafanaTheme2 } from '@grafana/data';
 import { css } from '@emotion/css';
 import { Alert, Button, RadioButtonGroup, Slider, useStyles2 } from '@grafana/ui';
 import { Zone } from 'building/model';
-import { Command, DURATIONS, ZoneCommand, validate } from 'building/control';
+import { Command, DURATIONS, ZoneCommand, durationLabel, validate } from 'building/control';
 import { ZoneOverride, ZoneState } from 'building/telemetry';
 
 interface Props {
@@ -37,7 +37,7 @@ export const ZoneControl: React.FC<Props> = ({ zone, state, override, canControl
   const [plugs, setPlugs] = useState<Mode>(
     override?.plugs === undefined ? 'auto' : override.plugs > 0.5 ? 'on' : 'off'
   );
-  const [duration, setDuration] = useState(60);
+  const [duration, setDuration] = useState(15);
 
   if (zone.critical) {
     return (
@@ -139,7 +139,7 @@ export const ZoneControl: React.FC<Props> = ({ zone, state, override, canControl
           disabled={disabled}
           value={duration}
           onChange={setDuration}
-          options={DURATIONS.map((d) => ({ value: d, label: d < 60 ? `${d} min` : `${d / 60} h` }))}
+          options={DURATIONS.map((d) => ({ value: d, label: durationLabel(d) }))}
         />
       </div>
       <div className={styles.actions}>

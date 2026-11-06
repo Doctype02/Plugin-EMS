@@ -22,7 +22,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from . import eventos as m_ev
 from .config import RHO_CP, Zona, horario, zonas
+from .eventos import Evento
 
 Q_PERSONA_KW = 0.075        # calor sensible por persona (actividad 120 W, schedule "Cargas" de E+)
 Q_PERSONA_LAT_KW = 0.045    # calor latente por persona
@@ -86,6 +88,9 @@ class Edificio:
         self.carga_extra_kw: dict[str, float] = {}
         self.falla_hvac: set[str] = set()
         self.falla_sensor: dict[str, dict] = {}
+        self.eventos: dict[str, Evento] = {}
+        self._fin_eventos: list[Evento] = []
+        self.unidades = {u["id"]: list(u["zonas"]) for u in cfg.get("sistemas_vrf", [])}
         self.e_kwh = 0.0
         self._hist_p: list[float] = []
         self._vt = 0.252  # transmitancia visible del vidrio del modelo
@@ -141,10 +146,68 @@ class Edificio:
         return round(float(m), 2)
 
     # -------------------------------------------------------------------- paso
+    # ----------------------------------------------------------------- eventos
+    def iniciar_evento(self, d: dict) -> tuple[Evento | None, list[dict], str | None]:
+        """Inicia un evento simulado. Devuelve (evento, alarmas de inicio, error)."""
+        err = m_ev.validar(d, set(self.estado), set(self.unidades))
+        if err:
+            return None, [], err
+        ev = m_ev.crear(d)
+        self.eventos[ev.id] = ev
+        if ev.tipo == "sensor":
+            self.falla_sensor[ev.zona] = {"tipo": "congelado", "evento": ev.id}
+        return ev, m_ev.alarmas_inicio(ev, self.unidades.get(ev.unidad or "")), None
+
+    def terminar_evento(self, ev_id: str):
+        ids = list(self.eventos) if ev_id == "*" else [ev_id]
+        for i in ids:
+            ev = self.eventos.pop(i, None)
+            if ev and ev.tipo == "sensor" and self.falla_sensor.get(ev.zona, {}).get("evento") == ev.id:
+                self.falla_sensor.pop(ev.zona, None)
+
+    def _efectos(self) -> dict:
+        """Efectos agregados de los eventos activos."""
+        ef = {"sin_frio": set(), "fuego": {}, "evac": None, "corte": None, "puerta": {}, "dt_ext": 0.0,
+              "sobre": {}, "extra_kw": {}}
+        for ev in self.eventos.values():
+            if ev.tipo == "incendio":
+                ef["sin_frio"].update(self.estado)
+                ef["fuego"][ev.zona] = ev
+                ef["evac"] = max(ef["evac"] or 0.0, ev.transcurrido)
+            elif ev.tipo == "corte_energia":
+                ef["corte"] = ev
+                ef["sin_frio"].update(self.estado)
+            elif ev.tipo == "falla_vrf":
+                ef["sin_frio"].update(self.unidades.get(ev.unidad, []))
+            elif ev.tipo == "falla_terminal":
+                ef["sin_frio"].add(ev.zona)
+            elif ev.tipo == "puerta_abierta":
+                ef["puerta"][ev.zona] = ef["puerta"].get(ev.zona, 0.0) + m_ev.CAUDAL_PUERTA_M3S * (ev.intensidad or 50) / 100
+            elif ev.tipo == "ola_calor":
+                ef["dt_ext"] += ev.intensidad or 4.0
+            elif ev.tipo == "sobreocupacion":
+                ef["sobre"][ev.zona] = ef["sobre"].get(ev.zona, 0.0) + (ev.intensidad or 50) / 100
+            elif ev.tipo == "pico_carga":
+                ef["extra_kw"][ev.zona] = ef["extra_kw"].get(ev.zona, 0.0) + (ev.intensidad or 10)
+        return ef
+
+    def _avanzar_eventos(self) -> list[Evento]:
+        """Avanza el reloj de los eventos y quita los terminados (los devuelve)."""
+        fin = []
+        for ev in list(self.eventos.values()):
+            ev.transcurrido += self.e["paso_min"]
+            if not ev.activo:
+                self.terminar_evento(ev.id)
+                fin.append(ev)
+        return fin
+
     def paso(self, clima: dict, ocupantes: dict[str, int], minuto_del_dia: int = 0,
              dia_semana: int = 0) -> tuple[list[dict], dict]:
-        t_ext = clima["t_ext_c"]
+        ef = self._efectos()
+        t_ext = clima["t_ext_c"] + ef["dt_ext"]
         ghi = clima["irr_wm2"]
+        corte = ef["corte"]
+        ups_ok = corte is not None and corte.transcurrido < (corte.intensidad or 30)
         irr = {o: clima.get(f"irr_{o}", ghi * 0.4) for o in ("N", "E", "S", "W")}
         irr["H"] = clima.get("irr_H", ghi)
         hora = minuto_del_dia / 60.0
@@ -171,8 +234,14 @@ class Edificio:
         for z in self.zonas:
             s = self.estado[z.id]
             n = int(ocupantes.get(z.id, 0))
+            if z.id in ef["sobre"] and z.ocupantes > 0:
+                n = int(round(z.ocupantes * (1 + ef["sobre"][z.id])))
+            if ef["evac"] is not None:
+                n = int(round(n * max(0.0, 1 - ef["evac"] / m_ev.MIN_EVACUACION)))
             ocupado = n > 0 or (z.tipo == "pasillo" and edificio_ocupado)
-            cap = 0.0 if z.id in self.falla_hvac else z.hvac_kw
+            cap = 0.0 if (z.id in self.falla_hvac or z.id in ef["sin_frio"]) else z.hvac_kw
+            # la central de incendio / el corte desenergizan el terminal (ventilador incluido)
+            sin_energia_hvac = bool(ef["fuego"]) or corte is not None
             cop = z.cop * (1 - 0.012 * (t_ext - 30.0))
 
             # --- capacidad del terminal VRF
@@ -186,9 +255,13 @@ class Edificio:
                 mod, s.hvac_on = modulacion_termostato(s.t_medida, sp, self.banda, s.hvac_on)
             if cap == 0.0:
                 mod = 0.0
+                if z.id in ef["sin_frio"]:
+                    s.hvac_on = False
 
             # --- ventilador y aire exterior
-            if not s.hvac_enable:
+            if sin_energia_hvac:
+                fan_on, g_vent = False, 0.0
+            elif not s.hvac_enable:
                 fan_on, g_vent = False, 0.0
             elif s.ventilacion == "fija":
                 fan_on = True
@@ -199,15 +272,26 @@ class Edificio:
             p_fan = z.fan_kw if fan_on else 0.0
 
             # --- cargas internas (horarios del modelo E+)
-            p_luces = z.p_luces_max_kw * s.luces_nivel
+            nivel_luces = 1.0 if (ef["fuego"] and corte is None) else s.luces_nivel  # evacuación
+            p_luces = z.p_luces_max_kw * nivel_luces
             f_eq = horario(self.cfg, z.horario_equipos, dia_semana, hora)
-            p_eq = z.p_equipos_max_kw * f_eq * max(s.equipos_nivel, z.min_equipos) + self.carga_extra_kw.get(z.id, 0.0)
+            p_eq = (z.p_equipos_max_kw * f_eq * max(s.equipos_nivel, z.min_equipos) + self.carga_extra_kw.get(z.id, 0.0)
+                    + ef["extra_kw"].get(z.id, 0.0))
             p_it = z.it_kw * (1 + 0.02 * math.sin(minuto_del_dia / 1440 * 2 * math.pi)) if z.it_kw else 0.0
+            if corte is not None:
+                # sin red: sólo las cargas críticas (UPS) mientras dure su autonomía
+                if z.critica and ups_ok:
+                    p_luces *= 0.3
+                else:
+                    p_luces = p_eq = p_it = 0.0
             q_sol = f_sol * z.shgc * sum(a * irr[o] for o, a in z.ventanas.items()) / 1000.0
             q_opaco = sum(k * irr[o] for o, k in z.sol_opaco.items())
             q_int = n * Q_PERSONA_KW + p_luces + p_eq + p_it + p_fan + q_sol + q_opaco
+            if z.id in ef["fuego"]:
+                q_int += m_ev.CALOR_INCENDIO_KW
+            g_puerta = ef["puerta"].get(z.id, 0.0) * RHO_CP
             # latente: personas + humedad del aire exterior (ventilación + infiltración)
-            caudal_ext = g_vent / RHO_CP + self.e["infiltracion_m3s_m2"] * (sum(z.muros.values()) + z.techo)
+            caudal_ext = (g_vent + g_puerta) / RHO_CP + self.e["infiltracion_m3s_m2"] * (sum(z.muros.values()) + z.techo)
             q_lat = n * Q_PERSONA_LAT_KW + 1.2 * caudal_ext * H_FG * dw
 
             # --- integración térmica (subpasos de 1 min, Euler explícito)
@@ -217,7 +301,7 @@ class Edificio:
             dt = self.paso_h / sub
             t = s.t
             for _ in range(sub):
-                dTdt = (z.ua * (t_eq - t) + (z.g_inf + g_vent) * (t_ext - t) + z.ua_suelo * (t_suelo - t)
+                dTdt = (z.ua * (t_eq - t) + (z.g_inf + g_vent + g_puerta) * (t_ext - t) + z.ua_suelo * (t_suelo - t)
                         + z.ua_entrepiso * (t_otra - t) + q_int - q_hvac_sens) / z.c
                 t += dTdt * dt
             s.t = t
@@ -263,7 +347,11 @@ class Edificio:
             if cf.get("critica"):
                 p_crit += p
 
-        p_total = sum(tot.values()) + p_fija
+        p_edificio = sum(tot.values()) + p_fija
+        # durante un corte el medidor de la acometida lee cero; el UPS alimenta las cargas críticas
+        p_total = 0.0 if corte is not None else p_edificio
+        if corte is not None:
+            q_kvar = 0.0
         s_kva = math.hypot(p_total, q_kvar)
         self.e_kwh += p_total * self.paso_h
         self._hist_p.append(p_total)
@@ -277,9 +365,17 @@ class Edificio:
             "p_hvac_kw": round(tot["hvac"], 3), "p_luces_kw": round(tot["luces"], 3),
             "p_equipos_kw": round(tot["equipos"] + tot["it"], 3), "p_fija_kw": round(p_fija, 3),
             "q_kvar": round(q_kvar, 3), "s_kva": round(s_kva, 3), "fp": round(p_total / s_kva, 4) if s_kva else 1.0,
-            "v_ll": self.e["v_ll"], "i_a": round(s_kva * 1000 / (math.sqrt(3) * self.e["v_ll"]), 2),
+            "v_ll": 0.0 if corte is not None else self.e["v_ll"],
+            "i_a": round(s_kva * 1000 / (math.sqrt(3) * self.e["v_ll"]), 2),
             "e_kwh": round(self.e_kwh, 3), "demanda_15min_kw": round(dem15, 3),
             "t_ext_c": round(t_ext, 2), "hr_pct": round(clima.get("hr_pct", 0), 1), "irr_wm2": round(ghi, 1),
             **{f"irr_{o}": round(v, 1) for o, v in irr.items() if o != "H"},
+            "red_ok": corte is None,
         }
+        if corte is not None:
+            medidor["ups_kw"] = round(p_edificio, 3)
+            medidor["ups_min"] = round(max(0.0, (corte.intensidad or 30) - corte.transcurrido), 1)
+        if self.eventos:
+            medidor["eventos"] = sorted({ev.tipo for ev in self.eventos.values()})
+        self._fin_eventos = self._avanzar_eventos()
         return tel, medidor

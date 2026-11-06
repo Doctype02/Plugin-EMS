@@ -38,8 +38,9 @@ ocupac.├─► gemelo digital ──MQTT┤
 | `nodered/src/*.js` → `flows.json` | Las mismas reglas en Node-RED; `ems/nodered.py` verifica paridad exacta con Python |
 | `ems/validacion.py` | Validación y calibración contra EnergyPlus: usos finales, pico, NMBE y CV(RMSE) horarios (ASHRAE G14) |
 | `tools/importar_energyplus.py` | Importa los resultados del modelo E+ (eplusout.sql, EPW) a `data/` |
-| `grafana-ems-panel/` | Panel de Grafana propio: edificio inteligente en 3D (2 plantas, 10 zonas, azotea con 3 unidades VRF) con interiores animados, 6 vistas, alarmas, medidor y **control del edificio** (overrides por zona y parámetros del EMS vía Node-RED); modo demostración o datos de InfluxDB |
+| `grafana-ems-panel/` | Panel de Grafana propio: edificio inteligente en 3D (2 plantas, 10 zonas, azotea con 3 unidades VRF) con interiores animados, 6 vistas, barra de tiempo (hora, día, velocidad), alarmas, medidor, **control del edificio**, **simulación de alarmas y accidentes** y **«¿qué pasaría si…?»** (confort ISO 7730, rendimiento, riesgo de servidores); modo demostración o datos de InfluxDB |
 | `nodered/src/override.js`, `http_control.js` | Control manual: overrides con prioridad sobre las reglas y endpoint `POST /ems/control` con CORS |
+| `ems/eventos.py` | Eventos simulados en el gemelo (incendio, corte de energía con UPS, falla VRF/terminal, puerta abierta, sensor, ola de calor, sobreocupación, pico de carga) |
 
 ## Panel 3D de Grafana
 
@@ -58,7 +59,7 @@ python -m ems todo          # todo el análisis → resultados/ (≈1 min)
 ```
 
 ```bash
-pytest -q                   # 29 pruebas
+pytest -q                   # 36 pruebas
 ```
 
 Comandos individuales: `auditoria`, `pronostico`, `escenarios`, `pruebas`, `sensibilidad`, `paridad`,

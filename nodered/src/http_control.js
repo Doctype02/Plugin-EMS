@@ -1,6 +1,6 @@
 // Nodo función "Comando HTTP del panel" — entrada: POST /ems/control (http in)
 // Valida el comando del panel de Grafana y lo publica por MQTT.
-// Salida 1: override/liberar → ems/<edif>/ems/override
+// Salida 1: override/liberar → ems/<edif>/ems/override; evento simulado → ems/<edif>/sim/control
 // Salida 2: parámetros       → ems/<edif>/ems/parametros
 // Salida 3: respuesta HTTP (con CORS)
 const edif = env.get("EMS_EDIFICIO") || "edificio1";
@@ -32,9 +32,27 @@ if (b.tipo === "liberar") {
 }
 if (b.tipo === "parametros") {
     const p = {};
-    if (typeof b.limite_kw === "number" && b.limite_kw >= 50 && b.limite_kw <= 400) p.limite_kw = b.limite_kw;
+    if (typeof b.limite_kw === "number" && b.limite_kw >= 10 && b.limite_kw <= 100) p.limite_kw = b.limite_kw;
     if (typeof b.sp_ocupado === "number" && b.sp_ocupado >= 20 && b.sp_ocupado <= 28) p.sp_ocupado = b.sp_ocupado;
     if (!Object.keys(p).length) return [null, null, responder(400, { ok: false, mensaje: "Parámetros inválidos" })];
     return [null, { topic: `${base}/ems/parametros`, payload: p }, responder(200, { ok: true, mensaje: "parámetros publicados", parametros: p })];
 }
-return [null, null, responder(400, { ok: false, mensaje: "tipo debe ser override, liberar o parametros" })];
+if (b.tipo === "evento") {
+    // simulación de fallas y accidentes en el gemelo digital (ems/eventos.py)
+    const tipos = ["incendio", "corte_energia", "falla_vrf", "falla_terminal", "puerta_abierta", "sensor",
+        "ola_calor", "sobreocupacion", "pico_carga"];
+    if (b.accion === "detener") {
+        return [{ topic: `${base}/sim/control`, payload: { accion: "evento", operacion: "detener", id: String(b.id || "*") } },
+            null, responder(200, { ok: true, mensaje: "evento detenido" })];
+    }
+    if (!tipos.includes(b.evento)) return [null, null, responder(400, { ok: false, mensaje: `Evento desconocido: ${b.evento}` })];
+    if (b.zona !== undefined && !zonaValida(b.zona)) return [null, null, responder(400, { ok: false, mensaje: "Zona inválida" })];
+    if (b.unidad !== undefined && !/^VRF-[ABC]$/.test(b.unidad)) return [null, null, responder(400, { ok: false, mensaje: "Unidad inválida" })];
+    const dur = Number(b.duracion_min);
+    if (!(dur > 0 && dur <= 10080)) return [null, null, responder(400, { ok: false, mensaje: "Duración inválida" })];
+    const ev = { accion: "evento", operacion: "iniciar", id: String(b.id || `${b.evento}-${Date.now()}`), evento: b.evento,
+        duracion_min: dur, usuario: b.usuario || "" };
+    for (const k of ["zona", "unidad", "intensidad"]) if (b[k] !== undefined && b[k] !== null) ev[k] = b[k];
+    return [{ topic: `${base}/sim/control`, payload: ev }, null, responder(200, { ok: true, mensaje: "evento publicado", id: ev.id })];
+}
+return [null, null, responder(400, { ok: false, mensaje: "tipo debe ser override, liberar, parametros o evento" })];

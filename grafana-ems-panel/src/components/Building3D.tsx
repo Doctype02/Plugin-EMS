@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { GrafanaTheme2, colorManipulator } from '@grafana/data';
 import { css, cx, keyframes } from '@emotion/css';
 import { useStyles2, useTheme2 } from '@grafana/ui';
-import { BUILDING, FLOORS, VRF_UNITS, VRF_UNITS_STACKED, ZONES, Zone } from 'building/model';
-import { IsoConfig, Prism, Pt, bounds, path, placement, prism, rotate, toScreen } from 'building/iso';
+import { BUILDING, FLOORS, VRF_UNITS, VRF_UNITS_STACKED, VrfUnit, ZONES, Zone } from 'building/model';
+import { IsoConfig, Prism, Pt, bounds, path, placement, pointDepth, prism, rotate, toScreen } from 'building/iso';
+import { localParts } from 'building/clock';
+import { EVENTS, EventKind } from 'building/events';
 import { Snapshot, Status } from 'building/telemetry';
 import { MAX_POWER_DENSITY, ViewMode, zoneFill, zoneLabel } from 'building/views';
 import { Rooftop } from './Rooftop';
@@ -27,7 +29,38 @@ interface Props {
   onHover: (zone: Zone, e: React.MouseEvent) => void;
   onLeave: () => void;
   onSelect: (zone: Zone) => void;
+  hoveredUnit?: string;
+  onHoverUnit?: (unit: VrfUnit, e: React.MouseEvent) => void;
+  onLeaveUnit?: () => void;
 }
+
+/** Colores del cielo según la hora (noche → amanecer → día → atardecer). */
+export function skyColors(hour: number, dark: boolean): { top: string; bottom: string; night: number } {
+  const night = hour < 5.5 || hour > 19 ? 1 : hour < 7 ? (7 - hour) / 1.5 : hour > 17.5 ? (hour - 17.5) / 1.5 : 0;
+  const dusk = (hour > 5.5 && hour < 7.5) || (hour > 17 && hour < 19);
+  if (dark) {
+    return night >= 1
+      ? { top: '#0b1022', bottom: '#151a2e', night }
+      : dusk
+        ? { top: '#1d2140', bottom: '#4a3040', night }
+        : { top: '#142235', bottom: '#1e2a36', night };
+  }
+  return night >= 1
+    ? { top: '#2a3358', bottom: '#4b5478', night }
+    : dusk
+      ? { top: '#8fa6d6', bottom: '#f3c9a1', night }
+      : { top: '#bcd8f2', bottom: '#eef5fb', night };
+}
+
+const TREES: Array<[number, number, number]> = [
+  [-3, -3, 1.3],
+  [7, -3.6, 1.0],
+  [23.2, -2.6, 1.4],
+  [23.4, 11, 1.2],
+  [-2.8, 22, 1.4],
+  [12, 23.4, 1.0],
+  [23, 23, 1.3],
+];
 
 const shade = (color: string, amount: number) => colorManipulator.darken(color, amount);
 const ROOF_DECK = 0.25;
@@ -64,6 +97,9 @@ export const Building3D: React.FC<Props> = ({
   onHover,
   onLeave,
   onSelect,
+  hoveredUnit,
+  onHoverUnit,
+  onLeaveUnit,
 }) => {
   const theme = useTheme2();
   const styles = useStyles2(getStyles);
@@ -100,6 +136,36 @@ export const Building3D: React.FC<Props> = ({
     skin: ['#e0b08a', '#c58c62', '#8d5a3b'],
     surface: theme.colors.background.primary,
   };
+
+  const hour = localParts(snapshot.time || 0).hour;
+  // la vista exterior encuadra más de cerca: letras más pequeñas
+  const fs = exploded ? 1 : 0.55;
+  const sky = skyColors(hour, dark);
+  const outage = snapshot.meter?.gridOk === false;
+  const center = pointDepth(BUILDING.width / 2, BUILDING.depth / 2, iso);
+  const tree = ([x, y, r]: [number, number, number], k: number) => {
+    const base = toScreen(x, y, 0, iso);
+    const top = toScreen(x, y, r * 2.2, iso);
+    const R = r * iso.scale * 0.95;
+    const leaf = dark ? '#2f5a3a' : '#5c9e5f';
+    return (
+      <g key={`t${k}`} pointerEvents="none">
+        <ellipse cx={base.x} cy={base.y} rx={R * 0.9} ry={R * 0.45} fill="#000" opacity={0.12} />
+        <line
+          x1={base.x}
+          y1={base.y}
+          x2={top.x}
+          y2={top.y + R * 0.5}
+          stroke={dark ? '#5a4632' : '#7a5a3a'}
+          strokeWidth={2.4}
+        />
+        <circle cx={top.x} cy={top.y} r={R} fill={leaf} />
+        <circle cx={top.x - R * 0.35} cy={top.y - R * 0.3} r={R * 0.55} fill={colorManipulator.lighten(leaf, 0.15)} />
+      </g>
+    );
+  };
+  const treesBack = TREES.filter(([x, y]) => pointDepth(x, y, iso) >= center);
+  const treesFront = TREES.filter(([x, y]) => pointDepth(x, y, iso) < center);
 
   const levels = visible.map((floor) => {
     const { z: z0, dy } = placement(slotOf(floor.level), iso);
@@ -226,11 +292,25 @@ export const Building3D: React.FC<Props> = ({
         />
         {status === 'offline' && <path d={path(p.top)} fill={`url(#${idPrefix}-hatch)`} pointerEvents="none" />}
         <g pointerEvents="none">
-          <text x={p.center.x} y={p.center.y - 1} textAnchor="middle" className={styles.zoneId} fill={ink}>
+          <text
+            x={p.center.x}
+            y={p.center.y - 1}
+            textAnchor="middle"
+            className={styles.zoneId}
+            fill={ink}
+            style={{ fontSize: 11 * fs }}
+          >
             {zone.id}
             {manual.has(zone.id) ? ' · M' : ''}
           </text>
-          <text x={p.center.x} y={p.center.y + 12} textAnchor="middle" className={styles.zoneValue} fill={ink}>
+          <text
+            x={p.center.x}
+            y={p.center.y + 12 * fs}
+            textAnchor="middle"
+            className={styles.zoneValue}
+            fill={ink}
+            style={{ fontSize: 11 * fs }}
+          >
             {zoneLabel(viewMode, zone, s)}
           </text>
         </g>
@@ -258,18 +338,82 @@ export const Building3D: React.FC<Props> = ({
         >
           <line x1={0} y1={0} x2={0} y2={6} stroke={ink2} strokeWidth={1} opacity={0.5} />
         </pattern>
+        <linearGradient id={`${idPrefix}-sky`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={sky.top} />
+          <stop offset="100%" stopColor={sky.bottom} />
+        </linearGradient>
+        <radialGradient id={`${idPrefix}-fire`}>
+          <stop offset="0%" stopColor="#ffdd55" stopOpacity={0.95} />
+          <stop offset="45%" stopColor="#ff7a1a" stopOpacity={0.75} />
+          <stop offset="100%" stopColor="#e0301e" stopOpacity={0} />
+        </radialGradient>
         <radialGradient id={`${idPrefix}-glow`}>
           <stop offset="0%" stopColor="#ffe9a8" stopOpacity={0.95} />
           <stop offset="100%" stopColor="#ffe9a8" stopOpacity={0} />
         </radialGradient>
       </defs>
 
+      <rect
+        x={box.x - box.w}
+        y={box.y - box.h}
+        width={box.w * 3}
+        height={box.h * 3}
+        fill={`url(#${idPrefix}-sky)`}
+        opacity={0.55}
+        pointerEvents="none"
+      />
+      {(() => {
+        // sol o luna en una trayectoria según la hora
+        const day = hour >= 6 && hour <= 18.5;
+        const k = day ? (hour - 6) / 12.5 : ((hour + 24 - 18.5) % 24) / 11.5;
+        const cx = box.x + box.w * (0.92 - 0.84 * k);
+        const cy = box.y + box.h * (0.2 - 0.14 * Math.sin(Math.PI * Math.min(Math.max(k, 0), 1)));
+        return (
+          <g pointerEvents="none" data-testid="ems-sky" data-night={sky.night >= 1 ? 'si' : 'no'}>
+            {day ? (
+              <>
+                <circle cx={cx} cy={cy} r={22} fill="#ffd54f" opacity={0.18} />
+                <circle cx={cx} cy={cy} r={11} fill="#ffcc33" />
+              </>
+            ) : (
+              <>
+                <circle cx={cx} cy={cy} r={10} fill={dark ? '#d8dce8' : '#f2f4fa'} />
+                <circle cx={cx + 4} cy={cy - 3} r={9} fill={sky.top} />
+                {[
+                  [0.15, 0.08],
+                  [0.3, 0.14],
+                  [0.55, 0.06],
+                  [0.7, 0.12],
+                  [0.85, 0.05],
+                ].map(([a, b]) => (
+                  <circle key={a} cx={box.x + box.w * a} cy={box.y + box.h * b} r={1.1} fill="#fff" opacity={0.7} />
+                ))}
+              </>
+            )}
+          </g>
+        );
+      })()}
+      {/* terreno: césped, acera y entrada */}
+      <path
+        d={path(prism({ x: -5, y: -5, w: BUILDING.width + 10, d: BUILDING.depth + 10 }, -0.1, 0.05, iso).top)}
+        fill={dark ? '#1d2a1f' : '#dfe9d5'}
+        opacity={exploded ? 0.55 : 1}
+        pointerEvents="none"
+      />
       <path
         d={path(prism({ x: -1.5, y: -1.5, w: BUILDING.width + 3, d: BUILDING.depth + 3 }, -0.05, 0.05, iso).top)}
-        fill={dark ? '#1f1f1d' : '#efeee9'}
+        fill={dark ? '#2a2a28' : '#e9e7e0'}
         stroke={theme.colors.border.weak}
         opacity={exploded ? 0.6 : 1}
+        pointerEvents="none"
       />
+      <path
+        d={path(prism({ x: 13, y: -5, w: 4, d: 3.5 }, -0.04, 0.05, iso).top)}
+        fill={dark ? '#333331' : '#d8d5cc'}
+        opacity={exploded ? 0.6 : 1}
+        pointerEvents="none"
+      />
+      {treesBack.map(tree)}
 
       {connectors.map(([a, b], i) => (
         <line
@@ -367,6 +511,7 @@ export const Building3D: React.FC<Props> = ({
             textAnchor="end"
             className={styles.floorLabel}
             fill={ink2}
+            style={{ fontSize: 12 * fs }}
           >
             {floor.short} · {floor.name}
           </text>
@@ -385,7 +530,7 @@ export const Building3D: React.FC<Props> = ({
       )}
 
       {roof && (
-        <g data-testid="ems-roof" pointerEvents="none">
+        <g data-testid="ems-roof">
           {exploded && (
             <>
               {roof.slab.sides.map((sd, i) => (
@@ -412,10 +557,123 @@ export const Building3D: React.FC<Props> = ({
             snapshot={snapshot}
             animate={animate}
             dark={dark}
-            labelColor={ink2}
+            labelColor={ink}
+            surface={theme.colors.background.primary}
             compact={!exploded}
+            hoveredUnit={hoveredUnit}
+            onHoverUnit={onHoverUnit}
+            onLeaveUnit={onLeaveUnit}
           />
         </g>
+      )}
+      {treesFront.map(tree)}
+
+      {/* marcadores de eventos simulados sobre las zonas */}
+      {levels.flatMap(({ zones }) =>
+        zones
+          .filter(({ zone }) => snapshot.zones[zone.id]?.events?.length)
+          .map(({ zone, p }) => {
+            const s = snapshot.zones[zone.id];
+            const kinds = (s.events ?? []).filter((k) => k !== 'ola_calor' && k !== 'corte_energia') as EventKind[];
+            if (!kinds.length && !s.fire) {
+              return null;
+            }
+            const c = p.center;
+            return (
+              <g key={`ev-${zone.id}`} pointerEvents="none" data-testid={`ems-event-marker-${zone.id}`}>
+                {s.fire && (
+                  <>
+                    <ellipse
+                      cx={c.x}
+                      cy={c.y}
+                      rx={iso.scale * 3.2}
+                      ry={iso.scale * 1.8}
+                      fill={`url(#${idPrefix}-fire)`}
+                    >
+                      {animate && (
+                        <animate
+                          attributeName="opacity"
+                          values="0.75;1;0.6;0.9;0.75"
+                          dur="0.8s"
+                          repeatCount="indefinite"
+                        />
+                      )}
+                    </ellipse>
+                    {[0, 1, 2].map((i) => (
+                      <circle
+                        key={i}
+                        cx={c.x + (i - 1) * 8}
+                        cy={c.y - 10}
+                        r={6}
+                        fill={dark ? '#777' : '#555'}
+                        opacity={0}
+                      >
+                        {animate && (
+                          <>
+                            <animate
+                              attributeName="cy"
+                              values={`${c.y - 6};${c.y - 70}`}
+                              dur="2.4s"
+                              begin={`${i * 0.8}s`}
+                              repeatCount="indefinite"
+                            />
+                            <animate
+                              attributeName="r"
+                              values="5;16"
+                              dur="2.4s"
+                              begin={`${i * 0.8}s`}
+                              repeatCount="indefinite"
+                            />
+                            <animate
+                              attributeName="opacity"
+                              values="0.55;0"
+                              dur="2.4s"
+                              begin={`${i * 0.8}s`}
+                              repeatCount="indefinite"
+                            />
+                          </>
+                        )}
+                      </circle>
+                    ))}
+                  </>
+                )}
+                <g transform={`translate(${c.x.toFixed(1)},${(c.y - 34).toFixed(1)})`}>
+                  <line
+                    x1={0}
+                    y1={10}
+                    x2={0}
+                    y2={22}
+                    stroke={EVENTS[kinds[0] ?? 'incendio'].level === 'crit' ? '#f2495c' : '#ff9830'}
+                    strokeWidth={1.5}
+                  />
+                  <circle
+                    r={11}
+                    fill={theme.colors.background.primary}
+                    stroke={EVENTS[kinds[0] ?? 'incendio'].level === 'crit' ? '#f2495c' : '#ff9830'}
+                    strokeWidth={2}
+                  >
+                    {animate && <animate attributeName="r" values="11;12.5;11" dur="1.2s" repeatCount="indefinite" />}
+                  </circle>
+                  <text y={4} textAnchor="middle" fontSize={12}>
+                    {EVENTS[kinds[0] ?? 'incendio'].glyph}
+                  </text>
+                </g>
+              </g>
+            );
+          })
+      )}
+
+      {outage && (
+        <rect
+          x={box.x}
+          y={box.y}
+          width={box.w}
+          height={box.h}
+          fill="#000"
+          opacity={dark ? 0.35 : 0.22}
+          pointerEvents="none"
+          data-testid="ems-blackout"
+        />
       )}
     </svg>
   );

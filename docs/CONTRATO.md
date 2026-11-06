@@ -37,13 +37,14 @@ Prefijo: `ems/{edificio}` (por defecto `ems/edificio1`). Zonas: `Z01` … `Z10`.
 | Tópico | Dirección | Contenido |
 |---|---|---|
 | `ems/edificio1/zona/{Z}/telemetria` | sim → | `{ts, zona, nombre, tipo, critica, temp_c, setpoint_c, ocupantes, ocupado, lux, luces_nivel, equipos_nivel, hvac_on, hvac_enable, p_luces_kw, p_equipos_kw, p_hvac_kw, p_total_kw}` |
-| `ems/edificio1/medidor/general` | sim → | `{ts, p_total_kw, p_critica_kw, p_no_critica_kw, p_hvac_kw, p_luces_kw, p_equipos_kw, p_fija_kw, q_kvar, s_kva, fp, v_ll, i_a, e_kwh, demanda_15min_kw, t_ext_c, hr_pct, irr_wm2, precio_usd_kwh}` |
+| `ems/edificio1/medidor/general` | sim → | `{ts, p_total_kw, p_critica_kw, p_no_critica_kw, p_hvac_kw, p_luces_kw, p_equipos_kw, p_fija_kw, q_kvar, s_kva, fp, v_ll, i_a, e_kwh, demanda_15min_kw, t_ext_c, hr_pct, irr_wm2, precio_usd_kwh, red_ok, ups_kw?, ups_min?, eventos?}` (durante un corte `p_total_kw = 0`, `red_ok = false` y el UPS informa `ups_kw`/`ups_min`) |
 | `ems/edificio1/zona/{Z}/cmd` | Node-RED → sim | cualquiera de `{setpoint_c, hvac_enable, luces_nivel (0–1), equipos_nivel (0–1), ventilacion ("dcv"\|"fija"), hvac_mod (0–1 fuerza capacidad; null = termostato)}` + opcional `cmd_id`, `wall_ms` (epoch ms al enviar, para latencia) |
 | `ems/edificio1/zona/{Z}/ack` | sim → | `{cmd_id, zona, ts, recibido_wall_ms, aplicado: true}` (latencia = `recibido_wall_ms` − `wall_ms` del cmd) |
 | `ems/edificio1/ems/estado` | Node-RED/sim → | `{ts, origen, modo, dr_activo, limite_kw, n_alarmas, latencia_ms}` |
 | `ems/edificio1/alarma` | Node-RED/sim → | `{ts, nivel: info\|warn\|crit, codigo, zona, mensaje}` |
 | `ems/edificio1/pronostico` | sim → (retained) | `{generado, modelo, mae_kw, rmse_kw, puntos: [{ts, p_kw}]}` |
-| `ems/edificio1/sim/control` | → sim | `{accion: pausa\|reanuda, velocidad?}` |
+| `ems/edificio1/sim/control` | → sim | `{accion: pausa\|reanuda, velocidad?}` o evento simulado `{accion: "evento", operacion: iniciar\|detener, id, evento, zona?, unidad?, duracion_min, intensidad?}` (`ems/eventos.py`) |
+| `ems/edificio1/sim/eventos` | sim → (retenido) | `{ts, activos: [{id, evento, zona, unidad, intensidad, restante_min}]}` |
 | `ems/edificio1/sim/estado` | sim → (retained, LWT) | `{en_linea, control, velocidad}` — usar para el panel de disponibilidad |
 | `ems/edificio1/nodered/estado` | Node-RED → (retained, LWT) | `{en_linea}` |
 | `ems/edificio1/ems/parametros` | → Node-RED | p. ej. `{limite_kw: 27, sp_ocupado: 25}` (cambio de parámetros en vivo) |
@@ -114,3 +115,12 @@ from(bucket: "ems") |> range(start: 0)
 | Z10 | Cuarto eléctrico (PB) | electrico | **sí** |
 
 Edificio de 2 plantas (PB/PA) de 20 × 20 m según el modelo OpenStudio/EnergyPlus; 3 sistemas VRF: VRF-A (Z04–Z08), VRF-B (Z01, Z02, Z03, Z10), VRF-C (Z09). Parámetros completos en `config/edificio.yaml`. Las zonas críticas ignoran `hvac_enable=false`, `equipos_nivel` y `setpoint_c` (setpoint fijo).
+
+### Eventos simulados (panel → Node-RED → gemelo)
+
+`POST /ems/control` con `{tipo: "evento", accion: "iniciar", id, evento, zona?, unidad?, duracion_min, intensidad?}`
+o `{tipo: "evento", accion: "detener", id | "*"}`. Tipos: `incendio`, `corte_energia` (intensidad = autonomía
+del UPS en min), `falla_vrf` (unidad VRF-A/B/C), `falla_terminal`, `puerta_abierta` (%), `sensor`,
+`ola_calor` (°C), `sobreocupacion` (% sobre el aforo), `pico_carga` (kW). Alarmas nuevas: `INCENDIO`,
+`CORTE_ENERGIA`, `EN_UPS`, `UPS_AGOTADO`, `FALLA_VRF`, `FALLA_TERMINAL`, `PUERTA_ABIERTA`, `OLA_CALOR`,
+`SOBREOCUPACION`, `CARGA_EXTRA`. Rango de `limite_kw` en `parametros`: 10–100 kW.

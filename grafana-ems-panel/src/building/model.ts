@@ -272,3 +272,64 @@ export const VRF_UNITS_STACKED: VrfUnit[] = [
   { ...VRF_UNITS[1], rect: { x: 7.5, y: 17.2, w: 4.2, d: 2.2 } },
   { ...VRF_UNITS[2], rect: { x: 12.8, y: 17.8, w: 1.5, d: 1.2 } },
 ];
+
+// ---------------------------------------------------------------------------------------------
+// Envolvente y parámetros térmicos (mismos valores y fórmulas que ems/config.py, calibrados contra E+)
+
+/** Constantes del modelo E+ y de la calibración del gemelo (config/edificio.yaml). */
+export const ENVELOPE = {
+  uWall: 0.86,
+  uRoof: 0.274,
+  uGround: 2.945,
+  uGlass: 6.424,
+  shgc: 0.252,
+  infiltration: 0.00030226, // m³/s por m² de superficie exterior
+  rhoCp: 1.2 * 1.006,
+  tGround: 18,
+  capacitancePerM2: 0.03, // kWh/K·m²
+  solarFactor: 0.5,
+  skyDeltaT: 6,
+};
+
+/** Muros exteriores brutos por fachada (m²), techo exterior y losa sobre terreno (E+ Surfaces). */
+export const SURFACES: Record<
+  string,
+  { walls: Partial<Record<'n' | 's' | 'e' | 'w', number>>; roof: number; ground: number }
+> = {
+  Z01: { walls: { e: 24, s: 30 }, roof: 0, ground: 80 },
+  Z02: { walls: { n: 30, w: 51 }, roof: 0, ground: 170 },
+  Z03: { walls: { e: 36, n: 30 }, roof: 0, ground: 120 },
+  Z04: { walls: { n: 27, w: 30 }, roof: 90, ground: 0 },
+  Z05: { walls: { s: 27, w: 30 }, roof: 90, ground: 0 },
+  Z06: { walls: { n: 27, e: 30 }, roof: 90, ground: 0 },
+  Z07: { walls: { s: 27, e: 30 }, roof: 90, ground: 0 },
+  Z08: { walls: { n: 6, s: 6 }, roof: 40, ground: 0 },
+  Z09: { walls: { s: 18 }, roof: 0, ground: 18 },
+  Z10: { walls: { s: 12, w: 9 }, roof: 0, ground: 12 },
+};
+
+export interface Thermal {
+  /** Conducción por la envolvente (kW/K). */
+  ua: number;
+  /** Infiltración (kW/K). */
+  gInf: number;
+  /** Acople con el terreno (kW/K). */
+  uaGround: number;
+  /** Capacitancia térmica efectiva (kWh/K). */
+  c: number;
+  glass: number;
+  /** Constante de tiempo (h) con el HVAC apagado. */
+  tau: number;
+}
+
+export function thermal(zone: Zone): Thermal {
+  const s = SURFACES[zone.id] ?? { walls: {}, roof: 0, ground: 0 };
+  const glass = Object.values(zone.glazing).reduce((a, v) => a + (v ?? 0), 0);
+  const wallsGross = Object.values(s.walls).reduce((a, v) => a + (v ?? 0), 0);
+  const opaque = Math.max(wallsGross - glass, 0);
+  const ua = (ENVELOPE.uWall * opaque + ENVELOPE.uGlass * glass + ENVELOPE.uRoof * s.roof) / 1000;
+  const gInf = ENVELOPE.infiltration * (wallsGross + s.roof) * ENVELOPE.rhoCp;
+  const uaGround = (ENVELOPE.uGround * s.ground) / 1000;
+  const c = ENVELOPE.capacitancePerM2 * zone.area;
+  return { ua, gInf, uaGround, c, glass, tau: c / Math.max(ua + gInf + uaGround, 1e-6) };
+}

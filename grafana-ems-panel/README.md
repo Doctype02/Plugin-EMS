@@ -12,7 +12,29 @@ sparklines y pantalla completa. El plano y los equipos son propios del edificio 
 |---|---|
 | ![Detalle](docs/vista_detalle_control.png) | ![Control](docs/vista_control_deslastre.png) |
 
-![Vista exterior](docs/vista_exterior_ocupacion.png)
+| Incendio simulado (evacuación, HVAC detenido) | Falla de la unidad VRF-A (popup de la azotea) |
+|---|---|
+| ![Incendio](docs/vista_incendio.png) | ![Falla VRF](docs/vista_falla_vrf.png) |
+
+| ¿Qué pasaría si…? oficina a 28 °C durante 8 h | Servidores sin enfriamiento: minutos hasta cada umbral |
+|---|---|
+| ![Qué pasaría si](docs/vista_que_pasaria.png) | ![Sin enfriamiento](docs/vista_sin_enfriamiento.png) |
+
+| Corte de energía (UPS) | Vista exterior de noche |
+|---|---|
+| ![Corte](docs/vista_corte_energia.png) | ![Noche](docs/vista_exterior_noche.png) |
+
+## Uso rápido
+
+1. **Elige la hora** en la barra de tiempo: arrastra la hora del día (bandas de noche, jornada y punta
+   tarifaria), cambia el día de la semana, pausa o acelera (tiempo real, 1 min/s, 10 min/s, 1 h/s).
+   *Ahora* vuelve a la hora real de Panamá.
+2. **Explora**: pasa el mouse por una zona o por una unidad VRF de la azotea (ventana con capacidad, carga,
+   potencia, COP, estado y zonas que atiende); clic en una zona para su detalle y control.
+3. **Controla** (pestaña *Control*): plano de zonas con su temperatura, parámetros del EMS con su efecto
+   estimado, acciones rápidas de 5 min a 1 h, zonas en manual con el tiempo restante.
+4. **Simula** (pestaña *Simular*): alarmas y accidentes, y «¿qué pasaría si…?».
+5. Botón **?** del escenario: guía breve.
 
 ## Qué muestra
 
@@ -41,8 +63,14 @@ sparklines y pantalla completa. El plano y los equipos son propios del edificio 
   - _Potencia_: densidad en W/m².
   - _Iluminación_: nivel de dimerización.
   - _HVAC_: compresor enfriando, en espera, bloqueado por el limitador de demanda o apagado.
-- Las **ventanas** se iluminan cuando la zona tiene luz encendida. Las **unidades VRF de la azotea** (VRF-A: oficinas y pasillo; VRF-B: recepción, cubículos, conferencias y cuarto eléctrico; VRF-C: servidores) se
-  pintan de azul cuando alguna de sus zonas enfría y de naranja cuando el limitador de demanda (DR) tiene alguna en espera.
+- Las **ventanas** se iluminan cuando la zona tiene luz encendida. **Azotea** con parapeto, escotilla y las
+  **unidades VRF** (VRF-A: oficinas y pasillo; VRF-B: recepción, cubículos, conferencias y cuarto eléctrico;
+  VRF-C: servidores) con carcasa, rejillas del serpentín, ventiladores, tuberías de refrigerante y franja LED
+  de estado: azul enfriando, naranja con compresores limitados por DR, gris en espera, rojo intermitente en
+  falla. Ventana emergente al pasar el mouse.
+- **Entorno**: cielo y sol/luna según la hora simulada, césped, acera, entrada y árboles.
+- **Eventos** sobre el edificio: marcador sobre cada zona afectada, fuego y humo en un incendio, edificio
+  oscurecido en un corte de energía, banner de emergencia con acciones.
 - **Encabezado**: cuatro indicadores por vista (potencia, demanda de 15 min frente al límite, personas,
   alarmas, FP, corriente, energía del día, …).
 - **Panel lateral**:
@@ -55,12 +83,13 @@ sparklines y pantalla completa. El plano y los equipos son propios del edificio 
 Requiere rol **Editor** o **Admin** en Grafana y la opción *Permitir control del edificio*.
 
 - **Por zona** (en el detalle): HVAC auto/encender/apagar, setpoint fijo (20–28 °C), nivel de luces y
-  corte de standby de enchufes, durante 30 min, 1 h o 4 h. El control manual tiene prioridad sobre las reglas
+  corte de standby de enchufes, durante 5 min, 15 min, 30 min, 1 h o 4 h (tiempo simulado en demostración). El control manual tiene prioridad sobre las reglas
   del EMS y el limitador de demanda hasta que vence; *Volver a automático* lo libera. Las zonas en manual
   muestran una insignia **M**. Las zonas críticas (Z09, Z10) no se pueden controlar.
-- **Del edificio** (pestaña *Control*): límite de demanda y setpoint con ocupación del EMS. Acciones rápidas:
-  *Pre-enfriar ahora*, *Deslastre manual* y *Cierre nocturno*. Lista de zonas en manual con *Liberar*, y
-  registro de comandos.
+- **Del edificio** (pestaña *Control*): plano de zonas (clic para controlarla), límite de demanda y setpoint
+  con ocupación del EMS con el efecto estimado (kW de HVAC por °C del modelo RC). Acciones rápidas
+  *Pre-enfriar*, *Modo eco*, *Deslastre* y *Cierre* con duración elegible. Zonas en manual con barra de
+  tiempo restante, y registro de comandos.
 - **Modo demostración**: los comandos se aplican al simulador del navegador y el efecto se ve de inmediato
   (temperatura, potencia, demanda).
 - **Modo en vivo**: el panel hace `POST` a *URL de control* (por defecto `http://localhost:1880/ems/control`).
@@ -68,15 +97,53 @@ Requiere rol **Editor** o **Admin** en Grafana y la opción *Permitir control de
   `…/ems/parametros` y sus reglas lo respetan. El navegador del usuario debe poder llegar a esa URL (CORS
   habilitado en el flujo). La duración de los overrides se cuenta en tiempo real del servidor.
 
+## Simular alarmas, accidentes y «¿qué pasaría si…?»
+
+Pestaña **Simular** → *Alarmas y accidentes*: se elige el evento, dónde (plano de zonas o unidad VRF),
+intensidad y duración, y se inicia. El gemelo aplica el efecto físico y el supervisor emite las alarmas:
+
+| Evento | Efecto en el gemelo | Alarmas |
+|---|---|---|
+| Incendio | Central de incendio: climatización de todo el edificio detenida (NFPA 90A), evacuación en 5 min, iluminación de evacuación, 150 kW de calor en la zona | `INCENDIO`, `TEMP_ALTA` |
+| Corte de energía | Medidor de acometida en 0, sólo cargas críticas en UPS durante la autonomía elegida, sin climatización | `CORTE_ENERGIA`, `EN_UPS` → `UPS_AGOTADO` |
+| Falla de unidad VRF | Todas sus zonas sin enfriamiento (libre flotación RC) | `FALLA_VRF`, `TEMP_ALTA` |
+| Falla de terminal | Una zona sin enfriamiento | `FALLA_TERMINAL` |
+| Puerta o ventana abierta | Aire exterior caliente y húmedo | `PUERTA_ABIERTA` |
+| Falla de sensor | Lectura congelada → modo seguro | `SENSOR_CONGELADO` |
+| Ola de calor | Exterior +1…8 °C | `OLA_CALOR`, `PICO_DEMANDA` |
+| Sobreocupación | Personas sobre el aforo | `SOBREOCUPACION` |
+| Pico de carga | kW extra de equipos (el limitador responde) | `CARGA_EXTRA`, `DR_ACTIVO` |
+
+La temperatura sin enfriamiento usa el modelo RC calibrado de cada zona
+(`T = Teq + (T0 − Teq)·e^(−t/τ)`, con UA, infiltración, terreno y capacitancia de `model.ts`).
+
+*¿Qué pasaría si…?* (`building/projection.ts`, `building/comfort.ts`):
+
+- **Temperatura sostenida**: una zona a X °C durante H horas → PMV/PPD (ISO 7730), pérdida de rendimiento
+  (Seppänen et al. 2006, ≈ 2 %/°C sobre 25 °C) y su costo, energía extra o ahorrada; en servidores, rango
+  ASHRAE TC 9.9 (18–27 °C, A1 ≤ 32 °C), factor X de fallas y vida de las baterías del UPS (mitad por cada
+  8 °C sobre 25 °C).
+- **Sin enfriamiento**: curva de temperatura y minutos hasta cada umbral (26/28/30 °C; 27/32/35 °C en
+  servidores), con botón para simularlo en el edificio.
+- **Ola de calor**: energía, costo, pico y horas sobre el límite de demanda durante 1, 3 o 7 días.
+
+Supuestos económicos: 7.5 USD/h de costo laboral y 0.21 USD/kWh (editables en `projection.ts`).
+
+En **modo en vivo** el evento se envía a Node-RED (`POST /ems/control {tipo: "evento"}`), que lo publica en
+`ems/edificio1/sim/control` y lo aplica el gemelo en Python (`ems/eventos.py`).
+
 ## Modo demostración
 
 Activado por defecto. Simula el edificio en el navegador con la misma lógica que el EMS en Python
 (`ems/control.py`): ocupación por tipo de zona, setpoints por ocupación, pre-enfriamiento, termostato con
-histéresis, luz natural, corte de standby y limitador de demanda. Con *Velocidad de simulación* = 60, un día
-dura 24 minutos. Ocupación, iluminación y equipos siguen los horarios del modelo E+. Cada día laborable inyecta un incidente distinto para que se vean las alarmas:
+histéresis, luz natural, corte de standby y limitador de demanda. La hora, el día y la velocidad se eligen en
+la barra de tiempo (*Velocidad inicial* en las opciones; la pantalla se refresca 5 veces por segundo cuando
+se acelera). Ocupación, iluminación y equipos siguen los horarios del modelo E+. Cada día laborable inyecta un incidente distinto para que se vean las alarmas:
 - sensor congelado en los cubículos (Z02);
 - falla del terminal VRF de la Oficina 3 (Z06);
 - sala de conferencias (Z03) por encima de su aforo.
+
+Se desactivan en *Simular → Incidentes de demostración diarios*.
 
 ## Modo en vivo (InfluxDB)
 
@@ -136,7 +203,7 @@ npm run dev        # webpack en modo watch
 ```
 
 ```bash
-npm run test:ci    # 35 pruebas unitarias (proyección, interiores, data frames, simulador, control)
+npm run test:ci    # 47 pruebas unitarias (proyección, simulador, eventos, confort, reloj, control…)
 ```
 
 ```bash
@@ -168,4 +235,12 @@ requiere reiniciar el servidor de Grafana.
 | `src/components/ZoneInterior.tsx` | Zona en corte con interiores y animaciones |
 | `src/components/Rooftop.tsx` | Unidades exteriores VRF con ventiladores animados |
 | `src/components/ZoneControl.tsx`, `BuildingControl.tsx` | Controles por zona y del edificio |
+| `src/building/events.ts` | Catálogo de eventos simulados (fallas, accidentes, condiciones extremas) |
+| `src/building/comfort.ts` | PMV/PPD, rendimiento, factor X de ASHRAE, vida de baterías |
+| `src/building/projection.ts` | «¿Qué pasaría si…?»: temperatura sostenida, libre flotación, ola de calor |
+| `src/building/clock.ts` | Reloj de la simulación (hora, día, velocidad) |
+| `src/components/TimeBar.tsx` | Barra de tiempo |
+| `src/components/SimulatePanel.tsx`, `EmergencyBanner.tsx` | Pestaña Simular y banner de emergencia |
+| `src/components/ZoneMiniMap.tsx`, `MiniChart.tsx` | Plano de zonas y gráfico liviano |
+| `src/components/VrfTooltip.tsx`, `HelpOverlay.tsx` | Ventana de las unidades VRF y guía de uso |
 | `src/components/EmsPanel.tsx` | Panel: encabezado, controles, panel lateral y tooltip |

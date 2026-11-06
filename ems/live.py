@@ -121,6 +121,8 @@ class Puente:
                 a = {"ts": t, "nivel": data.get("nivel", "warn"), "codigo": data.get("codigo", "ALARMA"),
                      "zona": data.get("zona", "EDIF"), "mensaje": data.get("mensaje", ""), "valor": data.get("valor")}
                 self.influx.alarma(a)
+            elif partes[-1] == "control" and data.get("accion") == "evento":
+                self._evento(ed, t, data)
             elif partes[-1] == "control":
                 acc = data.get("accion")
                 if acc == "pausa":
@@ -129,6 +131,28 @@ class Puente:
                     self.pausado = False
                 if "velocidad" in data:
                     self.velocidad = float(data["velocidad"])
+
+    def _evento(self, ed: Edificio, t, data: dict):
+        """Evento simulado desde el panel (vía Node-RED): iniciar o detener."""
+        if data.get("operacion", "iniciar") == "detener":
+            ed.terminar_evento(str(data.get("id", "*")))
+            self._pub("sim/eventos", {"ts": t.isoformat(), "activos": self._eventos_activos(ed)}, retain=True)
+            return
+        ev, alarmas, err = ed.iniciar_evento(data)
+        if err:
+            print(f"[live] evento rechazado: {err}")
+            return
+        for a in alarmas:
+            a = {"ts": t, **a}
+            self._pub("alarma", a)
+            self.influx.alarma(a)
+        print(f"[live] evento {ev.tipo} iniciado ({ev.minutos:.0f} min)")
+        self._pub("sim/eventos", {"ts": t.isoformat(), "activos": self._eventos_activos(ed)}, retain=True)
+
+    @staticmethod
+    def _eventos_activos(ed: Edificio) -> list[dict]:
+        return [{"id": e.id, "evento": e.tipo, "zona": e.zona, "unidad": e.unidad, "intensidad": e.intensidad,
+                 "restante_min": round(e.minutos - e.transcurrido, 1)} for e in ed.eventos.values()]
 
     def publicar_pronostico(self):
         """Entrena la regresión con 3 semanas simuladas previas y publica el día pronosticado."""
@@ -188,6 +212,8 @@ class Puente:
                         self.influx.alarma(a)
                 tel, med = ed.paso(cl.iloc[i].to_dict(), oc.iloc[i].to_dict(), t.hour * 60 + t.minute, t.dayofweek)
                 med["precio_usd_kwh"] = precio(cfg, t)
+                if ed._fin_eventos:
+                    self._pub("sim/eventos", {"ts": t.isoformat(), "activos": self._eventos_activos(ed)}, retain=True)
                 ts = t.isoformat()
                 for z in tel:
                     z["ts"] = ts

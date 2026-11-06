@@ -4,7 +4,7 @@ import { css, cx } from '@emotion/css';
 import { Button, IconButton, RadioButtonGroup, Tab, TabsBar, useStyles2, useTheme2 } from '@grafana/ui';
 import { config } from '@grafana/runtime';
 import { EmsOptions } from 'types';
-import { BUILDING, FLOORS, ZONES, ZONE_BY_ID, Zone } from 'building/model';
+import { BUILDING, FLOORS, VRF_UNITS, VrfUnit, ZONES, ZONE_BY_ID, Zone } from 'building/model';
 import { Azimuth, IsoConfig } from 'building/iso';
 import { SimOptions, simulate, simulateHistory } from 'building/simulator';
 import { EmsParams, History, Overrides, Snapshot, Status, snapshotFromFrames, zoneStatuses } from 'building/telemetry';
@@ -19,6 +19,13 @@ import { Legend } from './Legend';
 import { MeterCard } from './MeterCard';
 import { ZoneDetail } from './ZoneDetail';
 import { ZoneTooltip } from './ZoneTooltip';
+import { TimeBar } from './TimeBar';
+import { SimulatePanel } from './SimulatePanel';
+import { EmergencyBanner } from './EmergencyBanner';
+import { HelpOverlay } from './HelpOverlay';
+import { VrfTooltip } from './VrfTooltip';
+import { ClockState, goLive, initialClock, setSpeed, setTime, simNow, tickMs, togglePlay } from 'building/clock';
+import { SimEvent } from 'building/events';
 import { useStatusColors } from './useStatusColors';
 
 interface Props extends PanelProps<EmsOptions> {}
@@ -36,31 +43,53 @@ export function demoTime(now: number, speed: number): number {
   return dayStart + (((now - dayStart) * speed) % DAY);
 }
 
-function useSnapshot(props: Props, sim: SimOptions): { snapshot: Snapshot; history: History; now: number } {
-  const { options, data } = props;
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!options.demoMode) {
-      return;
-    }
-    const timer = setInterval(() => setNow(Date.now()), Math.max(1, options.refreshSeconds) * 1000);
-    return () => clearInterval(timer);
-  }, [options.demoMode, options.refreshSeconds]);
+const HIST_SPAN = 2 * 3_600_000;
+const HIST_STEP = 2 * 60_000;
 
-  const simT = demoTime(now, options.demoSpeed);
-  const demo = useMemo(
-    () =>
-      options.demoMode
-        ? { snapshot: simulate(simT, sim), history: simulateHistory(simT, 2 * 3_600_000, 37, sim) }
-        : undefined,
-    [options.demoMode, simT, sim]
+/** Reloj de la simulación controlado por el operador (barra de tiempo). */
+function useSimClock(demo: boolean, initialSpeed: number) {
+  const [clock, setClock] = useState<ClockState>(() => initialClock(Date.now(), initialSpeed));
+  const [real, setReal] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setReal(Date.now()), demo ? tickMs(clock) : 1000);
+    return () => clearInterval(timer);
+  }, [demo, clock]);
+  const now = simNow(clock, Math.max(real, clock.anchorReal));
+  return {
+    clock,
+    now,
+    real,
+    stamp: () => simNow(clock, Date.now()),
+    setTime: (t: number) => setClock((c) => setTime(c, t, Date.now())),
+    setSpeed: (v: number) => setClock((c) => setSpeed(c, v, Date.now())),
+    togglePlay: () => setClock((c) => togglePlay(c, Date.now())),
+    goLive: () => setClock(goLive(Date.now())),
+  };
+}
+
+function useSnapshot(
+  props: Props,
+  sim: SimOptions,
+  simT: number,
+  real: number
+): { snapshot: Snapshot; history: History; now: number } {
+  const { options, data } = props;
+  const snapshot = useMemo(() => (options.demoMode ? simulate(simT, sim) : undefined), [options.demoMode, simT, sim]);
+  // la tendencia de 2 h sólo cambia cada 2 min simulados
+  const histT = Math.floor(simT / HIST_STEP) * HIST_STEP;
+  const history = useMemo(
+    () => (options.demoMode ? simulateHistory(histT, HIST_SPAN, 37, sim) : undefined),
+    [options.demoMode, histT, sim]
   );
-  const real = useMemo(
+  const realNow = real;
+  const fromData = useMemo(
     () => (options.demoMode ? undefined : snapshotFromFrames(data.series)),
     [options.demoMode, data.series]
   );
-  const result = demo ?? real!;
-  return { ...result, now: options.demoMode ? simT : result.snapshot.time || now };
+  if (options.demoMode) {
+    return { snapshot: snapshot!, history: history!, now: simT };
+  }
+  return { ...fromData!, now: fromData!.snapshot.time || realNow };
 }
 
 /** Sólo Editor/Admin de la organización (o administrador de Grafana) pueden enviar comandos. */
@@ -247,11 +276,14 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const [log, setLog] = useState<LogEntry[]>([]);
   const [busy, setBusy] = useState(false);
   const [animate, setAnimate] = useState(options.animations);
+  const [events, setEvents] = useState<SimEvent[]>([]);
+  const [demoIncidents, setDemoIncidents] = useState(true);
+  const simClock = useSimClock(options.demoMode, options.demoSpeed);
   const sim = useMemo<SimOptions>(
-    () => ({ limitKw: params.limitKw, spOccupied: params.spOccupied, overrides }),
-    [params, overrides]
+    () => ({ limitKw: params.limitKw, spOccupied: params.spOccupied, overrides, events, demoIncidents }),
+    [params, overrides, events, demoIncidents]
   );
-  const { snapshot, history, now } = useSnapshot(props, sim);
+  const { snapshot, history, now } = useSnapshot(props, sim, simClock.now, simClock.real);
   const activeOverrides = useMemo(() => prune(overrides, now), [overrides, now]);
   const manual = useMemo(() => new Set(Object.keys(activeOverrides)), [activeOverrides]);
   const permission = controlPermission(options.allowControl);
@@ -262,9 +294,11 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const [exploded, setExploded] = useState(options.exploded);
   const [floor, setFloor] = useState<'all' | number>('all');
   const [selectedId, setSelectedId] = useState<string>();
-  const [hover, setHover] = useState<{ id: string; x: number; y: number }>();
+  const [hover, setHover] = useState<{ id: string; x: number; y: number; w: number; h: number }>();
+  const [unitHover, setUnitHover] = useState<{ id: string; x: number; y: number; w: number; h: number }>();
   const [statusFilter, setStatusFilter] = useState<Status>();
-  const [sideTab, setSideTab] = useState<'alarms' | 'meter' | 'control'>('alarms');
+  const [sideTab, setSideTab] = useState<'alarms' | 'meter' | 'control' | 'simulate'>('alarms');
+  const [help, setHelp] = useState(false);
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState<Set<string>>(() => new Set());
 
@@ -277,6 +311,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
   }
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<HTMLDivElement>(null);
   const fullscreen = useFullscreen(containerRef);
   const panelWidth = fullscreen.active ? window.innerWidth : width;
   const panelHeight = fullscreen.active ? window.innerHeight : height;
@@ -318,9 +353,15 @@ export const EmsPanel: React.FC<Props> = (props) => {
   });
 
   const onHover = useCallback((zone: Zone, e: React.MouseEvent) => {
-    const rect = containerRef.current?.getBoundingClientRect();
+    const rect = sceneRef.current?.getBoundingClientRect();
     if (rect) {
-      setHover({ id: zone.id, x: e.clientX - rect.left, y: e.clientY - rect.top });
+      setHover({ id: zone.id, x: e.clientX - rect.left, y: e.clientY - rect.top, w: rect.width, h: rect.height });
+    }
+  }, []);
+  const onHoverUnit = useCallback((unit: VrfUnit, e: React.MouseEvent) => {
+    const rect = sceneRef.current?.getBoundingClientRect();
+    if (rect) {
+      setUnitHover({ id: unit.id, x: e.clientX - rect.left, y: e.clientY - rect.top, w: rect.width, h: rect.height });
     }
   }, []);
   const selectZone = (zoneId: string) => {
@@ -334,10 +375,11 @@ export const EmsPanel: React.FC<Props> = (props) => {
   /** Ejecuta uno o varios comandos del operador (simulador local o Node-RED). */
   const runCommands = async (input: Command | Command[]) => {
     const commands = Array.isArray(input) ? input : [input];
-    const stamp = () => (options.demoMode ? demoTime(Date.now(), options.demoSpeed) : Date.now());
+    const stamp = () => (options.demoMode ? simClock.stamp() : Date.now());
     const entries: LogEntry[] = [];
     let next = activeOverrides;
     let nextParams = params;
+    let nextEvents = events;
     setBusy(true);
     for (const c of commands) {
       const problem = c.kind === 'override' ? validate(c.cmd) : undefined;
@@ -353,6 +395,16 @@ export const EmsPanel: React.FC<Props> = (props) => {
         if (c.kind === 'params') {
           nextParams = { ...nextParams, ...c.params };
         }
+        if (c.kind === 'event') {
+          nextEvents = [...nextEvents.filter((e) => e.end > stamp()), c.event];
+        }
+        if (c.kind === 'event_stop') {
+          const t = stamp();
+          // se termina en el instante actual (queda en la historia para las tendencias)
+          nextEvents = nextEvents
+            .map((e) => ((c.id === '*' || e.id === c.id) && e.end > t ? { ...e, end: Math.max(e.start, t) } : e))
+            .filter((e) => e.end > e.start);
+        }
         entries.push({ at: stamp(), ok: true, text: describe(c) });
       } catch (err) {
         entries.push({
@@ -364,10 +416,12 @@ export const EmsPanel: React.FC<Props> = (props) => {
     }
     setOverrides(next);
     setParams(nextParams);
+    setEvents(nextEvents);
     setLog((l) => [...entries.reverse(), ...l].slice(0, 30));
     setBusy(false);
   };
 
+  const activeEventCount = events.filter((e) => e.start <= now && e.end > now).length;
   const selected = selectedId ? ZONE_BY_ID[selectedId] : undefined;
   const hovered = hover ? ZONE_BY_ID[hover.id] : undefined;
   const rotate = (dir: 1 | -1) => setAzimuth((a) => ((a + dir * 90 + 360) % 360) as Azimuth);
@@ -410,12 +464,33 @@ export const EmsPanel: React.FC<Props> = (props) => {
           counter={manual.size || null}
           onChangeTab={() => setSideTab('control')}
         />
+        <Tab
+          label="Simular"
+          active={sideTab === 'simulate'}
+          counter={activeEventCount || null}
+          onChangeTab={() => setSideTab('simulate')}
+        />
       </TabsBar>
-      {sideTab === 'control' ? (
+      {sideTab === 'simulate' ? (
+        <SimulatePanel
+          now={now}
+          snapshot={snapshot}
+          sim={sim}
+          events={events}
+          demoIncidents={demoIncidents}
+          canControl={permission.canControl}
+          reason={permission.reason}
+          live={!options.demoMode}
+          onCommand={runCommands}
+          onDemoIncidents={setDemoIncidents}
+        />
+      ) : sideTab === 'control' ? (
         <BuildingControl
           params={params}
           overrides={activeOverrides}
           log={log}
+          snapshot={snapshot}
+          now={now}
           canControl={permission.canControl}
           reason={permission.reason}
           busy={busy}
@@ -455,7 +530,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
       {options.showSummary && (
         <Header
           title={BUILDING.name}
-          subtitle={`${ZONES.length} zonas · ${FLOORS.length} plantas · ${timeLabel}${dr ? ' · DR activo' : ''}${manual.size ? ` · ${manual.size} en manual` : ''}`}
+          subtitle={`${ZONES.length} zonas · ${FLOORS.length} plantas${options.showTimeBar === false ? ` · ${timeLabel}` : ''}${dr ? ' · DR activo' : ''}${manual.size ? ` · ${manual.size} en manual` : ''}`}
           demoMode={options.demoMode}
           kpis={kpis}
           showKpis={panelWidth >= 560 && panelHeight >= 360}
@@ -465,8 +540,21 @@ export const EmsPanel: React.FC<Props> = (props) => {
         />
       )}
 
+      {options.showTimeBar !== false && (
+        <TimeBar
+          now={now}
+          clock={simClock.clock}
+          live={!options.demoMode}
+          compact={panelWidth < 1100}
+          onTime={simClock.setTime}
+          onSpeed={simClock.setSpeed}
+          onTogglePlay={simClock.togglePlay}
+          onLive={simClock.goLive}
+        />
+      )}
+
       <div className={styles.body}>
-        <div className={styles.scene}>
+        <div className={styles.scene} ref={sceneRef}>
           <Building3D
             idPrefix={`ems-${id}`}
             snapshot={snapshot}
@@ -483,6 +571,9 @@ export const EmsPanel: React.FC<Props> = (props) => {
             onHover={onHover}
             onLeave={() => setHover(undefined)}
             onSelect={(z) => setSelectedId((cur) => (cur === z.id ? undefined : z.id))}
+            hoveredUnit={unitHover?.id}
+            onHoverUnit={onHoverUnit}
+            onLeaveUnit={() => setUnitHover(undefined)}
           />
 
           <div className={styles.topLeft}>
@@ -515,6 +606,12 @@ export const EmsPanel: React.FC<Props> = (props) => {
               onClick={() => setAnimate((a) => !a)}
               data-testid="ems-animate"
             />
+            <IconButton
+              name="question-circle"
+              tooltip="Cómo usar el panel"
+              onClick={() => setHelp(true)}
+              data-testid="ems-help-button"
+            />
             <RadioButtonGroup
               size="sm"
               value={floor}
@@ -525,6 +622,20 @@ export const EmsPanel: React.FC<Props> = (props) => {
               ]}
             />
           </div>
+
+          <EmergencyBanner
+            snapshot={snapshot}
+            events={events}
+            now={now}
+            canStop={permission.canControl}
+            onShow={() => {
+              setSelectedId(undefined);
+              setSideTab(snapshot.alarms.length ? 'alarms' : 'simulate');
+              setOverlayOpen(true);
+            }}
+            onStop={() => runCommands({ kind: 'event_stop', id: '*' })}
+          />
+          {help && <HelpOverlay onClose={() => setHelp(false)} />}
 
           <Legend spec={legend} counts={counts} statusFilter={statusFilter} onStatusFilter={setStatusFilter} />
 
@@ -550,15 +661,25 @@ export const EmsPanel: React.FC<Props> = (props) => {
               {sidebar}
             </aside>
           )}
+          {unitHover && (
+            <VrfTooltip
+              unit={VRF_UNITS.find((u) => u.id === unitHover.id)!}
+              snapshot={snapshot}
+              x={unitHover.x}
+              y={unitHover.y}
+              containerWidth={unitHover.w}
+              containerHeight={unitHover.h}
+            />
+          )}
           {hovered && hover && (
             <ZoneTooltip
               zone={hovered}
               state={snapshot.zones[hovered.id]}
               status={statuses[hovered.id]}
               x={hover.x}
-              y={hover.y - (options.showSummary ? 60 : 0)}
-              containerWidth={docked ? panelWidth - 310 : panelWidth}
-              containerHeight={panelHeight}
+              y={hover.y}
+              containerWidth={hover.w}
+              containerHeight={hover.h}
             />
           )}
         </div>
@@ -616,7 +737,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     right: ${theme.spacing(1)};
   `,
   sidebar: css`
-    width: 300px;
+    width: 350px;
     flex-shrink: 0;
     overflow-y: auto;
     padding: ${theme.spacing(1.5)};
@@ -629,7 +750,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     top: ${theme.spacing(1)};
     right: ${theme.spacing(1)};
     bottom: ${theme.spacing(1)};
-    width: min(300px, calc(100% - ${theme.spacing(2)}));
+    width: min(350px, calc(100% - ${theme.spacing(2)}));
     overflow-y: auto;
     padding: ${theme.spacing(1.5)};
     border-radius: ${theme.shape.radius.default};

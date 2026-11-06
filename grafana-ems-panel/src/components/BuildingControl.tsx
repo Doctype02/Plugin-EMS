@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
-import { GrafanaTheme2 } from '@grafana/data';
-import { css } from '@emotion/css';
-import { Button, Icon, Slider, useStyles2 } from '@grafana/ui';
-import { ZONES, ZONE_BY_ID } from 'building/model';
-import { Command, LogEntry } from 'building/control';
-import { EmsParams, Overrides } from 'building/telemetry';
+import { GrafanaTheme2, colorManipulator } from '@grafana/data';
+import { css, cx } from '@emotion/css';
+import { Button, Icon, RadioButtonGroup, useStyles2 } from '@grafana/ui';
+import { ZONES, ZONE_BY_ID, thermal } from 'building/model';
+import { Command, LogEntry, durationLabel } from 'building/control';
+import { EmsParams, Overrides, Snapshot } from 'building/telemetry';
+import { ZoneMiniMap } from './ZoneMiniMap';
 
 interface Props {
   params: EmsParams;
   overrides: Overrides;
   log: LogEntry[];
+  snapshot: Snapshot;
+  now: number;
   canControl: boolean;
   reason?: string;
   busy: boolean;
@@ -27,12 +30,53 @@ const fmtTime = (t: number) =>
   });
 
 const OFFICES = ZONES.filter((z) => !z.critical);
+const DEFAULTS: EmsParams = { limitKw: 30, spOccupied: 24 };
+/** kW eléctricos por °C de setpoint en las zonas con ocupación (G/COP del modelo RC). */
+const KW_PER_DEG = OFFICES.reduce((a, z) => {
+  const th = thermal(z);
+  return a + (th.ua + th.gInf + th.uaGround) / z.cop;
+}, 0);
+const QUICK_DURATIONS = [5, 15, 30, 60];
 
-/** Control del edificio: parámetros del EMS, acciones rápidas, overrides activos y registro de comandos. */
+type QuickKind = 'precool' | 'eco' | 'shed' | 'night';
+const QUICK: Array<{ kind: QuickKind; glyph: string; title: string; detail: string; effect: string }> = [
+  {
+    kind: 'precool',
+    glyph: '❄',
+    title: 'Pre-enfriar',
+    detail: 'HVAC encendido a 23 °C en todas las zonas',
+    effect: 'Llega fresco a la ocupación · más consumo ahora',
+  },
+  {
+    kind: 'eco',
+    glyph: '🌿',
+    title: 'Modo eco',
+    detail: 'Setpoint 25 °C y luces al 70 %',
+    effect: `≈ −${(KW_PER_DEG * 1).toFixed(1)} kW de HVAC · confort aceptable`,
+  },
+  {
+    kind: 'shed',
+    glyph: '⚡',
+    title: 'Deslastre',
+    detail: 'Luces 60 %, enchufes 85 %, setpoint 25 °C',
+    effect: 'Recorta el pico de demanda de inmediato',
+  },
+  {
+    kind: 'night',
+    glyph: '🌙',
+    title: 'Cierre',
+    detail: 'HVAC y luces apagados, standby cortado',
+    effect: 'Consumo mínimo · sólo cargas críticas',
+  },
+];
+
+/** Control del edificio: mapa de zonas, parámetros del EMS, acciones rápidas, manuales y registro. */
 export const BuildingControl: React.FC<Props> = ({
   params,
   overrides,
   log,
+  snapshot,
+  now,
   canControl,
   reason,
   busy,
@@ -43,129 +87,253 @@ export const BuildingControl: React.FC<Props> = ({
   const styles = useStyles2(getStyles);
   const [limit, setLimit] = useState(params.limitKw);
   const [sp, setSp] = useState(params.spOccupied);
+  const [duration, setDuration] = useState(15);
   const disabled = !canControl || busy;
   const active = Object.entries(overrides);
   const changed = limit !== params.limitKw || sp !== params.spOccupied;
+  const m = snapshot.meter;
+  const dr = snapshot.ems?.drActive;
+  const manual = new Set(Object.keys(overrides));
 
-  const quick = (kind: 'precool' | 'shed' | 'night') => {
+  const quick = (kind: QuickKind) => {
     const cmds: Command[] = OFFICES.map((z) => ({
       kind: 'override',
       cmd:
         kind === 'precool'
-          ? { zone: z.id, hvac: 'on', setpoint: 23, durationMin: 30 }
-          : kind === 'shed'
-            ? { zone: z.id, lights: 0.6, plugs: 0.85, setpoint: 25, durationMin: 30 }
-            : { zone: z.id, hvac: 'off', lights: 0, plugs: 0.1, durationMin: 240 },
+          ? { zone: z.id, hvac: 'on', setpoint: 23, durationMin: duration }
+          : kind === 'eco'
+            ? { zone: z.id, setpoint: 25, lights: 0.7, durationMin: duration }
+            : kind === 'shed'
+              ? { zone: z.id, lights: 0.6, plugs: 0.85, setpoint: 25, durationMin: duration }
+              : { zone: z.id, hvac: 'off', lights: 0, plugs: 0.1, durationMin: duration },
     }));
     onCommand(cmds);
   };
 
+  const spDelta = sp - params.spOccupied;
   return (
     <div className={styles.box} data-testid="ems-building-control">
-      <div className={styles.muted}>
-        {live
-          ? 'Los comandos se envían a Node-RED (MQTT) y se aplican en el siguiente paso del EMS.'
-          : 'Modo demostración: los comandos se aplican al simulador del navegador.'}
+      <div className={styles.status}>
+        <div className={styles.statusMain}>
+          <span className={cx(styles.dot, manual.size ? styles.dotWarn : styles.dotOk)} />
+          {manual.size ? `EMS con ${manual.size} zona${manual.size > 1 ? 's' : ''} en manual` : 'EMS en automático'}
+        </div>
+        <div className={styles.pills}>
+          <span className={cx(styles.pill, dr && styles.pillWarn)}>DR {dr ? 'activo' : 'en espera'}</span>
+          <span className={styles.pill}>{m ? `${m.demand15.toFixed(0)} / ${params.limitKw} kW` : '—'}</span>
+          <span className={styles.pill}>{live ? 'Node-RED' : 'Simulador'}</span>
+        </div>
       </div>
       {!canControl && <div className={styles.warn}>{reason ?? 'Sin permiso para controlar el edificio'}</div>}
 
-      <div className={styles.section}>Parámetros del EMS</div>
-      <div className={styles.label}>Límite de demanda (kW)</div>
-      <Slider min={100} max={200} step={5} value={limit} onChange={setLimit} ariaLabelForHandle="Límite de demanda" />
-      <div className={styles.label}>Setpoint con ocupación (°C)</div>
-      <Slider min={22} max={26} step={0.5} value={sp} onChange={setSp} ariaLabelForHandle="Setpoint con ocupación" />
-      <Button
-        size="sm"
-        icon="check"
-        disabled={disabled || !changed}
-        onClick={() => onCommand({ kind: 'params', params: { limitKw: limit, spOccupied: sp } })}
-        data-testid="ems-params-apply"
-      >
-        Aplicar parámetros
-      </Button>
-
-      <div className={styles.section}>Acciones rápidas (zonas no críticas)</div>
-      <div className={styles.actions}>
-        <Button
-          size="sm"
-          variant="secondary"
-          icon="repeat"
-          disabled={disabled}
-          onClick={() => quick('precool')}
-          tooltip="HVAC encendido a 23 °C por 30 min"
-        >
-          Pre-enfriar ahora
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          icon="bolt"
-          disabled={disabled}
-          onClick={() => quick('shed')}
-          tooltip="Luces 60 %, enchufes 85 %, setpoint 25 °C por 30 min"
-          data-testid="ems-quick-shed"
-        >
-          Deslastre manual
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          icon="eye-slash"
-          disabled={disabled}
-          onClick={() => quick('night')}
-          tooltip="HVAC y luces apagados, standby cortado por 4 h"
-        >
-          Cierre nocturno
-        </Button>
-      </div>
-
-      <div className={styles.section}>
-        Zonas en control manual ({active.length})
-        {active.length > 0 && (
-          <Button
-            size="sm"
-            variant="secondary"
-            fill="text"
-            disabled={disabled}
-            onClick={() => onCommand({ kind: 'release', zone: '*' })}
-            data-testid="ems-release-all"
-          >
-            Liberar todas
-          </Button>
-        )}
-      </div>
-      {active.length === 0 && <div className={styles.muted}>Todas las zonas en automático (EMS).</div>}
-      {active.map(([id, ov]) => (
-        <div key={id} className={styles.item}>
-          <Button size="sm" variant="secondary" fill="text" onClick={() => onSelectZone(id)}>
-            {id} · {ZONE_BY_ID[id]?.name}
-          </Button>
-          <span className={styles.muted}>hasta {fmtTime(ov.until)}</span>
-          <Button
-            size="sm"
-            variant="secondary"
-            fill="outline"
-            disabled={disabled}
-            onClick={() => onCommand({ kind: 'release', zone: id })}
-          >
-            Liberar
-          </Button>
+      <section className={styles.card}>
+        <div className={styles.cardTitle}>
+          <Icon name="building" /> Zonas
+          <span className={styles.hint}>toca una zona para controlarla</span>
         </div>
-      ))}
+        <ZoneMiniMap snapshot={snapshot} manual={manual} onSelect={onSelectZone} />
+      </section>
 
-      <div className={styles.section}>Registro de comandos</div>
-      {log.length === 0 && <div className={styles.muted}>Sin comandos en esta sesión.</div>}
-      {log.slice(0, 8).map((e, i) => (
-        <div key={`${e.at}-${i}`} className={styles.log} data-testid="ems-command-log">
-          <Icon
-            name={e.ok ? 'check-circle' : 'exclamation-triangle'}
+      <section className={styles.card}>
+        <div className={styles.cardTitle}>
+          <Icon name="sliders-v-alt" /> Parámetros del EMS
+          {(limit !== DEFAULTS.limitKw || sp !== DEFAULTS.spOccupied) && (
+            <Button
+              size="sm"
+              fill="text"
+              variant="secondary"
+              onClick={() => {
+                setLimit(DEFAULTS.limitKw);
+                setSp(DEFAULTS.spOccupied);
+              }}
+            >
+              Valores de diseño
+            </Button>
+          )}
+        </div>
+        <Param
+          label="Límite de demanda"
+          value={limit}
+          unit="kW"
+          min={20}
+          max={50}
+          step={1}
+          onChange={setLimit}
+          note={
+            m
+              ? `Demanda actual ${m.demand15.toFixed(1)} kW · el limitador rota compresores desde ${(limit - 3).toFixed(0)} kW`
+              : `El limitador rota compresores desde ${(limit - 3).toFixed(0)} kW`
+          }
+        />
+        <Param
+          label="Setpoint con ocupación"
+          value={sp}
+          unit="°C"
+          min={22}
+          max={26}
+          step={0.5}
+          onChange={setSp}
+          note={
+            spDelta === 0
+              ? `Cada °C más ≈ −${KW_PER_DEG.toFixed(1)} kW de HVAC con el edificio ocupado`
+              : `${spDelta > 0 ? 'Ahorro' : 'Aumento'} ≈ ${Math.abs(spDelta * KW_PER_DEG).toFixed(1)} kW de HVAC · ${sp > 25 ? 'confort en el límite' : sp < 23 ? 'sobreenfriamiento' : 'confort ISO 7730 cat. B'}`
+          }
+        />
+        <Button
+          size="sm"
+          icon="check"
+          fullWidth
+          disabled={disabled || !changed}
+          onClick={() => onCommand({ kind: 'params', params: { limitKw: limit, spOccupied: sp } })}
+          data-testid="ems-params-apply"
+        >
+          {changed ? 'Aplicar parámetros' : 'Sin cambios'}
+        </Button>
+      </section>
+
+      <section className={styles.card}>
+        <div className={styles.cardTitle}>
+          <Icon name="bolt" /> Acciones rápidas
+          <span className={styles.hint}>a todas las zonas no críticas</span>
+        </div>
+        <div className={styles.durationRow}>
+          <span className={styles.muted}>Durante</span>
+          <RadioButtonGroup
             size="sm"
-            className={e.ok ? styles.ok : styles.bad}
+            value={duration}
+            onChange={setDuration}
+            options={QUICK_DURATIONS.map((d) => ({ value: d, label: durationLabel(d) }))}
           />
-          <span className={styles.muted}>{fmtTime(e.at)}</span>
-          <span>{e.text}</span>
         </div>
-      ))}
+        <div className={styles.tiles}>
+          {QUICK.map((q) => (
+            <button
+              key={q.kind}
+              type="button"
+              className={styles.tile}
+              disabled={disabled}
+              onClick={() => quick(q.kind)}
+              data-testid={`ems-quick-${q.kind}`}
+            >
+              <span className={styles.tileGlyph}>{q.glyph}</span>
+              <span className={styles.tileTitle}>{q.title}</span>
+              <span className={styles.tileDetail}>{q.detail}</span>
+              <span className={styles.tileEffect}>{q.effect}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className={styles.card}>
+        <div className={styles.cardTitle}>
+          <Icon name="user" /> En manual ({active.length})
+          {active.length > 0 && (
+            <Button
+              size="sm"
+              variant="secondary"
+              fill="text"
+              disabled={disabled}
+              onClick={() => onCommand({ kind: 'release', zone: '*' })}
+              data-testid="ems-release-all"
+            >
+              Todo a automático
+            </Button>
+          )}
+        </div>
+        {active.length === 0 && <div className={styles.muted}>Todas las zonas siguen las reglas del EMS.</div>}
+        {active.map(([id, ov]) => {
+          const frac = Math.min(1, Math.max(0, (ov.until - now) / Math.max(ov.until - ov.since, 1)));
+          return (
+            <div key={id} className={styles.item}>
+              <button type="button" className={styles.link} onClick={() => onSelectZone(id)}>
+                {id} · {ZONE_BY_ID[id]?.name}
+              </button>
+              <div className={styles.progress} title={`hasta ${fmtTime(ov.until)}`}>
+                <div style={{ width: `${frac * 100}%` }} />
+              </div>
+              <span className={styles.muted}>{Math.max(0, Math.ceil((ov.until - now) / 60_000))} min</span>
+              <Button
+                size="sm"
+                variant="secondary"
+                fill="text"
+                icon="times"
+                disabled={disabled}
+                tooltip="Volver a automático"
+                aria-label={`Liberar ${id}`}
+                onClick={() => onCommand({ kind: 'release', zone: id })}
+              />
+            </div>
+          );
+        })}
+      </section>
+
+      <section className={styles.card}>
+        <div className={styles.cardTitle}>
+          <Icon name="list-ul" /> Registro
+        </div>
+        {log.length === 0 && <div className={styles.muted}>Sin comandos en esta sesión.</div>}
+        {log.slice(0, 8).map((e, i) => (
+          <div key={`${e.at}-${i}`} className={styles.log} data-testid="ems-command-log">
+            <Icon
+              name={e.ok ? 'check-circle' : 'exclamation-triangle'}
+              size="sm"
+              className={e.ok ? styles.ok : styles.bad}
+            />
+            <span className={styles.muted}>{fmtTime(e.at)}</span>
+            <span>{e.text}</span>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+};
+
+const Param: React.FC<{
+  label: string;
+  value: number;
+  unit: string;
+  min: number;
+  max: number;
+  step: number;
+  note: string;
+  onChange: (v: number) => void;
+}> = ({ label, value, unit, min, max, step, note, onChange }) => {
+  const styles = useStyles2(getStyles);
+  return (
+    <div className={styles.param}>
+      <div className={styles.paramHead}>
+        <span>{label}</span>
+        <span className={styles.paramValue}>
+          {value % 1 ? value.toFixed(1) : value} <small>{unit}</small>
+        </span>
+      </div>
+      <div className={styles.stepper}>
+        <Button
+          size="sm"
+          variant="secondary"
+          icon="minus"
+          aria-label={`Bajar ${label}`}
+          onClick={() => onChange(Math.max(min, +(value - step).toFixed(2)))}
+        />
+        <input
+          type="range"
+          className={styles.range}
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          aria-label={label}
+          onChange={(e) => onChange(Number(e.currentTarget.value))}
+        />
+        <Button
+          size="sm"
+          variant="secondary"
+          icon="plus"
+          aria-label={`Subir ${label}`}
+          onClick={() => onChange(Math.min(max, +(value + step).toFixed(2)))}
+        />
+      </div>
+      <div className={styles.note}>{note}</div>
     </div>
   );
 };
@@ -176,27 +344,184 @@ const getStyles = (theme: GrafanaTheme2) => ({
     flex-direction: column;
     gap: ${theme.spacing(1)};
   `,
-  section: css`
+  status: css`
+    display: flex;
+    flex-direction: column;
+    gap: ${theme.spacing(0.5)};
+    padding: ${theme.spacing(1)};
+    border-radius: ${theme.shape.radius.default};
+    background: ${colorManipulator.alpha(theme.colors.primary.main, 0.08)};
+    border: 1px solid ${colorManipulator.alpha(theme.colors.primary.main, 0.3)};
+  `,
+  statusMain: css`
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-top: ${theme.spacing(1)};
+    gap: ${theme.spacing(0.75)};
     font-weight: ${theme.typography.fontWeightMedium};
   `,
-  label: css`
-    color: ${theme.colors.text.secondary};
-    font-size: ${theme.typography.bodySmall.fontSize};
-  `,
-  actions: css`
+  pills: css`
     display: flex;
     flex-wrap: wrap;
     gap: ${theme.spacing(0.5)};
   `,
-  item: css`
+  pill: css`
+    padding: 0 ${theme.spacing(0.75)};
+    border-radius: ${theme.shape.radius.pill};
+    border: 1px solid ${theme.colors.border.medium};
+    font-size: 11px;
+    color: ${theme.colors.text.secondary};
+    font-variant-numeric: tabular-nums;
+  `,
+  pillWarn: css`
+    border-color: ${theme.colors.warning.border};
+    color: ${theme.colors.warning.text};
+  `,
+  dot: css`
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+  `,
+  dotOk: css`
+    background: ${theme.colors.success.main};
+  `,
+  dotWarn: css`
+    background: ${theme.colors.warning.main};
+  `,
+  card: css`
+    display: flex;
+    flex-direction: column;
+    gap: ${theme.spacing(0.75)};
+    padding: ${theme.spacing(1)};
+    border: 1px solid ${theme.colors.border.weak};
+    border-radius: ${theme.shape.radius.default};
+    background: ${theme.colors.background.secondary};
+  `,
+  cardTitle: css`
     display: flex;
     align-items: center;
+    gap: ${theme.spacing(0.75)};
+    font-weight: ${theme.typography.fontWeightMedium};
+    & > :last-child:not(:first-child):not(svg) {
+      margin-left: auto;
+    }
+  `,
+  hint: css`
+    margin-left: auto;
+    font-weight: ${theme.typography.fontWeightRegular};
+    font-size: 11px;
+    color: ${theme.colors.text.secondary};
+  `,
+  durationRow: css`
+    display: flex;
+    align-items: center;
+    gap: ${theme.spacing(1)};
+  `,
+  param: css`
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  `,
+  paramHead: css`
+    display: flex;
     justify-content: space-between;
+    align-items: baseline;
+    font-size: ${theme.typography.bodySmall.fontSize};
+    color: ${theme.colors.text.secondary};
+  `,
+  paramValue: css`
+    font-size: ${theme.typography.h4.fontSize};
+    color: ${theme.colors.text.primary};
+    font-weight: ${theme.typography.fontWeightMedium};
+    font-variant-numeric: tabular-nums;
+    small {
+      font-size: ${theme.typography.bodySmall.fontSize};
+      color: ${theme.colors.text.secondary};
+    }
+  `,
+  stepper: css`
+    display: flex;
+    align-items: center;
     gap: ${theme.spacing(0.5)};
+  `,
+  range: css`
+    flex: 1;
+    accent-color: ${theme.colors.primary.main};
+  `,
+  note: css`
+    font-size: 11px;
+    color: ${theme.colors.text.secondary};
+  `,
+  tiles: css`
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: ${theme.spacing(0.75)};
+  `,
+  tile: css`
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: ${theme.spacing(0.75, 1)};
+    text-align: left;
+    border: 1px solid ${theme.colors.border.weak};
+    border-radius: ${theme.shape.radius.default};
+    background: ${theme.colors.background.primary};
+    color: ${theme.colors.text.primary};
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      transform 0.15s;
+    &:hover:not(:disabled) {
+      border-color: ${theme.colors.primary.border};
+      transform: translateY(-1px);
+    }
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  `,
+  tileGlyph: css`
+    font-size: 18px;
+    line-height: 1;
+  `,
+  tileTitle: css`
+    font-weight: ${theme.typography.fontWeightMedium};
+  `,
+  tileDetail: css`
+    font-size: 11px;
+    color: ${theme.colors.text.secondary};
+  `,
+  tileEffect: css`
+    font-size: 11px;
+    color: ${theme.colors.primary.text};
+  `,
+  item: css`
+    display: grid;
+    grid-template-columns: 1fr 60px auto auto;
+    align-items: center;
+    gap: ${theme.spacing(0.75)};
+  `,
+  link: css`
+    background: none;
+    border: none;
+    padding: 0;
+    color: ${theme.colors.text.link};
+    text-align: left;
+    cursor: pointer;
+    font-size: ${theme.typography.bodySmall.fontSize};
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  `,
+  progress: css`
+    height: 4px;
+    border-radius: 2px;
+    background: ${theme.colors.border.weak};
+    div {
+      height: 100%;
+      border-radius: 2px;
+      background: ${theme.colors.warning.main};
+    }
   `,
   log: css`
     display: flex;

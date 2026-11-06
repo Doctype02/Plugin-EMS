@@ -29,6 +29,11 @@ export interface ZoneState {
   sensorFault?: boolean;
   /** La zona está en control manual (override del operador). */
   override?: boolean;
+  /** Eventos simulados activos en la zona (incendio, falla, puerta abierta…). */
+  events?: string[];
+  fire?: boolean;
+  /** Sin suministro de red (corte de energía). */
+  noPower?: boolean;
   updatedAt: number;
 }
 
@@ -73,6 +78,11 @@ export interface MeterState {
   irr: number;
   price: number;
   updatedAt: number;
+  /** Red disponible (false durante un corte de energía). */
+  gridOk?: boolean;
+  /** Carga alimentada por el UPS (kW) y autonomía restante (min). */
+  upsKw?: number;
+  upsMinutes?: number;
 }
 
 export interface EmsState {
@@ -83,6 +93,10 @@ export interface EmsState {
   nAlarms: number;
   safeMode: string[];
   latencyMs: number;
+  /** Eventos simulados activos (para el banner de emergencia). */
+  events?: string[];
+  /** Alarma de incendio activa: climatización del edificio en paro. */
+  fireAlarm?: boolean;
 }
 
 export type AlarmLevel = 'info' | 'warn' | 'crit';
