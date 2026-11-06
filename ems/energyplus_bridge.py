@@ -15,7 +15,8 @@ estima como carga de enfriamiento / COP de la zona.
 
 Uso:
     export ENERGYPLUS_DIR=/usr/local/EnergyPlus-24-2-0
-    python -m ems energyplus --idf modelo.idf --epw PAN_Tocumen.epw
+    python -m ems energyplus --idf data/energyplus/modelo/in.idf \
+        --epw data/clima/PAN_PO_Panama-Albrook.Gelabert.Intl.AP.783842_TMYx.2011-2025.epw
 """
 from __future__ import annotations
 

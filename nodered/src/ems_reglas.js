@@ -9,19 +9,15 @@ const P = Object.assign({
     banda: 0.5, sp_ocupado: 24.0, sp_desocupado: 27.0, sp_noche: 29.0,
     precool_min: 60, entrada: 7.0, salida: 18.0,
     lux_objetivo: 500, lux_artificial: 500,
-    luces_desocupado: 0.0, equipos_desocupado: 0.10, retardo_vacancia_min: 15,
-    limite_kw: 145, dr_hist_kw: 10, dr_luces: 0.70, dr_equipos: 0.85, dr_margen_confort: 0.75,
+    luces_desocupado: 0.0, equipos_desocupado: 0.1, retardo_vacancia_min: 15,
+    limite_kw: 30, dr_hist_kw: 3, dr_luces: 0.7, dr_equipos: 0.85, dr_margen_confort: 0.75,
     confort_max: 26.0, confort_min: 21.0, alarma_servidor: 27.0,
     plr_min: 0.15, banda_prop: 2.0
 }, flow.get("parametros") || {});
 
 // Terminal VRF de cada zona: [capacidad total kW, COP estacional del sistema, ventilador kW].
 // Lo genera nodered/build_flows.py desde config/edificio.yaml; se puede reemplazar con flow "parametros" → hvac.
-const HVAC = P.hvac || /*@HVAC@*/{
-    Z01: [5.76, 1.72, 0.147], Z02: [19.41, 1.72, 0.435], Z03: [13.36, 1.72, 0.269], Z04: [17.04, 2.08, 0.433],
-    Z05: [16.13, 2.08, 0.397], Z06: [15.31, 2.08, 0.37], Z07: [14.54, 2.08, 0.341], Z08: [3.55, 2.08, 0.099],
-    Z09: [2.89, 3.08, 0.086], Z10: [0.16, 1.72, 0.003]
-}/*@FIN@*/;
+const HVAC = P.hvac || /*@HVAC@*/{"Z01": [5.76, 1.72, 0.147], "Z02": [19.41, 1.72, 0.435], "Z03": [13.36, 1.72, 0.269], "Z04": [17.04, 2.08, 0.433], "Z05": [16.13, 2.08, 0.397], "Z06": [15.31, 2.08, 0.37], "Z07": [14.54, 2.08, 0.341], "Z08": [3.55, 2.08, 0.099], "Z09": [2.89, 3.08, 0.086], "Z10": [0.16, 1.72, 0.003]}/*@FIN@*/;
 // capacidad pedida por el terminal (ley proporcional, igual que ems/edificio.py: fraccion_carga)
 const fraccionCarga = (t, sp) => Math.min(1, Math.max(P.plr_min, (t - sp + P.banda) / P.banda_prop));
 

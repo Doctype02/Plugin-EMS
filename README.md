@@ -90,7 +90,7 @@ export ENERGYPLUS_DIR=/ruta/EnergyPlus-24-2-0
 ```
 
 ```bash
-python -m ems energyplus --idf modelo_10zonas.idf --epw PAN_Tocumen.epw --mapa config/energyplus_mapa.yaml
+python -m ems energyplus --idf data/energyplus/modelo/in.idf --epw data/clima/PAN_PO_Panama-Albrook.Gelabert.Intl.AP.783842_TMYx.2011-2025.epw
 ```
 
 `config/energyplus_mapa_5zone.yaml` permite probar el puente con el ejemplo `5ZoneAirCooled.idf` de EnergyPlus.

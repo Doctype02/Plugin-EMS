@@ -20,7 +20,9 @@ sparklines y pantalla completa. El plano y los equipos son propios del edificio 
   un solo piso (PB, P1, P2):
   - _En corte_ (vista explotada): cada piso escalonado, con muros de fondo completos y ventanas, fachada de
     vidrio con antepecho, divisiones bajas y el **interior de cada zona**: escritorios, mesa de reuniones,
-    mesas de cafetería, mesones de laboratorio, filas de racks, gabinetes de UPS, recepción y sofás.
+    estaciones de trabajo de los cubículos, escritorios de las oficinas, mesa de la sala de conferencias,
+    mostrador y sofás de la recepción, fila de racks del cuarto de servidores, tableros del cuarto eléctrico
+    y plantas del pasillo.
   - _Exterior_: pisos apilados con fachadas y ventanas.
 - **Animaciones internas**:
   - personas sentadas en su puesto y ~30 % caminando hacia el pasillo y de regreso;
@@ -164,6 +166,6 @@ requiere reiniciar el servidor de Grafana.
 | `src/building/control.ts` | Comandos del operador: validación, overrides locales y envío a Node-RED |
 | `src/components/Building3D.tsx` | Escena SVG: pisos, vista exterior, montante eléctrica |
 | `src/components/ZoneInterior.tsx` | Zona en corte con interiores y animaciones |
-| `src/components/Rooftop.tsx` | Condensadoras con ventiladores animados |
+| `src/components/Rooftop.tsx` | Unidades exteriores VRF con ventiladores animados |
 | `src/components/ZoneControl.tsx`, `BuildingControl.tsx` | Controles por zona y del edificio |
 | `src/components/EmsPanel.tsx` | Panel: encabezado, controles, panel lateral y tooltip |
