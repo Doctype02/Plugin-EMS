@@ -455,7 +455,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
       {options.showSummary && (
         <Header
           title={BUILDING.name}
-          subtitle={`${ZONES.length} zonas · 3 niveles · ${timeLabel}${dr ? ' · DR activo' : ''}${manual.size ? ` · ${manual.size} en manual` : ''}`}
+          subtitle={`${ZONES.length} zonas · ${FLOORS.length} plantas · ${timeLabel}${dr ? ' · DR activo' : ''}${manual.size ? ` · ${manual.size} en manual` : ''}`}
           demoMode={options.demoMode}
           kpis={kpis}
           showKpis={panelWidth >= 560 && panelHeight >= 360}

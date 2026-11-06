@@ -3,6 +3,6 @@
   "pruebas_total": 10,
   "confiabilidad_logica_pct": 100.0,
   "disponibilidad_pct": 100.0,
-  "latencia_media_ms": 0.23669999999999997,
-  "latencia_p99_ms": 1.037
+  "latencia_media_ms": 0.2444,
+  "latencia_p99_ms": 0.895
 }

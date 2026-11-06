@@ -1,7 +1,7 @@
 # EMS Edificio — panel de Grafana (`doctype02-ems-panel`)
 
-Panel de Grafana con el **edificio inteligente del Proyecto 2 en 3D isométrico**: 3 niveles, 10 zonas y
-azotea con las unidades condensadoras. Cada zona se colorea según la vista elegida y muestra el estado del
+Panel de Grafana con el **edificio inteligente del Proyecto 2 en 3D isométrico**, según el modelo
+OpenStudio/EnergyPlus del equipo: 2 plantas de 20 × 20 m, 10 zonas y azotea con las 3 unidades exteriores VRF. Cada zona se colorea según la vista elegida y muestra el estado del
 EMS (ocupación, HVAC, iluminación, potencia, alarmas). Reutiliza la base técnica del panel BMS
 (`Doctype02/Plugin-BMS`): scaffolding de Grafana, encabezado de indicadores, insignias de estado,
 sparklines y pantalla completa. El plano y los equipos son propios del edificio del EMS.
@@ -28,7 +28,7 @@ sparklines y pantalla completa. El plano y los equipos son propios del edificio 
     limitador de demanda lo bloquea);
   - halo de las luminarias según el nivel de dimerización;
   - LEDs de los racks parpadeando;
-  - ventiladores de las condensadoras girando;
+  - ventiladores de las unidades VRF girando (más rápido cuanto más potencia piden sus zonas);
   - montante eléctrica con flujo cuya velocidad sigue la potencia total.
 
   Botón ⏸ para pausarlas; se apagan solas con *prefers-reduced-motion*.
@@ -39,8 +39,8 @@ sparklines y pantalla completa. El plano y los equipos son propios del edificio 
   - _Potencia_: densidad en W/m².
   - _Iluminación_: nivel de dimerización.
   - _HVAC_: compresor enfriando, en espera, bloqueado por el limitador de demanda o apagado.
-- Las **ventanas** se iluminan cuando la zona tiene luz encendida. Las **condensadoras de la azotea** se
-  pintan de azul cuando su compresor enfría y de naranja cuando el limitador de demanda (DR) lo tiene en espera.
+- Las **ventanas** se iluminan cuando la zona tiene luz encendida. Las **unidades VRF de la azotea** (VRF-A: oficinas y pasillo; VRF-B: recepción, cubículos, conferencias y cuarto eléctrico; VRF-C: servidores) se
+  pintan de azul cuando alguna de sus zonas enfría y de naranja cuando el limitador de demanda (DR) tiene alguna en espera.
 - **Encabezado**: cuatro indicadores por vista (potencia, demanda de 15 min frente al límite, personas,
   alarmas, FP, corriente, energía del día, …).
 - **Panel lateral**:
@@ -71,10 +71,10 @@ Requiere rol **Editor** o **Admin** en Grafana y la opción *Permitir control de
 Activado por defecto. Simula el edificio en el navegador con la misma lógica que el EMS en Python
 (`ems/control.py`): ocupación por tipo de zona, setpoints por ocupación, pre-enfriamiento, termostato con
 histéresis, luz natural, corte de standby y limitador de demanda. Con *Velocidad de simulación* = 60, un día
-dura 24 minutos. Cada día laborable inyecta un incidente distinto para que se vean las alarmas:
-- sensor congelado en Z03;
-- falla de HVAC en Z04;
-- sala de conferencias Z06 por encima de su aforo.
+dura 24 minutos. Ocupación, iluminación y equipos siguen los horarios del modelo E+. Cada día laborable inyecta un incidente distinto para que se vean las alarmas:
+- sensor congelado en los cubículos (Z02);
+- falla del terminal VRF de la Oficina 3 (Z06);
+- sala de conferencias (Z03) por encima de su aforo.
 
 ## Modo en vivo (InfluxDB)
 

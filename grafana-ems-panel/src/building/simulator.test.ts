@@ -3,7 +3,7 @@ import { clock, incident, simulate, simulateHistory } from './simulator';
 
 // martes 3 nov 2026 (hora de Panamá = UTC-5)
 const at = (h: number, m = 0, day = 3) => Date.UTC(2026, 10, day, h + 5, m);
-const opts = { limitKw: 145 };
+const opts = { limitKw: 30 };
 
 describe('simulador del edificio', () => {
   it('usa la hora de Panamá', () => {
@@ -21,7 +21,7 @@ describe('simulador del edificio', () => {
     const noche = simulate(at(3), opts);
     const personas = (s: ReturnType<typeof simulate>) =>
       ZONES.filter((z) => !z.critical).reduce((a, z) => a + s.zones[z.id].occupants, 0);
-    expect(personas(dia)).toBeGreaterThan(100);
+    expect(personas(dia)).toBeGreaterThan(40); // aforo de diseño del modelo: 75 personas
     expect(personas(noche)).toBe(0);
     expect(dia.meter!.pTotal).toBeGreaterThan(noche.meter!.pTotal * 1.8);
   });

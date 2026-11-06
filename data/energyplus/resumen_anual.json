@@ -1,0 +1,35 @@
+{
+  "fuente": "OpenStudio/EnergyPlus — EMS_Edificio_Ultima simulacion",
+  "clima": "PAN_PO_Panama-Albrook.Gelabert.Intl.AP.783842_TMYx.2011-2025.epw",
+  "area_m2": 800.0,
+  "energia_anual_kwh": {
+    "Heating": 19.4,
+    "Cooling": 66755.6,
+    "Interior Lighting": 17850.0,
+    "Interior Equipment": 43777.8,
+    "Fans": 15594.4,
+    "Total End Uses": 143994.4
+  },
+  "pico_kw": {
+    "Cooling": 33.95,
+    "Interior Lighting": 6.423,
+    "Interior Equipment": 8.931,
+    "Fans": 2.58,
+    "Total End Uses": 51.884
+  },
+  "hora_pico": "15-AUG-15:10",
+  "horas_no_satisfechas_ocupado": {
+    "Z02": 0.0,
+    "Z04": 5.0,
+    "Z05": 5.0,
+    "Z06": 13.5,
+    "Z07": 4.83,
+    "Z01": 0.17,
+    "Z03": 0.5,
+    "Z10": 0.0,
+    "Z08": 0.0,
+    "Z09": 0.0,
+    "Facility": 14.0
+  },
+  "electricidad_10min_kwh": 143995.3
+}

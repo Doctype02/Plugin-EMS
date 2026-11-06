@@ -49,8 +49,8 @@ test('la vista exterior apila los pisos', async ({ gotoPanelEditPage, readProvis
   const panel = panelEditPage.panel.locator;
 
   await panel.getByTestId('ems-explode').click();
-  await expect(panel.getByTestId('ems-floor-P2')).toBeVisible();
-  await expect(panel.getByText('Azotea · condensadoras')).toHaveCount(0);
+  await expect(panel.getByTestId('ems-floor-PA')).toBeVisible();
+  await expect(panel.getByText('Azotea · unidades VRF')).toHaveCount(0);
 });
 
 test('muestra el interior animado en la vista en corte', async ({ gotoPanelEditPage, readProvisionedDashboard }) => {

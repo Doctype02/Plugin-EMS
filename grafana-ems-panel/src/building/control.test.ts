@@ -48,7 +48,7 @@ describe('comandos del operador', () => {
 describe('overrides en el simulador', () => {
   const t0 = at(10, 0);
   const t = at(11, 0);
-  const base = { limitKw: 145 };
+  const base = { limitKw: 30 };
 
   it('apagar el HVAC de una zona la calienta y baja su potencia', () => {
     const auto = simulate(t, base);

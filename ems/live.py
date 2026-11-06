@@ -164,7 +164,7 @@ class Puente:
         while self.activo:
             idx = m_clima.indice(inicio, dias_bloque, paso, self.tz)
             cl = m_clima.generar(cfg, idx)
-            oc = m_ocup.generar(zonas(cfg), idx, cfg["ocupacion"])
+            oc = m_ocup.generar(zonas(cfg), idx, cfg["ocupacion"], cfg=cfg)
             for i, t in enumerate(idx):
                 if not self.activo:
                     break
@@ -186,7 +186,7 @@ class Puente:
                     for a in ctrl.alarmas:
                         self._pub("alarma", a)
                         self.influx.alarma(a)
-                tel, med = ed.paso(cl.iloc[i].to_dict(), oc.iloc[i].to_dict(), t.hour * 60 + t.minute)
+                tel, med = ed.paso(cl.iloc[i].to_dict(), oc.iloc[i].to_dict(), t.hour * 60 + t.minute, t.dayofweek)
                 med["precio_usd_kwh"] = precio(cfg, t)
                 ts = t.isoformat()
                 for z in tel:

@@ -144,3 +144,30 @@ def dia_siguiente(medidor: pd.DataFrame, semilla: int = 5) -> pd.Series:
     fut["lag24"] = h["p_total_kw"].reindex(fut_idx - pd.Timedelta(days=1)).values
     fut["lag168"] = prev["p_total_kw"].values
     return pd.Series(_diseno(fut, rng, 0.0) @ beta, index=fut_idx, name="p_kw")
+
+
+def historico_energyplus(cfg: dict) -> pd.DataFrame:
+    """Serie horaria del medidor general simulada por EnergyPlus (año completo) con el clima del EPW."""
+    from . import clima as m_clima
+    from .validacion import cargar_energyplus
+
+    el = cargar_energyplus()["electricidad"].resample("1h").mean()
+    cl = m_clima.generar(cfg, el.index)
+    return pd.DataFrame({"p_total_kw": el.values, "t_ext_c": cl["t_ext_c"].values, "irr_wm2": cl["irr_wm2"].values},
+                        index=el.index)
+
+
+def evaluar_horario(h: pd.DataFrame, dias_prueba: int = 28, usar_sarimax: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Igual que `evaluar` pero a partir de una serie horaria ya preparada (p. ej. la de EnergyPlus)."""
+    reg, _ = regresion(h, dias_prueba)
+    out = pd.DataFrame({"real": h["p_total_kw"]}).loc[reg.index]
+    out["regresion"] = reg
+    out["persistencia"] = persistencia(h, dias_prueba).reindex(out.index)
+    if usar_sarimax:
+        try:
+            out["sarimax"] = sarimax(h, dias_prueba).reindex(out.index)
+        except Exception as exc:  # pragma: no cover
+            print(f"[pronostico] SARIMAX omitido: {exc}")
+    met = pd.DataFrame({m: metricas(out["real"], out[m]) for m in out.columns if m != "real"}).T
+    met.index.name = "modelo"
+    return out, met

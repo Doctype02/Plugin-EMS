@@ -1,6 +1,5 @@
 uso,clasificacion,e_kwh,participacion_pct,e_anual_mwh
-HVAC (zonas no críticas),no crítica / diferible,6138.491,36.379,320.078
-Iluminación (zonas no críticas),no crítica / atenuable,1416.54,8.395,73.862
-Enchufes y equipos (zonas no críticas),no crítica / deslastrable,2401.417,14.232,125.217
-"Servidores, seguridad, UPS (Z09, Z10)",crítica,5893.848,34.929,307.322
-"Ascensores, bombas, iluminación exterior",crítica / mixta,1023.539,6.066,53.37
+HVAC (zonas no críticas),no crítica / diferible,5396.37,50.654,70.346
+Iluminación (zonas no críticas),no crítica / atenuable,1342.312,12.6,17.498
+Enchufes y equipos (zonas no críticas),no crítica / deslastrable,1914.584,17.972,24.958
+"Cuarto de servidores y cuarto eléctrico (Z09, Z10)",crítica,2000.169,18.775,26.074

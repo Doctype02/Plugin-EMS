@@ -37,7 +37,7 @@ export const plugin = new PanelPlugin<EmsOptions>(EmsPanel).setPanelOptions((bui
       path: 'limitKw',
       name: 'Límite de demanda (kW)',
       description: 'Límite del EMS para la respuesta a la demanda (si los datos no traen limite_kw)',
-      defaultValue: 145,
+      defaultValue: 30,
       settings: { min: 10 },
     })
     .addBooleanSwitch({

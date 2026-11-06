@@ -134,7 +134,7 @@ class PuenteEnergyPlus:
             pl, pe = gv(hz["pl"]) / 1000, gv(hz["pe"]) / 1000
             p_hvac = abs(gv(hz["qc"])) / 1000 / z.cop
             luces_nivel = min(pl / max(z.p_luces_max_kw, 1e-6), 1.0)
-            lux_dia = z.lux_dia_max * ghi / max(self.cfg["clima"]["irr_max_wm2"], 1)
+            lux_dia = 110.0 * 0.252 * 0.25 * z.ventana * ghi * 0.4 / max(z.area, 1)
             p_z = pl + pe + p_hvac
             tot["hvac"] += p_hvac
             tot["luces"] += pl

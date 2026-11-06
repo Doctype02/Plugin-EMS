@@ -2,7 +2,9 @@
 
 Comandos:
   auditoria      Línea base y clasificación de cargas
-  pronostico     Pronóstico día siguiente y métricas MAE/RMSE/MAPE
+  validar        Compara el gemelo digital con la simulación de EnergyPlus (ASHRAE Guideline 14)
+  calibrar       Calibra los parámetros efectivos del modelo RC contra EnergyPlus
+  pronostico     Pronóstico día siguiente y métricas MAE/RMSE/MAPE (datos de EnergyPlus y del gemelo)
   escenarios     Línea base vs Reglas vs Reglas+DR vs MPC (KPIs, ROI, costo kWh evitado)
   pruebas        10 perfiles normales/anómalos con criterios de aceptación
   sensibilidad   Tornado de parámetros técnicos y económicos
@@ -67,16 +69,71 @@ def cmd_auditoria(args, cfg=None, res_base=None):
 
 
 def cmd_pronostico(args, cfg=None):
+    """Pronóstico día siguiente sobre dos fuentes: el año simulado por EnergyPlus (histórico del medidor,
+    validación en las últimas 4 semanas) y 6 semanas del gemelo digital con ocupación estocástica."""
+    from .validacion import DATOS
+
     cfg = cfg or _set(args)
     out = _out(args)
+    tablas = []
+    serie_ep = None
+    if (DATOS / "electricidad_10min.csv").exists():
+        h = pronostico.historico_energyplus(cfg)
+        serie_ep, met_ep = pronostico.evaluar_horario(h, dias_prueba=28, usar_sarimax=not args.sin_sarimax)
+        serie_ep.to_csv(out / "pronostico_serie_energyplus.csv")
+        tablas.append(met_ep.assign(fuente="EnergyPlus (año 2006, 4 semanas de validación)"))
+        reportes.pronostico_fig(serie_ep.iloc[-24 * 7:], met_ep, out / "fig_pronostico_energyplus.png",
+                                titulo="Pronóstico del día siguiente — datos de EnergyPlus (última semana)")
     inicio = (pd.Timestamp("2026-11-02") - pd.Timedelta(days=35)).strftime("%Y-%m-%d %H:%M")
     hist = simular(cfg, args.controlador, dias=42, inicio=inicio)
     serie, met = pronostico.evaluar(hist.medidor, dias_prueba=7, usar_sarimax=not args.sin_sarimax)
     serie.to_csv(out / "pronostico_serie.csv")
-    met.to_csv(out / "pronostico_metricas.csv")
-    reportes.pronostico_fig(serie, met, out / "fig_pronostico.png")
-    print(met.round(3).to_string())
-    return serie, met
+    tablas.append(met.assign(fuente=f"Gemelo digital ({args.controlador}, 1 semana de validación)"))
+    reportes.pronostico_fig(serie, met, out / "fig_pronostico.png",
+                            titulo="Pronóstico del día siguiente — gemelo digital con ocupación estocástica")
+    todas = pd.concat(tablas).reset_index().set_index(["fuente", "modelo"])
+    todas.to_csv(out / "pronostico_metricas.csv")
+    print(todas.round(3).to_string())
+    return serie_ep if serie_ep is not None else serie, todas
+
+
+def cmd_validar(args, cfg=None):
+    from . import validacion
+
+    cfg = cfg or _set(args)
+    out = _out(args)
+    a = validacion.anual(cfg)
+    a["usos"].round(1).to_csv(out / "validacion_usos_finales.csv")
+    semanas = []
+    ref = validacion.cargar_energyplus()
+    for ini, dias in validacion.SEMANAS_CALIBRACION:
+        c = validacion.comparar(cfg, ini, dias, ref)
+        semanas.append({"periodo": c["periodo"], **{f"total_{k}": v for k, v in c["electricidad_total"].items()},
+                        **{f"vrf_{k}": v for k, v in c["compresores_vrf"].items() if k != "n"},
+                        "pico_energyplus_kw": c["pico_kw"]["energyplus"], "pico_modelo_kw": c["pico_kw"]["modelo"],
+                        **{f"rmse_t_{z}": v for z, v in c["rmse_temp_ocupado_c"].items()}})
+        if ini == validacion.SEMANAS_CALIBRACION[-1][0]:
+            reportes.validacion_fig(c["series"], a["usos"], out / "fig_validacion_energyplus.png")
+    tabla = pd.DataFrame(semanas)
+    tabla.to_csv(out / "validacion_semanas.csv", index=False)
+    resumen = {"anual_horario": a["horario"], "pico_kw": a["pico_kw"],
+               "total_anual_kwh": {"energyplus": float(a["usos"].loc["Total End Uses", "energyplus_kwh"]),
+                                   "modelo": float(a["usos"].loc["Total End Uses", "modelo_kwh"])}}
+    reportes.guardar_json(out / "validacion_resumen.json", resumen)
+    print(a["usos"].round(1).to_string())
+    print(json.dumps(resumen, indent=2, default=float))
+    return a, tabla, resumen
+
+
+def cmd_calibrar(args, cfg=None):
+    from . import validacion
+
+    cfg = cfg or _set(args)
+    mejor, tabla = validacion.calibrar(cfg)
+    tabla.to_csv(_out(args) / "calibracion_rejilla.csv", index=False)
+    print(tabla.head(10).round(3).to_string(index=False))
+    print("Mejor combinación (copiar a config/edificio.yaml):", json.dumps(mejor, indent=2))
+    return mejor, tabla
 
 
 def cmd_escenarios(args, cfg=None):
@@ -160,6 +217,8 @@ def cmd_todo(args):
     tabla, eco, esc_pa, res = cmd_escenarios(args, cfg)
     print("\n== Auditoría ==")
     _, usos, aud = cmd_auditoria(args, cfg, res["baseline"])
+    print("\n== Validación contra EnergyPlus ==")
+    _, _, val = cmd_validar(args, cfg)
     print("\n== Pronóstico ==")
     _, met = cmd_pronostico(args, cfg)
     print("\n== Pruebas ==")
@@ -174,8 +233,12 @@ def cmd_todo(args):
     reportes.escribir_resumen(out / "RESUMEN.md", {
         "Auditoría energética (línea base)": aud,
         "Clasificación de cargas": usos.set_index("uso"),
-        "Escenarios (1 semana, mismo clima y ocupación)": tabla[[c for c in sel if c in tabla]],
-        "Pronóstico día siguiente (semana de validación)": met,
+        "Validación del gemelo digital contra EnergyPlus (año completo)": {
+            "NMBE horario (%)": val["anual_horario"]["nmbe_pct"], "CV(RMSE) horario (%)": val["anual_horario"]["cvrmse_pct"],
+            "Cumple ASHRAE Guideline 14": val["anual_horario"]["cumple_g14"],
+            "Energía anual E+ (kWh)": val["total_anual_kwh"]["energyplus"], "Energía anual modelo (kWh)": val["total_anual_kwh"]["modelo"]},
+        "Escenarios (4 semanas tipo con el EPW de Panamá, mismo clima y ocupación)": tabla[[c for c in sel if c in tabla]],
+        "Pronóstico día siguiente": met,
         "Pruebas normales y anómalas": pr[["id", "prueba", "superada", "confort_pct", "demanda_max_kw",
                                            "detalle_checks"]].set_index("id"),
         "Confiabilidad, disponibilidad y latencia": conf,
@@ -228,7 +291,8 @@ def main(argv=None):
     ap.add_argument("--sin-sarimax", action="store_true")
     ap.add_argument("--series", action="store_true", help="guarda series completas en resultados/series")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for n in ("auditoria", "pronostico", "escenarios", "pruebas", "sensibilidad", "paridad", "todo", "exportar"):
+    for n in ("auditoria", "validar", "calibrar", "pronostico", "escenarios", "pruebas", "sensibilidad", "paridad",
+              "todo", "exportar"):
         sub.add_parser(n)
     lv = sub.add_parser("live")
     lv.add_argument("--control", choices=["externo", "interno", "baseline"], default=None)
@@ -240,7 +304,7 @@ def main(argv=None):
     ep.add_argument("--epw", required=True)
     ep.add_argument("--mapa", default=None, help="YAML zona→objetos del IDF (defecto config/energyplus_mapa.yaml)")
     args = ap.parse_args(argv)
-    {"auditoria": cmd_auditoria, "pronostico": cmd_pronostico, "escenarios": cmd_escenarios, "pruebas": cmd_pruebas,
+    {"auditoria": cmd_auditoria, "validar": cmd_validar, "calibrar": cmd_calibrar, "pronostico": cmd_pronostico, "escenarios": cmd_escenarios, "pruebas": cmd_pruebas,
      "sensibilidad": cmd_sensibilidad, "paridad": cmd_paridad, "todo": cmd_todo, "live": cmd_live,
      "exportar": cmd_exportar, "energyplus": cmd_energyplus}[args.cmd](args)
 

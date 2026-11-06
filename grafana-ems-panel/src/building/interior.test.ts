@@ -16,20 +16,22 @@ describe('interior de las zonas', () => {
     }
   });
 
-  it('el cuarto de servidores tiene filas de racks y las oficinas escritorios para su aforo', () => {
+  it('el cuarto de servidores tiene una fila de racks y oficinas y cubículos tienen puestos para su aforo', () => {
     const racks = interiorOf(ZONES.find((z) => z.id === 'Z09')!).furniture.filter((f) => f.kind === 'rack');
-    expect(racks.length).toBeGreaterThanOrEqual(20);
-    const z02 = ZONES.find((z) => z.id === 'Z02')!;
-    expect(interiorOf(z02).seats.length).toBeGreaterThanOrEqual(14);
+    expect(racks.length).toBeGreaterThanOrEqual(5);
+    for (const id of ['Z02', 'Z04', 'Z05', 'Z06', 'Z07']) {
+      const zone = ZONES.find((z) => z.id === id)!;
+      expect(interiorOf(zone).seats.length).toBeGreaterThanOrEqual(zone.occupants);
+    }
   });
 
   it('marca las fachadas exteriores', () => {
-    const lobby = edgesOf(ZONES.find((z) => z.id === 'Z01')!.rect);
-    expect(
-      lobby
+    const exteriores = (id: string) =>
+      edgesOf(ZONES.find((z) => z.id === id)!.rect)
         .filter((e) => e.exterior)
         .map((e) => e.side)
-        .sort()
-    ).toEqual(['n', 's', 'w']);
+        .sort();
+    expect(exteriores('Z01')).toEqual(['e', 's']); // recepción: esquina sureste
+    expect(exteriores('Z08')).toEqual(['n', 's']); // pasillo: atraviesa la planta alta
   });
 });

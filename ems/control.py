@@ -18,8 +18,8 @@ from collections import defaultdict, deque
 import numpy as np
 import pandas as pd
 
-from .config import zonas
-from .edificio import LUX_ARTIFICIAL, Q_PERSONA_KW, RHO_CP
+from .config import horario, zonas
+from .edificio import LUX_ARTIFICIAL, Q_PERSONA_KW, RHO_CP, fraccion_carga
 
 
 def precio(cfg: dict, t: pd.Timestamp) -> float:
@@ -192,8 +192,8 @@ class Controlador:
             if p.critica or zid not in cmds or zid in self.sup.invalidos:
                 continue
             c = cmds[zid]
-            cop = p.cop * (1 - 0.015 * (t_ext - 30.0))
-            fan = e_cfg["fan_frac"] * p.hvac_kw * 0.6 if z["hvac_enable"] and (z["ocupado"] or z["hvac_on"]) else 0.0
+            cop = p.cop * (1 - 0.012 * (t_ext - 30.0))
+            fan = p.fan_kw if z["hvac_enable"] and (z["ocupado"] or z["hvac_on"]) else 0.0
             if z["hvac_on"]:
                 p_comp_actual += max(z["p_hvac_kw"] - fan, 0.0)
             if not c.get("hvac_enable"):
@@ -202,7 +202,9 @@ class Controlador:
             if c.get("hvac_mod") is not None:
                 pide = c["hvac_mod"]
             else:
-                pide = 1.0 if (z["temp_c"] > sp + banda or (z["hvac_on"] and z["temp_c"] > sp - banda)) else 0.0
+                quiere = z["temp_c"] > sp + banda or (z["hvac_on"] and z["temp_c"] > sp - banda)
+                # el terminal VRF modula con el error dentro de la banda (misma ley que el termostato)
+                pide = fraccion_carga(z["temp_c"], sp, banda) if quiere else 0.0
             if pide > 0:
                 solicitudes.append((z["temp_c"] - sp, zid, pide * p.hvac_kw / max(cop, 1.0), p.hvac_kw / max(cop, 1.0),
                                     z["temp_c"] > self.e["confort_max_c"] - self.e["dr_margen_confort_c"]))
@@ -241,22 +243,25 @@ class Controlador:
 
 
 class Baseline(Controlador):
+    """Operación del modelo E+: setpoint por horario de cada zona (22 °C en horario, 28 °C fuera),
+    luces por horario, equipos sin control y ventiladores continuos (o en horario, según la zona)."""
     nombre = "baseline"
 
     def _decidir(self, t, tel, med):
-        b = self.cfg["baseline"]
         h = hora(t)
-        laborable = t.dayofweek < 5
-        sabado = t.dayofweek == 5
+        dow = t.dayofweek
         cmds = {}
         for z in tel:
             if z["critica"]:
                 continue
-            hvac = (laborable and b["hvac_horario"][0] <= h < b["hvac_horario"][1]) or (sabado and 7 <= h < 13)
-            luces_horario = laborable and b["luces_horario"][0] <= h < b["luces_horario"][1]
+            p = self.zmap[z["zona"]]
+            sp = horario(self.cfg, p.horario_ac, dow, h)
+            en_horario = sp < 27.5
             cmds[z["zona"]] = {
-                "hvac_enable": hvac, "setpoint_c": self.e["setpoint_baseline_c"], "ventilacion": "fija",
-                "luces_nivel": b["luces_nivel"] if (luces_horario or z["ocupado"]) else 0.0,
+                "hvac_enable": True,
+                "setpoint_c": sp,
+                "ventilacion": "fija" if (p.ventilador == "continuo" or en_horario) else "dcv",
+                "luces_nivel": horario(self.cfg, p.horario_luces, dow, h),
                 "equipos_nivel": 1.0,
             }
         return cmds
@@ -281,7 +286,12 @@ class Reglas(Controlador):
         else:
             luces = self.e["luces_desocupado_ems"]
             equipos = self.e["equipos_desocupado_ems"]
-        return {"hvac_enable": en, "setpoint_c": sp, "ventilacion": "dcv",
+        vent = "dcv"
+        if z["temp_c"] < self.e["confort_min_c"] + 1.0:
+            # protección por baja temperatura (losa al terreno a 18 °C en el modelo E+): ventilador con
+            # aire exterior para recuperar temperatura, sin compresor
+            en, vent = True, "fija"
+        return {"hvac_enable": en, "setpoint_c": sp, "ventilacion": vent,
                 "luces_nivel": luces, "equipos_nivel": equipos}
 
     def _decidir(self, t, tel, med):
@@ -304,7 +314,6 @@ class MPC(ReglasDR):
         niveles = self.e["mpc_niveles"]
         pr = precio(self.cfg, t)
         e_cfg = self.cfg["edificio"]
-        shr = e_cfg["shr"]
         p_otros_base = med["p_total_kw"] - med["p_hvac_kw"]
         t_ext = med["t_ext_c"]
         for z in tel:
@@ -318,16 +327,22 @@ class MPC(ReglasDR):
             sup = c["setpoint_c"] + (0.5 if ocup else 1.0)
             inf = c["setpoint_c"] - 1.5
             g_vent = z["ocupantes"] * e_cfg["ventilacion_m3s_persona"] * RHO_CP
-            q_sol = p.ventana * p.shgc * 0.5 * med["irr_wm2"] / 1000.0
-            q_int = z["ocupantes"] * Q_PERSONA_KW + z["p_luces_kw"] + z["p_equipos_kw"] + q_sol
-            cop = p.cop * (1 - 0.015 * (t_ext - 30.0))
+            irr = {o: med.get(f"irr_{o}", med["irr_wm2"] * 0.4) for o in ("N", "E", "S", "W")}
+            irr["H"] = med["irr_wm2"]
+            q_sol = p.shgc * sum(a * irr[o] for o, a in p.ventanas.items()) / 1000.0
+            q_sol += sum(k * irr[o] for o, k in p.sol_opaco.items())
+            q_int = z["ocupantes"] * Q_PERSONA_KW + z["p_luces_kw"] + z["p_equipos_kw"] + q_sol + p.fan_kw
+            t_suelo = e_cfg["t_suelo_c"]
+            dt_cielo = e_cfg.get("delta_t_cielo_c", 0.0)
+            cop = p.cop * (1 - 0.012 * (t_ext - 30.0))
             p_otros_hvac = med["p_hvac_kw"] - z["p_hvac_kw"]
             mejor, j_min = 0.0, np.inf
             for m in niveles:
                 T, J = z["temp_c"], 0.0
-                p_elec = m * p.hvac_kw / max(cop, 1.0) + e_cfg["fan_frac"] * p.hvac_kw * 0.6
+                p_elec = m * p.hvac_kw / max(cop, 1.0) + p.fan_kw
                 for _ in range(H):
-                    T += dt * ((p.ua + g_vent) * (t_ext - T) + q_int - m * p.hvac_kw * shr) / p.c
+                    T += dt * (p.ua * (t_ext - dt_cielo - T) + (p.g_inf + g_vent) * (t_ext - T)
+                               + p.ua_suelo * (t_suelo - T) + q_int - m * p.hvac_kw) / p.c
                     viol = max(0.0, T - sup) + max(0.0, inf - T)
                     exceso = max(0.0, p_otros_base + p_otros_hvac + p_elec - self.limite_kw)
                     J += pr * p_elec * dt + self.e["mpc_peso_confort"] * viol * dt + self.e["mpc_peso_pico"] * exceso

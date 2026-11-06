@@ -7,18 +7,23 @@
 const P = Object.assign({
     edificio: env.get("EMS_EDIFICIO") || "edificio1",
     banda: 0.5, sp_ocupado: 24.0, sp_desocupado: 27.0, sp_noche: 29.0,
-    precool_min: 60, entrada: 7.5, salida: 17.5,
+    precool_min: 60, entrada: 7.0, salida: 18.0,
     lux_objetivo: 500, lux_artificial: 500,
     luces_desocupado: 0.0, equipos_desocupado: 0.10, retardo_vacancia_min: 15,
     limite_kw: 145, dr_hist_kw: 10, dr_luces: 0.70, dr_equipos: 0.85, dr_margen_confort: 0.75,
-    confort_max: 26.0, confort_min: 21.0, alarma_servidor: 27.0, fan_frac: 0.08
+    confort_max: 26.0, confort_min: 21.0, alarma_servidor: 27.0,
+    plr_min: 0.15, banda_prop: 2.0
 }, flow.get("parametros") || {});
 
-// capacidad térmica (kW) y COP nominal por zona (config/edificio.yaml)
-const HVAC = {
-    Z01: [24, 3.0], Z02: [30, 3.0], Z03: [30, 3.0], Z04: [30, 3.0], Z05: [30, 3.0],
-    Z06: [18, 3.0], Z07: [26, 3.0], Z08: [24, 3.0], Z09: [30, 2.8], Z10: [10, 3.0]
-};
+// Terminal VRF de cada zona: [capacidad total kW, COP estacional del sistema, ventilador kW].
+// Lo genera nodered/build_flows.py desde config/edificio.yaml; se puede reemplazar con flow "parametros" → hvac.
+const HVAC = P.hvac || /*@HVAC@*/{
+    Z01: [5.76, 1.72, 0.147], Z02: [19.41, 1.72, 0.435], Z03: [13.36, 1.72, 0.269], Z04: [17.04, 2.08, 0.433],
+    Z05: [16.13, 2.08, 0.397], Z06: [15.31, 2.08, 0.37], Z07: [14.54, 2.08, 0.341], Z08: [3.55, 2.08, 0.099],
+    Z09: [2.89, 3.08, 0.086], Z10: [0.16, 1.72, 0.003]
+}/*@FIN@*/;
+// capacidad pedida por el terminal (ley proporcional, igual que ems/edificio.py: fraccion_carga)
+const fraccionCarga = (t, sp) => Math.min(1, Math.max(P.plr_min, (t - sp + P.banda) / P.banda_prop));
 
 const tInicio = Date.now();
 const med = msg.payload;
@@ -93,7 +98,10 @@ for (const zid of Object.keys(zonas)) {
         luces = Math.round(Math.round(luces / 0.05) * 0.05 * 100) / 100;
         equipos = 1.0;
     } else { luces = P.luces_desocupado; equipos = P.equipos_desocupado; }
-    cmds[zid] = { hvac_enable: en, setpoint_c: sp, ventilacion: "dcv", luces_nivel: luces, equipos_nivel: equipos, hvac_mod: null };
+    let vent = "dcv";
+    // protección por baja temperatura (losa al terreno a 18 °C en el modelo E+): ventilador con aire exterior
+    if (z.temp_c < P.confort_min + 1.0) { en = true; vent = "fija"; }
+    cmds[zid] = { hvac_enable: en, setpoint_c: sp, ventilacion: vent, luces_nivel: luces, equipos_nivel: equipos, hvac_mod: null };
 }
 
 // ---------------------------------------------------------------- overrides del operador (prioridad sobre las reglas)
@@ -118,15 +126,15 @@ const sol = [];
 for (const zid of Object.keys(cmds)) {
     const z = zonas[zid], c = cmds[zid];
     if (invalidos[zid]) continue;
-    const [cap, copN] = HVAC[zid] || [20, 3.0];
-    const cop = Math.max(copN * (1 - 0.015 * (med.t_ext_c - 30)), 1);
-    const fan = z.hvac_enable && (z.ocupado || z.hvac_on) ? P.fan_frac * cap * 0.6 : 0;
+    const [cap, copN, fanKw] = HVAC[zid] || [20, 3.0, 0];
+    const cop = Math.max(copN * (1 - 0.012 * (med.t_ext_c - 30)), 1);
+    const fan = z.hvac_enable && (z.ocupado || z.hvac_on) ? fanKw : 0;
     if (z.hvac_on) pCompActual += Math.max(z.p_hvac_kw - fan, 0);
     if (!c.hvac_enable) continue;
     const pideManual = z.temp_c > c.setpoint_c + P.banda || (z.hvac_on && z.temp_c > c.setpoint_c - P.banda);
-    if (manual[zid]) { if (pideManual) reservado += cap / cop; continue; } // el operador manda: no se deslastra
+    if (manual[zid]) { if (pideManual) reservado += fraccionCarga(z.temp_c, c.setpoint_c) * cap / cop; continue; } // el operador manda
     const pide = z.temp_c > c.setpoint_c + P.banda || (z.hvac_on && z.temp_c > c.setpoint_c - P.banda);
-    if (pide) sol.push({ zid, urg: z.temp_c - c.setpoint_c, kw: cap / cop, emerg: z.temp_c > P.confort_max - P.dr_margen_confort });
+    if (pide) sol.push({ zid, urg: z.temp_c - c.setpoint_c, kw: fraccionCarga(z.temp_c, c.setpoint_c) * cap / cop, emerg: z.temp_c > P.confort_max - P.dr_margen_confort });
 }
 let presupuesto = P.limite_kw - 3 - (med.p_total_kw - pCompActual) - reservado;
 let forzadas = 0;

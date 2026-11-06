@@ -8,9 +8,27 @@ import pandas as pd
 
 from . import config as m_config
 from . import kpi
-from .simulacion import Anomalia, simular
+from .simulacion import Anomalia, Resultado, simular
 
 ESCENARIOS_EMS = ["baseline", "reglas", "reglas_dr", "mpc"]
+# Semanas tipo (lunes) para estimar el año: estación seca, transición, lluviosa y fin de lluvias
+SEMANAS_TIPO = ["2026-02-09", "2026-05-11", "2026-08-10", "2026-11-02"]
+
+
+def simular_muestra(cfg: dict, controlador: str, semanas=SEMANAS_TIPO, dias: float = 7, **kw) -> Resultado:
+    """Simula varias semanas tipo y une los resultados (los KPIs se anualizan por el número de días)."""
+    partes = [simular(cfg, controlador, dias=dias, inicio=s, **kw) for s in semanas]
+    if len(partes) == 1:
+        return partes[0]
+    return Resultado(
+        partes[0].nombre,
+        pd.concat([p.zonas for p in partes], ignore_index=True),
+        pd.concat([p.medidor for p in partes]),
+        pd.concat([p.alarmas for p in partes], ignore_index=True),
+        pd.concat([p.estado for p in partes], ignore_index=True),
+        np.concatenate([p.latencia_ms for p in partes]),
+        cfg,
+    )
 
 
 def area_total(cfg: dict) -> float:
@@ -18,11 +36,13 @@ def area_total(cfg: dict) -> float:
 
 
 # ============================================================================ eficiencia
-def comparar(cfg: dict, dias: float = 7, controladores=ESCENARIOS_EMS, guardar_series: bool = True):
-    """Ejecuta cada controlador sobre el mismo clima y ocupación. Devuelve (tabla KPI, resultados)."""
+def comparar(cfg: dict, dias: float = 7, controladores=ESCENARIOS_EMS, guardar_series: bool = True,
+             semanas=SEMANAS_TIPO):
+    """Ejecuta cada controlador sobre el mismo clima (EPW) y ocupación en las semanas tipo.
+    Devuelve (tabla KPI, resultados)."""
     resultados, filas = {}, []
     for c in controladores:
-        r = simular(cfg, c, dias=dias)
+        r = simular_muestra(cfg, c, semanas=semanas, dias=dias)
         resultados[c] = r
     base = kpi.energeticos(resultados["baseline"], cfg)
     for c, r in resultados.items():
@@ -44,29 +64,29 @@ def _casos(cfg: dict) -> list[dict]:
          "esperado": [], "criterios": {"confort_min_pct": 95, "dem_max_kw": lim * 1.03}},
         {"id": "P02", "nombre": "Ola de calor +4 °C", "dias": 3,
          "anomalias": [Anomalia("ola_calor", d, d + 24, params={"delta_c": 4.0})],
-         "esperado": ["TEMP_ALTA"], "criterios": {"confort_vs_base_pp": -1.0, "energia_vs_base": True}},
-        {"id": "P03", "nombre": "Ocupación fuera de horario (evento nocturno Z06)", "dias": 3,
-         "anomalias": [Anomalia("ocupacion_extra", d + 19, d + 22, "Z06", {"personas": 35})],
-         "esperado": [], "criterios": {"recuperacion": ("Z06", d + 19, 75)}},
-        {"id": "P04", "nombre": "Sensor congelado Z03 (4 h)", "dias": 3,
-         "anomalias": [Anomalia("sensor", d + 9, d + 13, "Z03", {"tipo": "congelado"})],
-         "esperado": ["SENSOR_CONGELADO"], "criterios": {"zona_tmax": ("Z03", d + 9, d + 13, 27.0)}},
-        {"id": "P05", "nombre": "Sensor fuera de rango Z05 (85 °C)", "dias": 3,
+         "esperado": [], "criterios": {"confort_min_pct": 90, "confort_vs_base_pp": -1.0, "energia_vs_base": True}},
+        {"id": "P03", "nombre": "Ocupación fuera de horario (evento nocturno en la sala de conferencias Z03)", "dias": 3,
+         "anomalias": [Anomalia("ocupacion_extra", d + 19, d + 22, "Z03", {"personas": 18})],
+         "esperado": [], "criterios": {"recuperacion": ("Z03", d + 19, 75)}},
+        {"id": "P04", "nombre": "Sensor congelado en cubículos Z02 (4 h)", "dias": 3,
+         "anomalias": [Anomalia("sensor", d + 9, d + 13, "Z02", {"tipo": "congelado"})],
+         "esperado": ["SENSOR_CONGELADO"], "criterios": {"zona_tmax": ("Z02", d + 9, d + 13, 27.0)}},
+        {"id": "P05", "nombre": "Sensor fuera de rango en Oficina 2 Z05 (85 °C)", "dias": 3,
          "anomalias": [Anomalia("sensor", d + 10, d + 11, "Z05", {"tipo": "fuera_rango", "valor": 85.0})],
          "esperado": ["SENSOR_FUERA_RANGO"], "criterios": {"zona_tmax": ("Z05", d + 10, d + 11, 26.5)}},
-        {"id": "P06", "nombre": "Sensor ruidoso Z02 (σ = 2 °C)", "dias": 3,
-         "anomalias": [Anomalia("sensor", d + 8, d + 12, "Z02", {"tipo": "ruidoso", "sigma": 2.0})],
-         "esperado": ["SENSOR_FUERA_RANGO"], "criterios": {"zona_tmax": ("Z02", d + 8, d + 12, 27.0)}},
-        {"id": "P07", "nombre": "Falla de HVAC Z04 (10–14 h)", "dias": 3,
-         "anomalias": [Anomalia("falla_hvac", d + 10, d + 14, "Z04")],
+        {"id": "P06", "nombre": "Sensor ruidoso en Oficina 1 Z04 (σ = 2 °C)", "dias": 3,
+         "anomalias": [Anomalia("sensor", d + 8, d + 12, "Z04", {"tipo": "ruidoso", "sigma": 2.0})],
+         "esperado": ["SENSOR_FUERA_RANGO"], "criterios": {"zona_tmax": ("Z04", d + 8, d + 12, 27.0)}},
+        {"id": "P07", "nombre": "Falla del terminal VRF de la Oficina 3 Z06 (10–14 h)", "dias": 3,
+         "anomalias": [Anomalia("falla_hvac", d + 10, d + 14, "Z06")],
          "esperado": ["TEMP_ALTA"], "criterios": {}},
-        {"id": "P08", "nombre": "Pico de carga +40 kW laboratorio (13–15 h)", "dias": 3,
-         "anomalias": [Anomalia("carga_extra", d + 13, d + 15, "Z07", {"kw": 40.0})],
+        {"id": "P08", "nombre": "Pico de carga +12 kW en Oficina 4 Z07 (13–15 h)", "dias": 3,
+         "anomalias": [Anomalia("carga_extra", d + 13, d + 15, "Z07", {"kw": 12.0})],
          "esperado": ["DR_ACTIVO"], "criterios": {"respuesta_dr": (d + 13, 2)}},
         {"id": "P09", "nombre": "Pérdida del 30 % de comandos", "dias": 3,
          "anomalias": [Anomalia("perdida_comandos", d, d + 24, params={"prob": 0.3})],
          "esperado": [], "criterios": {"confort_min_pct": 93, "dem_max_kw": lim * 1.08}},
-        {"id": "P10", "nombre": "Sobrecalentamiento servidores (falla CRAC 1 h)", "dias": 3,
+        {"id": "P10", "nombre": "Sobrecalentamiento del cuarto de servidores (falla del VRF-C, 1 h)", "dias": 3,
          "anomalias": [Anomalia("falla_hvac", d + 15, d + 16, "Z09")],
          "esperado": ["SERVIDOR_TEMP"], "criterios": {}},
     ]
@@ -166,11 +186,12 @@ def resumen_confiabilidad(df: pd.DataFrame) -> dict:
 
 
 # ============================================================================ sensibilidad
-def sensibilidad(cfg: dict, controlador: str = "reglas_dr", dias: float = 7) -> pd.DataFrame:
+def sensibilidad(cfg: dict, controlador: str = "reglas_dr", dias: float = 7,
+                 semanas=("2026-02-09", "2026-08-10")) -> pd.DataFrame:
     """Tornado: variación ±de parámetros técnicos (re-simula) y económicos (recalcula)."""
-    base_res = simular(cfg, "baseline", dias=dias)
+    base_res = simular_muestra(cfg, "baseline", semanas=semanas, dias=dias)
     kb = kpi.energeticos(base_res, cfg)
-    ke = kpi.energeticos(simular(cfg, controlador, dias=dias), cfg)
+    ke = kpi.energeticos(simular_muestra(cfg, controlador, semanas=semanas, dias=dias), cfg)
     ref = kpi.economia(kb, ke, cfg)
     filas = [{"parametro": "referencia", "valor": "-", **_sel(ref)}]
 
@@ -182,21 +203,21 @@ def sensibilidad(cfg: dict, controlador: str = "reglas_dr", dias: float = 7) -> 
         fila("capex", f"{f:.0%}", kpi.economia(kb, ke, cfg, capex_factor=f))
     tecnicos = [
         ("ems.setpoint_ocupado_c", [23.0, 25.0]),
-        ("ems.limite_demanda_kw", [135, 160]),
+        ("ems.limite_demanda_kw", [27, 33]),
         ("ems.equipos_desocupado_ems", [0.2, 0.4]),
-        ("clima.t_max_c", [29.5, 33.5]),
+        ("edificio.t_suelo_c", [18.0, 27.0]),
     ]
     for clave, valores in tecnicos:
         for v in valores:
             c2 = m_config.aplicar(cfg, {clave: v})
-            kb2 = kb if not clave.startswith("clima") else kpi.energeticos(simular(c2, "baseline", dias=dias), c2)
-            ke2 = kpi.energeticos(simular(c2, controlador, dias=dias), c2)
+            kb2 = kb if not clave.startswith(("clima", "edificio")) else kpi.energeticos(simular_muestra(c2, "baseline", semanas=semanas, dias=dias), c2)
+            ke2 = kpi.energeticos(simular_muestra(c2, controlador, semanas=semanas, dias=dias), c2)
             eco = kpi.economia(kb2, ke2, c2)
             eco["confort_pct"] = ke2["confort_pct"]
             fila(clave, v, eco)
     for f in (0.8, 1.2):
-        kb2 = kpi.energeticos(simular(cfg, "baseline", dias=dias, factor_ocupacion=f), cfg)
-        ke2 = kpi.energeticos(simular(cfg, controlador, dias=dias, factor_ocupacion=f), cfg)
+        kb2 = kpi.energeticos(simular_muestra(cfg, "baseline", semanas=semanas, dias=dias, factor_ocupacion=f), cfg)
+        ke2 = kpi.energeticos(simular_muestra(cfg, controlador, semanas=semanas, dias=dias, factor_ocupacion=f), cfg)
         eco = kpi.economia(kb2, ke2, cfg)
         eco["confort_pct"] = ke2["confort_pct"]
         fila("ocupacion", f"{f:.0%}", eco)

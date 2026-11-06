@@ -1,11 +1,11 @@
 zona,nombre,tipo,critica,e_hvac_kwh,e_luces_kwh,e_equipos_kwh,e_total_kwh,area_m2,eui_kwh_m2_anio,participacion_pct,clasificacion,p_max_kw
-Z01,Lobby,lobby,False,660.847,150.15,58.26,869.252,220,206.024,5.151,no crítica (gestionable),12.676
-Z02,Oficinas P1 Norte,oficina,False,894.959,227.5,361.98,1484.44,300,258.01,8.797,no crítica (gestionable),19.202
-Z03,Oficinas P1 Sur,oficina,False,903.275,227.5,361.98,1492.756,300,259.455,8.847,no crítica (gestionable),19.193
-Z04,Oficinas P2 Norte,oficina,False,898.998,227.5,361.632,1488.129,300,258.651,8.819,no crítica (gestionable),19.218
-Z05,Oficinas P2 Sur,oficina,False,903.282,227.5,362.123,1492.903,300,259.481,8.847,no crítica (gestionable),19.182
-Z06,Sala de conferencias,conferencia,False,475.567,87.23,58.639,621.437,120,270.029,3.683,no crítica (gestionable),9.601
-Z07,Laboratorio,laboratorio,False,695.121,160.2,426.685,1282.004,180,371.374,7.598,no crítica (gestionable),17.595
-Z08,Cafeteria,cafeteria,False,706.442,108.96,410.116,1225.51,160,399.385,7.263,no crítica (gestionable),16.314
-Z09,Cuarto de servidores,servidores,True,1783.809,80.64,3024.0,4888.451,60,4248.297,28.971,crítica,30.846
-Z10,Seguridad UPS emergencia,soporte,True,454.357,80.64,470.4,1005.397,80,655.303,5.958,crítica,7.173
+Z01,Recepción,recepcion,False,345.302,96.072,136.272,577.678,80,94.131,5.422,no crítica (gestionable),3.683
+Z02,Cubículos,cubiculos,False,1033.487,323.576,511.2,1868.425,170,143.272,17.537,no crítica (gestionable),11.032
+Z03,Sala de conferencias,conferencia,False,756.049,235.804,40.424,1032.317,120,112.142,9.689,no crítica (gestionable),6.665
+Z04,Oficina 1,oficina,False,750.825,174.672,306.672,1232.216,90,178.476,11.566,no crítica (gestionable),8.371
+Z05,Oficina 2,oficina,False,751.953,174.672,306.672,1233.348,90,178.64,11.576,no crítica (gestionable),8.07
+Z06,Oficina 3,oficina,False,920.836,145.372,306.672,1372.926,90,198.856,12.886,no crítica (gestionable),8.619
+Z07,Oficina 4,oficina,False,717.486,174.672,306.672,1198.892,90,173.649,11.253,no crítica (gestionable),7.568
+Z08,Pasillo,pasillo,False,120.431,17.472,0.0,137.905,40,44.942,1.294,no crítica (gestionable),1.283
+Z09,Cuarto de servidores,servidores,True,461.123,53.76,1344.0,1858.829,18,1346.176,17.447,crítica,2.995
+Z10,Cuarto eléctrico,electrico,True,0.22,40.32,100.8,141.34,12,153.539,1.327,crítica,0.275

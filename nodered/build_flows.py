@@ -8,8 +8,45 @@ TAB = "ems_tab"
 BROKER = "ems_broker"
 
 
+RAIZ = AQUI.parent
+
+
+def _desde_config(codigo: str) -> str:
+    """Inyecta en el código JS la tabla VRF y los parámetros del EMS de config/edificio.yaml."""
+    import re
+    import sys
+
+    sys.path.insert(0, str(RAIZ))
+    from ems import config as m_config
+    from ems.edificio import BANDA_PROPORCIONAL_C, PLR_MIN
+
+    cfg = m_config.cargar()
+    hvac = {z.id: [round(z.hvac_kw, 3), round(z.cop, 3), round(z.fan_kw, 3)] for z in m_config.zonas(cfg)}
+    codigo = re.sub(r"/\*@HVAC@\*/\{.*?\}/\*@FIN@\*/", "/*@HVAC@*/" + json.dumps(hvac) + "/*@FIN@*/",
+                    codigo, flags=re.S)
+    e, o = cfg["ems"], cfg["ocupacion"]
+    valores = {
+        "banda": e["banda_histeresis_c"], "sp_ocupado": e["setpoint_ocupado_c"], "sp_desocupado": e["setpoint_desocupado_c"],
+        "precool_min": e["precool_min"], "entrada": o["hora_entrada"], "salida": o["hora_salida"],
+        "lux_objetivo": e["lux_objetivo"], "luces_desocupado": e["luces_desocupado_ems"],
+        "equipos_desocupado": e["equipos_desocupado_ems"], "retardo_vacancia_min": e["retardo_vacancia_min"],
+        "limite_kw": e["limite_demanda_kw"], "dr_hist_kw": e["dr_histeresis_kw"], "dr_luces": e["dr_luces_nivel"],
+        "dr_equipos": e["dr_equipos_nivel"], "dr_margen_confort": e["dr_margen_confort_c"],
+        "confort_max": e["confort_max_c"], "confort_min": e["confort_min_c"], "alarma_servidor": e["alarma_servidor_c"],
+        "plr_min": PLR_MIN, "banda_prop": BANDA_PROPORCIONAL_C,
+    }
+    bloque = codigo[codigo.index("const P = Object.assign({"): codigo.index("}, flow.get(\"parametros\")")]
+    nuevo = bloque
+    for k, v in valores.items():
+        nuevo = re.sub(rf"\b{k}: [0-9.]+", f"{k}: {v}", nuevo)
+    return codigo.replace(bloque, nuevo)
+
+
 def fn(id_, nombre, archivo, x, y, wires, outputs=1):
-    return {"id": id_, "type": "function", "z": TAB, "name": nombre, "func": (SRC / archivo).read_text(encoding="utf-8"),
+    codigo = (SRC / archivo).read_text(encoding="utf-8")
+    if archivo == "ems_reglas.js":
+        codigo = _desde_config(codigo)
+    return {"id": id_, "type": "function", "z": TAB, "name": nombre, "func": codigo,
             "outputs": outputs, "timeout": 0, "noerr": 0, "initialize": "", "finalize": "", "libs": [],
             "x": x, "y": y, "wires": wires}
 
@@ -54,11 +91,11 @@ flows = [
      "console": False, "tostatus": False, "complete": "payload", "targetType": "msg", "x": 740, "y": 340, "wires": []},
     {"id": "c_par", "type": "comment", "z": TAB, "name": "Parámetros en vivo (demo / sensibilidad)", "info": "", "x": 200, "y": 400, "wires": []},
     mqtt_in("in_par", "parámetros", "ems/+/ems/parametros", 140, 440, [["fn_par"]]),
-    {"id": "inj_lim135", "type": "inject", "z": TAB, "name": "límite 135 kW", "props": [{"p": "payload"}],
-     "repeat": "", "crontab": "", "once": False, "onceDelay": 0.1, "topic": "", "payload": "{\"limite_kw\":135}",
+    {"id": "inj_lim135", "type": "inject", "z": TAB, "name": "límite 27 kW", "props": [{"p": "payload"}],
+     "repeat": "", "crontab": "", "once": False, "onceDelay": 0.1, "topic": "", "payload": "{\"limite_kw\":27}",
      "payloadType": "json", "x": 140, "y": 480, "wires": [["fn_par"]]},
-    {"id": "inj_lim145", "type": "inject", "z": TAB, "name": "límite 145 kW (defecto)", "props": [{"p": "payload"}],
-     "repeat": "", "crontab": "", "once": True, "onceDelay": 0.5, "topic": "", "payload": "{\"limite_kw\":145}",
+    {"id": "inj_lim145", "type": "inject", "z": TAB, "name": "límite 30 kW (defecto)", "props": [{"p": "payload"}],
+     "repeat": "", "crontab": "", "once": True, "onceDelay": 0.5, "topic": "", "payload": "{\"limite_kw\":30}",
      "payloadType": "json", "x": 170, "y": 520, "wires": [["fn_par"]]},
     {"id": "inj_sp25", "type": "inject", "z": TAB, "name": "setpoint ocupado 25 °C", "props": [{"p": "payload"}],
      "repeat": "", "crontab": "", "once": False, "onceDelay": 0.1, "topic": "", "payload": "{\"sp_ocupado\":25}",

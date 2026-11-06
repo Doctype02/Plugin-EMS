@@ -46,7 +46,7 @@ Prefijo: `ems/{edificio}` (por defecto `ems/edificio1`). Zonas: `Z01` … `Z10`.
 | `ems/edificio1/sim/control` | → sim | `{accion: pausa\|reanuda, velocidad?}` |
 | `ems/edificio1/sim/estado` | sim → (retained, LWT) | `{en_linea, control, velocidad}` — usar para el panel de disponibilidad |
 | `ems/edificio1/nodered/estado` | Node-RED → (retained, LWT) | `{en_linea}` |
-| `ems/edificio1/ems/parametros` | → Node-RED | p. ej. `{limite_kw: 135, sp_ocupado: 25}` (cambio de parámetros en vivo) |
+| `ems/edificio1/ems/parametros` | → Node-RED | p. ej. `{limite_kw: 27, sp_ocupado: 25}` (cambio de parámetros en vivo) |
 | `ems/edificio1/ems/override` | panel/operador → Node-RED | control manual temporal: `{zona, setpoint_c?, hvac_enable?, luces_nivel?, equipos_nivel?, duracion_min (1–1440, def. 60), usuario?}` o `{tipo: "liberar", zona: "Z03"\|"*"}`. Prioridad sobre reglas y limitador de demanda; Z09/Z10 se rechazan. `ems/estado` informa `manual: [zonas]` |
 
 ### Endpoint HTTP de control (Node-RED, puerto 1880)
@@ -102,15 +102,15 @@ from(bucket: "ems") |> range(start: 0)
 
 | Zona | Nombre | Tipo | Crítica |
 |---|---|---|---|
-| Z01 | Lobby | lobby | no |
-| Z02 | Oficinas P1 Norte | oficina | no |
-| Z03 | Oficinas P1 Sur | oficina | no |
-| Z04 | Oficinas P2 Norte | oficina | no |
-| Z05 | Oficinas P2 Sur | oficina | no |
-| Z06 | Sala de conferencias | conferencia | no |
-| Z07 | Laboratorio | laboratorio | no |
-| Z08 | Cafetería | cafeteria | no |
-| Z09 | Cuarto de servidores | servidores | **sí** |
-| Z10 | Seguridad / UPS / emergencia | soporte | **sí** |
+| Z01 | Recepción (PB) | recepcion | no |
+| Z02 | Cubículos (PB) | cubiculos | no |
+| Z03 | Sala de conferencias (PB) | conferencia | no |
+| Z04 | Oficina 1 (PA, noroeste) | oficina | no |
+| Z05 | Oficina 2 (PA, suroeste) | oficina | no |
+| Z06 | Oficina 3 (PA, noreste) | oficina | no |
+| Z07 | Oficina 4 (PA, sureste) | oficina | no |
+| Z08 | Pasillo (PA) | pasillo | no |
+| Z09 | Cuarto de servidores (PB) | servidores | **sí** |
+| Z10 | Cuarto eléctrico (PB) | electrico | **sí** |
 
-Parámetros completos en `config/edificio.yaml`. Las zonas críticas ignoran `hvac_enable=false`, `equipos_nivel` y `setpoint_c` (setpoint fijo).
+Edificio de 2 plantas (PB/PA) de 20 × 20 m según el modelo OpenStudio/EnergyPlus; 3 sistemas VRF: VRF-A (Z04–Z08), VRF-B (Z01, Z02, Z03, Z10), VRF-C (Z09). Parámetros completos en `config/edificio.yaml`. Las zonas críticas ignoran `hvac_enable=false`, `equipos_nivel` y `setpoint_c` (setpoint fijo).

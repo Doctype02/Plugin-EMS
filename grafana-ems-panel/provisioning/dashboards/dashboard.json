@@ -34,7 +34,7 @@
         "demoMode": true,
         "demoSpeed": 60,
         "refreshSeconds": 2,
-        "limitKw": 145,
+        "limitKw": 30,
         "defaultView": "status",
         "azimuth": 0,
         "exploded": true,
@@ -50,7 +50,9 @@
   ],
   "refresh": "",
   "schemaVersion": 39,
-  "tags": ["ems"],
+  "tags": [
+    "ems"
+  ],
   "templating": {
     "list": []
   },

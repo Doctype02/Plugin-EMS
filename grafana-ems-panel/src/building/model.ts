@@ -1,9 +1,10 @@
 /**
- * Edificio de oficinas de 3 niveles en Ciudad de Panamá con 10 zonas (ver config/edificio.yaml del EMS).
+ * Edificio de oficinas de 2 plantas en Ciudad de Panamá (800 m², 10 zonas), según el modelo
+ * OpenStudio/EnergyPlus del proyecto (config/edificio.yaml del EMS).
  * Coordenadas en metros: x hacia el este, y hacia el norte, origen en la esquina suroeste.
  */
 
-export type ZoneType = 'lobby' | 'oficina' | 'conferencia' | 'laboratorio' | 'cafeteria' | 'servidores' | 'soporte';
+export type ZoneType = 'recepcion' | 'cubiculos' | 'oficina' | 'conferencia' | 'pasillo' | 'servidores' | 'electrico';
 
 export interface Rect {
   x: number;
@@ -19,16 +20,22 @@ export interface Zone {
   critical: boolean;
   floor: number;
   rect: Rect;
-  /** Parámetros de diseño (iguales al modelo Python). */
+  /** Parámetros del modelo E+ (iguales al gemelo digital en Python). */
   area: number;
   occupants: number;
   lpd: number;
   epd: number;
+  /** Capacidad total del terminal VRF (kW térmicos). */
   hvacKw: number;
+  /** COP estacional del sistema VRF que atiende la zona (calibrado con E+). */
   cop: number;
+  fanKw: number;
+  system: string;
   itKw?: number;
   fixedSetpoint?: number;
-  /** Fachada con ventanas (lados expuestos al exterior). */
+  /** Área de vidrio por fachada (m²). */
+  glazing: Partial<Record<'n' | 's' | 'e' | 'w', number>>;
+  /** Fachadas con ventanas (para el dibujo). */
   windows?: Array<'s' | 'n' | 'e' | 'w'>;
 }
 
@@ -36,198 +43,232 @@ export interface Floor {
   level: number;
   name: string;
   short: string;
-  /** Losas que no son zonas (pasillos, núcleos). */
+  /** Losas que no son zonas. */
   extras: Array<{ rect: Rect; label?: string }>;
 }
 
 export const BUILDING = {
-  name: 'Edificio Inteligente — Ciudad de Panamá',
-  width: 34,
+  name: 'Edificio de oficinas — Ciudad de Panamá',
+  width: 20,
   depth: 20,
-  floorHeight: 3.6,
+  floorHeight: 3.0,
 };
 
 export const FLOORS: Floor[] = [
   { level: 0, name: 'Planta baja', short: 'PB', extras: [] },
-  { level: 1, name: 'Piso 1', short: 'P1', extras: [{ rect: { x: 0, y: 9, w: 27, d: 2 }, label: 'Pasillo' }] },
-  { level: 2, name: 'Piso 2', short: 'P2', extras: [{ rect: { x: 0, y: 9, w: 27, d: 2 }, label: 'Pasillo' }] },
+  { level: 1, name: 'Planta alta', short: 'PA', extras: [] },
 ];
 
+const z = (d: Omit<Zone, 'windows'>): Zone => ({
+  ...d,
+  windows: (Object.keys(d.glazing) as Array<'n' | 's' | 'e' | 'w'>).filter((k) => (d.glazing[k] ?? 0) > 0),
+});
+
 export const ZONES: Zone[] = [
-  {
+  z({
     id: 'Z01',
-    name: 'Lobby',
-    type: 'lobby',
+    name: 'Recepción',
+    type: 'recepcion',
     critical: false,
     floor: 0,
-    rect: { x: 0, y: 0, w: 13, d: 20 },
-    area: 220,
+    rect: { x: 10, y: 0, w: 10, d: 8 },
+    area: 80,
+    occupants: 4,
+    lpd: 5.5,
+    epd: 6.0,
+    hvacKw: 5.76,
+    cop: 1.72,
+    fanKw: 0.147,
+    system: 'VRF-B',
+    glazing: { e: 18, s: 22.5 },
+  }),
+  z({
+    id: 'Z02',
+    name: 'Cubículos',
+    type: 'cubiculos',
+    critical: false,
+    floor: 0,
+    rect: { x: 0, y: 3, w: 10, d: 17 },
+    area: 170,
     occupants: 15,
-    lpd: 9,
-    epd: 3,
-    hvacKw: 24,
-    cop: 3.0,
-    windows: ['s', 'w', 'n'],
-  },
-  {
-    id: 'Z08',
-    name: 'Cafetería',
-    type: 'cafeteria',
+    lpd: 8.72,
+    epd: 10.59,
+    hvacKw: 19.41,
+    cop: 1.72,
+    fanKw: 0.435,
+    system: 'VRF-B',
+    glazing: { n: 22.5, w: 38.25 },
+  }),
+  z({
+    id: 'Z03',
+    name: 'Sala de conferencias',
+    type: 'conferencia',
     critical: false,
     floor: 0,
-    rect: { x: 13, y: 0, w: 10, d: 20 },
-    area: 160,
-    occupants: 45,
-    lpd: 9,
-    epd: 30,
-    hvacKw: 24,
-    cop: 3.0,
-    windows: ['s', 'n'],
-  },
-  {
+    rect: { x: 10, y: 8, w: 10, d: 12 },
+    area: 120,
+    occupants: 20,
+    lpd: 9.0,
+    epd: 2.08,
+    hvacKw: 13.36,
+    cop: 1.72,
+    fanKw: 0.269,
+    system: 'VRF-B',
+    glazing: { e: 27, n: 22.5 },
+  }),
+  z({
     id: 'Z09',
     name: 'Cuarto de servidores',
     type: 'servidores',
     critical: true,
     floor: 0,
-    rect: { x: 23, y: 0, w: 11, d: 8 },
-    area: 60,
-    occupants: 1,
-    lpd: 8,
+    rect: { x: 4, y: 0, w: 6, d: 3 },
+    area: 18,
+    occupants: 0,
+    lpd: 4.44,
     epd: 0,
-    hvacKw: 30,
-    cop: 2.8,
-    itKw: 18,
-    fixedSetpoint: 22,
-  },
-  {
+    itKw: 2.0,
+    hvacKw: 2.89,
+    cop: 3.08,
+    fanKw: 0.086,
+    system: 'VRF-C',
+    fixedSetpoint: 24,
+    glazing: {},
+  }),
+  z({
     id: 'Z10',
-    name: 'Seguridad / UPS',
-    type: 'soporte',
+    name: 'Cuarto eléctrico',
+    type: 'electrico',
     critical: true,
     floor: 0,
-    rect: { x: 23, y: 8, w: 11, d: 12 },
-    area: 80,
-    occupants: 2,
-    lpd: 6,
-    epd: 35,
-    hvacKw: 10,
-    cop: 3.0,
-    fixedSetpoint: 24,
-    windows: ['e', 'n'],
-  },
-  {
-    id: 'Z03',
-    name: 'Oficinas P1 Sur',
-    type: 'oficina',
-    critical: false,
-    floor: 1,
-    rect: { x: 0, y: 0, w: 27, d: 9 },
-    area: 300,
-    occupants: 30,
-    lpd: 10,
-    epd: 12,
-    hvacKw: 30,
-    cop: 3.0,
-    windows: ['s', 'w'],
-  },
-  {
-    id: 'Z02',
-    name: 'Oficinas P1 Norte',
-    type: 'oficina',
-    critical: false,
-    floor: 1,
-    rect: { x: 0, y: 11, w: 27, d: 9 },
-    area: 300,
-    occupants: 30,
-    lpd: 10,
-    epd: 12,
-    hvacKw: 30,
-    cop: 3.0,
-    windows: ['n', 'w'],
-  },
-  {
-    id: 'Z06',
-    name: 'Sala de conferencias',
-    type: 'conferencia',
-    critical: false,
-    floor: 1,
-    rect: { x: 27, y: 0, w: 7, d: 20 },
-    area: 120,
-    occupants: 40,
-    lpd: 11,
-    epd: 6,
-    hvacKw: 18,
-    cop: 3.0,
-    windows: ['e', 's', 'n'],
-  },
-  {
-    id: 'Z05',
-    name: 'Oficinas P2 Sur',
-    type: 'oficina',
-    critical: false,
-    floor: 2,
-    rect: { x: 0, y: 0, w: 27, d: 9 },
-    area: 300,
-    occupants: 28,
-    lpd: 10,
-    epd: 12,
-    hvacKw: 30,
-    cop: 3.0,
-    windows: ['s', 'w'],
-  },
-  {
+    rect: { x: 0, y: 0, w: 4, d: 3 },
+    area: 12,
+    occupants: 0,
+    lpd: 5.0,
+    epd: 12.5,
+    hvacKw: 0.16,
+    cop: 1.72,
+    fanKw: 0.003,
+    system: 'VRF-B',
+    fixedSetpoint: 27,
+    glazing: {},
+  }),
+  z({
     id: 'Z04',
-    name: 'Oficinas P2 Norte',
+    name: 'Oficina 1',
     type: 'oficina',
     critical: false,
-    floor: 2,
-    rect: { x: 0, y: 11, w: 27, d: 9 },
-    area: 300,
-    occupants: 28,
-    lpd: 10,
+    floor: 1,
+    rect: { x: 0, y: 10, w: 9, d: 10 },
+    area: 90,
+    occupants: 9,
+    lpd: 8.89,
     epd: 12,
-    hvacKw: 30,
-    cop: 3.0,
-    windows: ['n', 'w'],
-  },
-  {
-    id: 'Z07',
-    name: 'Laboratorio',
-    type: 'laboratorio',
+    hvacKw: 17.04,
+    cop: 2.08,
+    fanKw: 0.433,
+    system: 'VRF-A',
+    glazing: { n: 20.25, w: 22.5 },
+  }),
+  z({
+    id: 'Z05',
+    name: 'Oficina 2',
+    type: 'oficina',
     critical: false,
-    floor: 2,
-    rect: { x: 27, y: 0, w: 7, d: 20 },
-    area: 180,
-    occupants: 16,
-    lpd: 12,
-    epd: 25,
-    hvacKw: 26,
-    cop: 3.0,
-    windows: ['e', 's'],
-  },
+    floor: 1,
+    rect: { x: 0, y: 0, w: 9, d: 10 },
+    area: 90,
+    occupants: 9,
+    lpd: 8.89,
+    epd: 12,
+    hvacKw: 16.13,
+    cop: 2.08,
+    fanKw: 0.397,
+    system: 'VRF-A',
+    glazing: { s: 20.25, w: 22.5 },
+  }),
+  z({
+    id: 'Z06',
+    name: 'Oficina 3',
+    type: 'oficina',
+    critical: false,
+    floor: 1,
+    rect: { x: 11, y: 10, w: 9, d: 10 },
+    area: 90,
+    occupants: 9,
+    lpd: 8.89,
+    epd: 12,
+    hvacKw: 15.31,
+    cop: 2.08,
+    fanKw: 0.37,
+    system: 'VRF-A',
+    glazing: { n: 20.25, e: 22.5 },
+  }),
+  z({
+    id: 'Z07',
+    name: 'Oficina 4',
+    type: 'oficina',
+    critical: false,
+    floor: 1,
+    rect: { x: 11, y: 0, w: 9, d: 10 },
+    area: 90,
+    occupants: 9,
+    lpd: 8.89,
+    epd: 12,
+    hvacKw: 14.54,
+    cop: 2.08,
+    fanKw: 0.341,
+    system: 'VRF-A',
+    glazing: { s: 20.25, e: 22.5 },
+  }),
+  z({
+    id: 'Z08',
+    name: 'Pasillo',
+    type: 'pasillo',
+    critical: false,
+    floor: 1,
+    rect: { x: 9, y: 0, w: 2, d: 20 },
+    area: 40,
+    occupants: 0,
+    lpd: 2.0,
+    epd: 0,
+    hvacKw: 3.55,
+    cop: 2.08,
+    fanKw: 0.099,
+    system: 'VRF-A',
+    glazing: { n: 4.5, s: 4.5 },
+  }),
 ];
 
-export const ZONE_BY_ID: Record<string, Zone> = Object.fromEntries(ZONES.map((z) => [z.id, z]));
+export const ZONE_BY_ID: Record<string, Zone> = Object.fromEntries(ZONES.map((x) => [x.id, x]));
 
 export const ZONE_TYPE_LABELS: Record<ZoneType, string> = {
-  lobby: 'Lobby',
-  oficina: 'Oficinas',
+  recepcion: 'Recepción',
+  cubiculos: 'Cubículos',
+  oficina: 'Oficina',
   conferencia: 'Conferencias',
-  laboratorio: 'Laboratorio',
-  cafeteria: 'Cafetería',
+  pasillo: 'Circulación',
   servidores: 'Servidores',
-  soporte: 'Soporte',
+  electrico: 'Cuarto eléctrico',
 };
 
-/** Unidades condensadoras en la azotea (una por zona): en la vista explotada, repartidas sobre la azotea. */
-export const ROOF_UNITS = ZONES.map((z, i) => ({
-  zoneId: z.id,
-  rect: { x: 1.5 + (i % 5) * 6.4, y: i < 5 ? 3 : 13, w: 3.2, d: 3 } as Rect,
-}));
+/** Unidades exteriores VRF en la azotea (capacidad autodimensionada por E+) y zonas que atienden. */
+export interface VrfUnit {
+  id: string;
+  capacityKw: number;
+  zones: string[];
+  rect: Rect;
+}
 
-/** En la vista exterior, las condensadoras van en una franja junto al borde norte para no tapar las etiquetas. */
-export const ROOF_UNITS_STACKED = ZONES.map((z, i) => ({
-  zoneId: z.id,
-  rect: { x: 0.8 + i * 3.3, y: 17.6, w: 2.5, d: 1.8 } as Rect,
-}));
+export const VRF_UNITS: VrfUnit[] = [
+  { id: 'VRF-A', capacityKw: 66.57, zones: ['Z04', 'Z05', 'Z06', 'Z07', 'Z08'], rect: { x: 3, y: 12, w: 6, d: 4 } },
+  { id: 'VRF-B', capacityKw: 38.69, zones: ['Z01', 'Z02', 'Z03', 'Z10'], rect: { x: 12, y: 12.5, w: 4.5, d: 3.2 } },
+  { id: 'VRF-C', capacityKw: 2.89, zones: ['Z09'], rect: { x: 14, y: 5, w: 1.6, d: 1.4 } },
+];
+
+/** En la vista exterior las unidades van junto al borde norte para no tapar las etiquetas. */
+export const VRF_UNITS_STACKED: VrfUnit[] = [
+  { ...VRF_UNITS[0], rect: { x: 1.0, y: 16.8, w: 5.5, d: 2.6 } },
+  { ...VRF_UNITS[1], rect: { x: 7.5, y: 17.2, w: 4.2, d: 2.2 } },
+  { ...VRF_UNITS[2], rect: { x: 12.8, y: 17.8, w: 1.5, d: 1.2 } },
+];

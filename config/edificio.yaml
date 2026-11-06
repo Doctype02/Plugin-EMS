@@ -1,34 +1,98 @@
-# Edificio de oficinas de 3 niveles en Ciudad de Panamá — 10 zonas
-# Todos los valores son supuestos de diseño documentados; modifíquelos para escenarios/sensibilidad.
+# Edificio de oficinas de 2 plantas en Ciudad de Panamá — 10 zonas, 800 m²
+# Parámetros tomados del modelo OpenStudio/EnergyPlus "EMS_Edificio_Ultima simulacion"
+# (in.idf, eplusout.sql, floorplan.json). Origen de cada valor indicado en los comentarios.
+# Los datos horarios de esa simulación están en data/energyplus/ (tools/importar_energyplus.py).
 
 edificio:
   nombre: edificio1
   zona_horaria: America/Panama
-  paso_min: 5                # paso de simulación
-  v_ll: 480                  # tensión línea-línea (V), servicio 277/480 V trifásico
-  shr: 0.78                  # razón de calor sensible del equipo DX (resto = latente, clima húmedo)
-  fraccion_standby_equipos: 0.45  # potencia de equipos no usados pero energizados
-  fan_frac: 0.08             # potencia del ventilador / capacidad térmica (kW/kW)
-  ventilacion_m3s_persona: 0.010   # 10 L/s/persona (ASHRAE 62.1 oficinas, aprox.)
+  latitud: 8.97                # EPW Panamá-Albrook
+  longitud: -79.5
+  paso_min: 5
+  altura_piso_m: 3.0           # floorplan.json: floor_to_ceiling 3 m, 2 plantas
+  v_ll: 208                    # servicio 120/208 V trifásico (edificio pequeño, pico ≈ 52 kW)
+  # Envolvente (EnergyPlus EnvelopeSummary, constructions ASHRAE 189.1-2009 zona climática 1)
+  u_muro: 0.860                # EXTWALL MASS (concreto 8 in) W/m2K con películas
+  u_techo: 0.274               # EXTROOF IEAD
+  u_suelo: 2.945               # EXTSLABCARPET 4IN (losa sobre terreno)
+  u_ventana: 6.424             # EXTWINDOW: vidrio simple
+  shgc: 0.252
+  t_suelo_c: 18.0              # Site:GroundTemperature:BuildingSurface del modelo (valor por defecto de E+;
+                               # en Panamá el terreno está a 26–28 °C: ver sensibilidad)
+  infiltracion_m3s_m2: 0.00030226  # ZoneInfiltration por m2 de superficie exterior
+  u_entrepiso: 1.8            # losa interior entre plantas (W/m2K, estimado)
+  ventilacion_m3s_persona: 0.00944 # DesignSpecification:OutdoorAir (9.44 L/s·persona)
+  reflectancia_suelo: 0.20
+  # VRF (AirConditioner:VariableRefrigerantFlow): COP nominal 3.3; COP estacional real calculado de la
+  # simulación (frío total entregado / electricidad VRF): A 2.08, B 1.72, C 3.08
+  fraccion_standby_equipos: 0.30
+  fraccion_latente_serpentin: 0.10  # latente retirado / sensible (calibrado)
+  # Parámetros efectivos del modelo RC calibrados contra EnergyPlus (python -m ems calibrar):
+  # CV(RMSE) horario 26 %, NMBE −2 % (ASHRAE Guideline 14: ≤ 30 % y ±10 %)
+  capacitancia_kwh_k_m2: 0.030 # masa térmica efectiva por m2 de piso
+  factor_solar: 0.5            # fracción de la ganancia solar por ventanas que pasa al aire de inmediato
+  delta_t_cielo_c: 6.0         # radiación al cielo: Text equivalente para la conducción de la envolvente
 
 clima:
-  fuente: sintetico          # sintetico | epw
-  epw: null                  # ruta a un EPW (p. ej. PAN_Tocumen) si fuente = epw
+  fuente: epw                  # epw | sintetico
+  epw: data/clima/PAN_PO_Panama-Albrook.Gelabert.Intl.AP.783842_TMYx.2011-2025.epw
+  # parámetros del clima sintético (sólo si fuente = sintetico o falta el EPW)
   t_min_c: 24.5
   t_max_c: 31.5
   hora_t_max: 14.5
-  irr_max_wm2: 850
-  nubosidad_media: 0.35      # 0 despejado … 1 cubierto
+  irr_max_wm2: 900
+  nubosidad_media: 0.35
   semilla: 7
 
+# Horarios del modelo E+ (Schedule:Day:Interval). Cada lista: [hora de inicio, valor] escalonado.
+horarios:
+  ocupacion:            # "Programacion de horarios" (SCH_Ocupacion_Oficinas / sábados / domingos)
+    laborable: [[0, 0], [7, 0.204], [8, 0.602], [9, 1.0], [12, 0.612], [13, 1.0], [17, 0.505], [18, 0]]
+    sabado: [[0, 0], [9, 0.202], [13, 0]]
+    domingo: [[0, 0]]
+  iluminacion:          # SCH_Iluminacion_Oficinas
+    laborable: [[0, 0], [7, 0.25], [8, 1.0], [18, 0.245], [19, 0]]
+    sabado: [[0, 0], [9, 0.527], [13, 0]]
+    domingo: [[0, 0]]
+  equipos_oficina:      # SCH_Equipos_Oficinas (el modelo usa el perfil "4" sábado y domingo)
+    laborable: [[0, 0.05], [7, 0.25], [8, 0.99], [18, 0.25], [20, 0.05]]
+    sabado: [[0, 0.05], [7, 0.25], [8, 0.99], [13, 0.25], [20, 0.05]]
+    domingo: [[0, 0.05], [7, 0.25], [8, 0.99], [13, 0.25], [20, 0.05]]
+  equipos_conferencia:  # SCH_Sala de conferencias
+    laborable: [[0, 0.05], [7, 0.25], [8, 0.995], [11, 0.10], [15, 0.995], [18, 0.25], [20, 0.05]]
+    sabado: [[0, 0.05]]
+    domingo: [[0, 0.05]]
+  continuo:             # SCH_Servidores_24H
+    laborable: [[0, 1.0]]
+    sabado: [[0, 1.0]]
+    domingo: [[0, 1.0]]
+  ac_oficinas:          # SCH_AC_Oficinas: setpoint de enfriamiento (°C)
+    laborable: [[0, 28], [7, 22], [18, 28]]
+    sabado: [[0, 28], [7, 22], [13, 28]]
+    domingo: [[0, 28]]
+  ac_conferencia:       # SCH_AC_Conferencias
+    laborable: [[0, 28], [6, 22], [18, 28]]
+    sabado: [[0, 28], [7, 22], [13, 28]]
+    domingo: [[0, 28]]
+  ac_pasillo:           # SCH_AC_Pasillo
+    laborable: [[0, 28], [7, 22], [18, 28]]
+    sabado: [[0, 28], [7, 22], [14, 28]]
+    domingo: [[0, 28]]
+  ac_servidores:        # SCH_AC_Servidores
+    laborable: [[0, 24]]
+    sabado: [[0, 24]]
+    domingo: [[0, 24]]
+  ac_electrico:         # SCH_AC_Electrico
+    laborable: [[0, 27]]
+    sabado: [[0, 27]]
+    domingo: [[0, 27]]
+
 ocupacion:
-  hora_entrada: 7.5
-  hora_salida: 17.5
-  almuerzo: [12.0, 13.0]
-  fraccion_almuerzo: 0.55
-  fraccion_sabado: 0.15
-  ruido: 0.10
+  ruido: 0.10                  # variación aleatoria alrededor del horario del modelo
+  ausentismo: 0.08             # fracción media de puestos vacíos en días laborables
   semilla: 11
+  hora_entrada: 7.0            # inicio del horario de oficina del modelo
+  hora_salida: 18.0
 
 # Precios y factores para Panamá (supuestos; actualice con pliego tarifario ASEP vigente)
 tarifa:
@@ -38,78 +102,95 @@ tarifa:
   cargo_demanda_usd_kw_mes: 19.50
   factor_co2_kg_kwh: 0.31
 
-# Inversión del EMS (para ROI)
+# Inversión del EMS para 800 m² (retrofit ≈ 35–40 USD/m², supuesto: cotizar localmente)
 economia:
-  capex_usd:                        # retrofit típico ≈ 35–40 USD/m2 (supuesto, cotizar localmente)
-    sensores_ocupacion_temp_lux: 4500   # 10 zonas: PIR/ultrasonido, T/HR, lux
-    controladores_hvac: 14400           # 8 zonas × 1 800 USD (controlador + relés + sondas)
-    control_iluminacion: 24000          # drivers dimerizables + controladores ≈ 12 USD/m2
-    enchufes_inteligentes_pdu: 6000
-    medicion_electrica: 4500            # medidor de red + submedición por tablero
-    gateway_servidor_red: 5000
-    software_integracion: 12000
-    puesta_en_marcha_capacitacion: 6000
-  opex_usd_anio: 3500              # mantenimiento, licencias, calibración
+  capex_usd:
+    sensores_ocupacion_temp_lux: 2600   # 10 zonas: PIR, T/HR, lux
+    controladores_vrf_bacnet: 4500      # pasarela BACnet/Modbus para los 3 VRF + 10 terminales
+    control_iluminacion: 9600           # drivers dimerizables ≈ 12 USD/m2
+    enchufes_inteligentes_pdu: 2400
+    medicion_electrica: 2500            # medidor de red + submedición por tablero
+    gateway_servidor_red: 2500
+    software_integracion: 5500
+    puesta_en_marcha_capacitacion: 2500
+  opex_usd_anio: 1800
   vida_util_anios: 10
   tasa_descuento: 0.08
   escalamiento_tarifa_anual: 0.02
-  dias_laborables_anio: 250
-  dias_no_laborables_anio: 115
 
 ems:
-  banda_histeresis_c: 0.5          # ±banda alrededor del setpoint
+  banda_histeresis_c: 0.5
   setpoint_ocupado_c: 24.0
   setpoint_desocupado_c: 27.0
-  setpoint_baseline_c: 22.5
-  precool_min: 60                  # antes de la entrada
+  setpoint_baseline_c: 22.0        # setpoint del modelo E+ en horario
+  precool_min: 60
   lux_objetivo: 500
-  equipos_desocupado_ems: 0.10     # fracción de circuitos de enchufes energizados sin ocupación (EMS)
+  equipos_desocupado_ems: 0.10
   retardo_vacancia_min: 15
   luces_desocupado_ems: 0.0
-  limite_demanda_kw: 145           # respuesta a la demanda (peak shaving), ~90 % del pico con reglas
-  dr_histeresis_kw: 10
-  dr_margen_confort_c: 0.75        # zonas a < margen del confort_max no se deslastran
+  limite_demanda_kw: 30            # ≈ 90 % del pico con reglas (≈ 58 % del pico del modelo E+, 51.9 kW)
+  dr_histeresis_kw: 3
+  dr_margen_confort_c: 0.75
   dr_setpoint_extra_c: 1.5
   dr_luces_nivel: 0.70
   dr_equipos_nivel: 0.85
-  confort_max_c: 26.0              # límite superior de confort en ocupación
+  confort_max_c: 26.0
   confort_min_c: 21.0
   alarma_servidor_c: 27.0
   mpc_horizonte_pasos: 6
   mpc_niveles: [0.0, 0.25, 0.5, 0.75, 1.0]
-  mpc_peso_confort: 25.0           # USD por K·h fuera de banda
-  mpc_peso_pico: 0.02              # USD por kW sobre el límite por paso
+  mpc_peso_confort: 25.0
+  mpc_peso_pico: 0.02
 
-baseline:
-  hvac_horario: [6.0, 20.0]
-  luces_horario: [6.5, 19.5]
-  luces_nivel: 1.0
+cargas_fijas: []                   # el modelo E+ no incluye ascensores, bombas ni alumbrado exterior
 
-cargas_fijas:   # cargas del edificio que no pertenecen a una zona
-  - {nombre: Ascensores, kw_ocupado: 6.0, kw_desocupado: 1.0, critica: true, fp: 0.80}
-  - {nombre: Bombas agua, kw_ocupado: 3.0, kw_desocupado: 1.5, critica: true, fp: 0.85}
-  - {nombre: Iluminacion exterior, kw_noche: 3.5, critica: false, fp: 0.95}
+# Sistemas VRF (unidades exteriores) y zonas que atienden — capacidades autodimensionadas por E+
+sistemas_vrf:
+  - {id: VRF-A, capacidad_kw: 66.57, cop: 2.08, zonas: [Z04, Z05, Z06, Z07, Z08]}
+  - {id: VRF-B, capacidad_kw: 38.69, cop: 1.72, zonas: [Z01, Z02, Z03, Z10]}
+  - {id: VRF-C, capacidad_kw: 2.89, cop: 3.08, zonas: [Z09]}
 
-# Zonas: area m2, ocupantes, densidades de carga, envolvente (UA kW/K), capacitancia (kWh/K),
-# ventanas (m2, SHGC), HVAC (capacidad térmica kW, COP)
+# Zonas. rect = huella en planta (m) con origen en la esquina suroeste del edificio de 20 × 20 m
+# (floorplan.json desplazado +6 m en x y +10 m en y). ventanas/muros: m2 por orientación (E+ Surfaces).
+# hvac_kw = capacidad total del terminal VRF (E+ autosize); fan_w = potencia del ventilador del terminal.
 zonas:
-  - {id: Z01, nombre: Lobby, tipo: lobby, critica: false, area: 220, ocupantes: 15, lpd: 9, epd: 3,
-     ua: 0.85, c: 9.0, ventana: 45, shgc: 0.35, hvac_kw: 24, cop: 3.0, lux_dia_max: 650}
-  - {id: Z02, nombre: Oficinas P1 Norte, tipo: oficina, critica: false, area: 300, ocupantes: 30, lpd: 10, epd: 12,
-     ua: 0.95, c: 12.5, ventana: 28, shgc: 0.35, hvac_kw: 30, cop: 3.0, lux_dia_max: 380}
-  - {id: Z03, nombre: Oficinas P1 Sur, tipo: oficina, critica: false, area: 300, ocupantes: 30, lpd: 10, epd: 12,
-     ua: 0.95, c: 12.5, ventana: 34, shgc: 0.35, hvac_kw: 30, cop: 3.0, lux_dia_max: 450}
-  - {id: Z04, nombre: Oficinas P2 Norte, tipo: oficina, critica: false, area: 300, ocupantes: 28, lpd: 10, epd: 12,
-     ua: 1.00, c: 12.0, ventana: 28, shgc: 0.35, hvac_kw: 30, cop: 3.0, lux_dia_max: 380}
-  - {id: Z05, nombre: Oficinas P2 Sur, tipo: oficina, critica: false, area: 300, ocupantes: 28, lpd: 10, epd: 12,
-     ua: 1.00, c: 12.0, ventana: 34, shgc: 0.35, hvac_kw: 30, cop: 3.0, lux_dia_max: 450}
-  - {id: Z06, nombre: Sala de conferencias, tipo: conferencia, critica: false, area: 120, ocupantes: 40, lpd: 11, epd: 6,
-     ua: 0.45, c: 5.0, ventana: 12, shgc: 0.35, hvac_kw: 18, cop: 3.0, lux_dia_max: 300}
-  - {id: Z07, nombre: Laboratorio, tipo: laboratorio, critica: false, area: 180, ocupantes: 16, lpd: 12, epd: 25,
-     ua: 0.65, c: 8.0, ventana: 15, shgc: 0.35, hvac_kw: 26, cop: 3.0, lux_dia_max: 300, min_equipos: 0.25}
-  - {id: Z08, nombre: Cafeteria, tipo: cafeteria, critica: false, area: 160, ocupantes: 45, lpd: 9, epd: 30,
-     ua: 0.60, c: 6.5, ventana: 20, shgc: 0.35, hvac_kw: 24, cop: 3.0, lux_dia_max: 500, min_equipos: 0.35}
-  - {id: Z09, nombre: Cuarto de servidores, tipo: servidores, critica: true, area: 60, ocupantes: 1, lpd: 8, epd: 0,
-     it_kw: 18.0, ua: 0.20, c: 3.0, ventana: 0, shgc: 0.0, hvac_kw: 30, cop: 2.8, setpoint_fijo: 22.0, lux_dia_max: 0}
-  - {id: Z10, nombre: Seguridad UPS emergencia, tipo: soporte, critica: true, area: 80, ocupantes: 2, lpd: 6, epd: 35,
-     ua: 0.30, c: 3.5, ventana: 4, shgc: 0.35, hvac_kw: 10, cop: 3.0, setpoint_fijo: 24.0, lux_dia_max: 150}
+  - {id: Z01, nombre: Recepción, tipo: recepcion, critica: false, planta: 0, rect: [10, 0, 10, 8],
+     area: 80, ocupantes: 4, lpd: 5.5, epd: 6.0, hvac_kw: 5.76, sistema: VRF-B, fan_w: 147, ventilador: continuo,
+     horario_equipos: equipos_oficina, horario_ac: ac_oficinas,
+     ventanas: {E: 18.0, S: 22.5}, muros: {E: 24, S: 30}, techo: 0, suelo: 80}
+  - {id: Z02, nombre: Cubículos, tipo: cubiculos, critica: false, planta: 0, rect: [0, 3, 10, 17],
+     area: 170, ocupantes: 15, lpd: 8.72, epd: 10.59, hvac_kw: 19.41, sistema: VRF-B, fan_w: 435, ventilador: continuo,
+     horario_equipos: equipos_oficina, horario_ac: ac_oficinas,
+     ventanas: {N: 22.5, W: 38.25}, muros: {N: 30, W: 51}, techo: 0, suelo: 170}
+  - {id: Z03, nombre: Sala de conferencias, tipo: conferencia, critica: false, planta: 0, rect: [10, 8, 10, 12],
+     area: 120, ocupantes: 20, lpd: 9.0, epd: 2.08, hvac_kw: 13.36, sistema: VRF-B, fan_w: 269, ventilador: continuo,
+     horario_equipos: equipos_conferencia, horario_ac: ac_conferencia,
+     ventanas: {E: 27.0, N: 22.5}, muros: {E: 36, N: 30}, techo: 0, suelo: 120}
+  - {id: Z04, nombre: Oficina 1, tipo: oficina, critica: false, planta: 1, rect: [0, 10, 9, 10],
+     area: 90, ocupantes: 9, lpd: 8.89, epd: 12.0, hvac_kw: 17.04, sistema: VRF-A, fan_w: 433, ventilador: horario,
+     horario_equipos: equipos_oficina, horario_ac: ac_oficinas,
+     ventanas: {N: 20.25, W: 22.5}, muros: {N: 27, W: 30}, techo: 90, suelo: 0}
+  - {id: Z05, nombre: Oficina 2, tipo: oficina, critica: false, planta: 1, rect: [0, 0, 9, 10],
+     area: 90, ocupantes: 9, lpd: 8.89, epd: 12.0, hvac_kw: 16.13, sistema: VRF-A, fan_w: 397, ventilador: horario,
+     horario_equipos: equipos_oficina, horario_ac: ac_oficinas,
+     ventanas: {S: 20.25, W: 22.5}, muros: {S: 27, W: 30}, techo: 90, suelo: 0}
+  - {id: Z06, nombre: Oficina 3, tipo: oficina, critica: false, planta: 1, rect: [11, 10, 9, 10],
+     area: 90, ocupantes: 9, lpd: 8.89, epd: 12.0, hvac_kw: 15.31, sistema: VRF-A, fan_w: 370, ventilador: continuo,
+     horario_equipos: equipos_oficina, horario_ac: ac_oficinas, horario_ocupacion: iluminacion, horario_luces: ocupacion,
+     ventanas: {N: 20.25, E: 22.5}, muros: {N: 27, E: 30}, techo: 90, suelo: 0}
+  - {id: Z07, nombre: Oficina 4, tipo: oficina, critica: false, planta: 1, rect: [11, 0, 9, 10],
+     area: 90, ocupantes: 9, lpd: 8.89, epd: 12.0, hvac_kw: 14.54, sistema: VRF-A, fan_w: 341, ventilador: horario,
+     horario_equipos: equipos_oficina, horario_ac: ac_oficinas,
+     ventanas: {S: 20.25, E: 22.5}, muros: {S: 27, E: 30}, techo: 90, suelo: 0}
+  - {id: Z08, nombre: Pasillo, tipo: pasillo, critica: false, planta: 1, rect: [9, 0, 2, 20],
+     area: 40, ocupantes: 0, lpd: 2.0, epd: 0.0, hvac_kw: 3.55, sistema: VRF-A, fan_w: 99, ventilador: horario,
+     horario_equipos: equipos_oficina, horario_ac: ac_pasillo,
+     ventanas: {N: 4.5, S: 4.5}, muros: {N: 6, S: 6}, techo: 40, suelo: 0}
+  - {id: Z09, nombre: Cuarto de servidores, tipo: servidores, critica: true, planta: 0, rect: [4, 0, 6, 3],
+     area: 18, ocupantes: 0, lpd: 4.44, epd: 0.0, it_kw: 2.0, hvac_kw: 2.89, sistema: VRF-C, fan_w: 86, ventilador: continuo,
+     horario_equipos: continuo, horario_ac: ac_servidores, setpoint_fijo: 24.0,
+     ventanas: {}, muros: {S: 18}, techo: 0, suelo: 18}
+  - {id: Z10, nombre: Cuarto eléctrico, tipo: electrico, critica: true, planta: 0, rect: [0, 0, 4, 3],
+     area: 12, ocupantes: 0, lpd: 5.0, epd: 12.5, hvac_kw: 0.16, sistema: VRF-B, fan_w: 3, ventilador: continuo,
+     horario_equipos: continuo, horario_ac: ac_electrico, setpoint_fijo: 27.0,
+     ventanas: {}, muros: {S: 12, W: 9}, techo: 0, suelo: 12}

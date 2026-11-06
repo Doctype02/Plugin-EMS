@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { GrafanaTheme2, colorManipulator } from '@grafana/data';
 import { css, cx, keyframes } from '@emotion/css';
 import { useStyles2, useTheme2 } from '@grafana/ui';
-import { BUILDING, FLOORS, ROOF_UNITS, ROOF_UNITS_STACKED, ZONES, Zone } from 'building/model';
+import { BUILDING, FLOORS, VRF_UNITS, VRF_UNITS_STACKED, ZONES, Zone } from 'building/model';
 import { IsoConfig, Prism, Pt, bounds, path, placement, prism, rotate, toScreen } from 'building/iso';
 import { Snapshot, Status } from 'building/telemetry';
 import { MAX_POWER_DENSITY, ViewMode, zoneFill, zoneLabel } from 'building/views';
@@ -399,12 +399,12 @@ export const Building3D: React.FC<Props> = ({
                 className={styles.floorLabel}
                 fill={ink2}
               >
-                Azotea · condensadoras
+                Azotea · unidades VRF
               </text>
             </>
           )}
           <Rooftop
-            units={exploded ? ROOF_UNITS : ROOF_UNITS_STACKED}
+            units={exploded ? VRF_UNITS : VRF_UNITS_STACKED}
             z={roof.z + (exploded ? ROOF_DECK : 0)}
             dy={roof.dy}
             height={exploded ? 1.3 : 1}
@@ -413,6 +413,7 @@ export const Building3D: React.FC<Props> = ({
             animate={animate}
             dark={dark}
             labelColor={ink2}
+            compact={!exploded}
           />
         </g>
       )}

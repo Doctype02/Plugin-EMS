@@ -370,7 +370,7 @@ Resultados. Todos usan el datasource `ems-influx` y la variable `escenario`.
 3. Haz clic en **Z09**: aparece "Carga crítica", sin controles.
 4. En la pestaña **Control**: *Deslastre manual*. Las 8 zonas pasan a manual y el registro muestra los
    comandos como enviados.
-5. Cambia el **límite de demanda** a 135 kW: `ems/estado` informa `limite_kw: 135`.
+5. Cambia el **límite de demanda** a 27 kW: `ems/estado` informa `limite_kw: 27`.
 6. Reinicia la máquina: los 4 servicios vuelven solos y el panel sigue mostrando datos.
 
 ## Problemas frecuentes

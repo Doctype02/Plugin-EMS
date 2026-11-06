@@ -42,12 +42,19 @@ class Resultado:
 
 def simular(cfg: dict, controlador: str | Controlador, dias: float = 7, inicio: str = INICIO_DEFECTO,
             anomalias: list[Anomalia] | None = None, nombre: str | None = None,
-            factor_ocupacion: float = 1.0, semilla: int = 3, callback=None) -> Resultado:
+            factor_ocupacion: float = 1.0, semilla: int = 3, callback=None,
+            calentamiento_h: float = 24.0) -> Resultado:
+    """Simula `dias` desde `inicio`. Antes se simulan `calentamiento_h` horas que se descartan (como los
+    días de warmup de EnergyPlus) para que las temperaturas y los actuadores partan de un estado real."""
     anomalias = anomalias or []
     ctrl = crear(controlador, cfg) if isinstance(controlador, str) else controlador
     nombre = nombre or ctrl.nombre
     paso = cfg["edificio"]["paso_min"]
-    idx = m_clima.indice(inicio, dias, paso, cfg["edificio"]["zona_horaria"])
+    t_inicio = pd.Timestamp(inicio)
+    t_inicio = t_inicio.tz_localize(cfg["edificio"]["zona_horaria"]) if t_inicio.tzinfo is None else t_inicio
+    idx = m_clima.indice(t_inicio - pd.Timedelta(hours=calentamiento_h), dias + calentamiento_h / 24, paso,
+                         cfg["edificio"]["zona_horaria"])
+    n_cal = int(round(calentamiento_h * 60 / paso))
     dt_ext = sum(a.params.get("delta_c", 3.0) for a in anomalias if a.tipo == "ola_calor")
     cl = m_clima.generar(cfg, idx)
     if dt_ext:
@@ -58,19 +65,24 @@ def simular(cfg: dict, controlador: str | Controlador, dias: float = 7, inicio: 
                 mask |= (h_arr >= a.inicio_h) & (h_arr < a.fin_h)
         cl.loc[mask, "t_ext_c"] += dt_ext
         cl.loc[mask, "irr_wm2"] *= 1.10
-    oc = m_ocup.generar(zonas(cfg), idx, cfg["ocupacion"], factor_ocupacion)
+    oc = m_ocup.generar(zonas(cfg), idx, cfg["ocupacion"], factor_ocupacion, cfg=cfg)
 
     ed = Edificio(cfg, rng_semilla=semilla)
     rng = np.random.default_rng(semilla + 100)
     filas_z, filas_m, filas_e, alarmas, lat = [], [], [], [], []
     tel, med = None, None
+    clima_reg = cl.to_dict("records")
+    ocup_reg = oc.to_dict("records")
     for i, t in enumerate(idx):
-        h = i * paso / 60.0
+        h = (i - n_cal) * paso / 60.0          # horas desde `inicio` (negativas durante el calentamiento)
+        registrar = i >= n_cal
+        if i == n_cal:
+            ed.e_kwh = 0.0
         # --- anomalías físicas y de sensores
         ed.carga_extra_kw = {}
         ed.falla_hvac = set()
         sensores_activos = set()
-        ocup = oc.iloc[i].to_dict()
+        ocup = dict(ocup_reg[i])
         p_perdida = 0.0
         for a in anomalias:
             if not a.activa(h):
@@ -93,21 +105,24 @@ def simular(cfg: dict, controlador: str | Controlador, dias: float = 7, inicio: 
         if tel is not None:
             t0 = time.perf_counter()
             cmds = ctrl.decidir(t, tel, med)
-            lat.append((time.perf_counter() - t0) * 1000)
+            if registrar:
+                lat.append((time.perf_counter() - t0) * 1000)
             if p_perdida:
                 cmds = {k: v for k, v in cmds.items() if rng.random() >= p_perdida}
             ed.aplicar(cmds)
-            for a in ctrl.alarmas:
-                alarmas.append(a)
-            est = ctrl.estado(t)
-            est["modo_seguro"] = len(est["modo_seguro"])
-            filas_e.append(est)
+            if registrar:
+                alarmas.extend(ctrl.alarmas)
+                est = ctrl.estado(t)
+                est["modo_seguro"] = len(est["modo_seguro"])
+                filas_e.append(est)
 
-        tel, med = ed.paso(cl.iloc[i].to_dict(), ocup, t.hour * 60 + t.minute)
+        tel, med = ed.paso(clima_reg[i], ocup, t.hour * 60 + t.minute, t.dayofweek)
         med["precio_usd_kwh"] = precio(cfg, t)
         med["ts"] = t
         for z in tel:
             z["ts"] = t
+        if not registrar:
+            continue
         filas_z.extend(tel)
         filas_m.append(med)
         if callback:

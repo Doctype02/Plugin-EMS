@@ -26,7 +26,8 @@ export interface Interior {
   lights: P2[];
 }
 
-const M = 1.1; // margen a los muros
+const M = 1.1; // margen a los muros (se reduce en cuartos pequeños)
+const margin = (r: Rect) => Math.min(M, Math.min(r.w, r.d) / 4);
 
 /** Distribuye `n` posiciones a lo largo de [a, b] (centros de celdas iguales). */
 function spread(a: number, b: number, n: number): number[] {
@@ -41,11 +42,11 @@ function grid(r: Rect, every: number): P2[] {
   return spread(r.x, r.x + r.w, nx).flatMap((x) => spread(r.y, r.y + r.d, ny).map((y) => ({ x, y })));
 }
 
-function offices(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
+function offices(r: Rect, stepX = 3, stepY = 2.7): Pick<Interior, 'furniture' | 'seats'> {
   const furniture: Furniture[] = [];
   const seats: P2[] = [];
-  const cols = Math.max(1, Math.floor((r.w - 2 * M) / 3));
-  const rows = Math.max(1, Math.floor((r.d - 2 * M) / 2.7));
+  const cols = Math.max(1, Math.floor((r.w - 2 * M) / stepX));
+  const rows = Math.max(1, Math.floor((r.d - 2 * M) / stepY));
   for (const cx of spread(r.x + M, r.x + r.w - M, cols)) {
     for (const cy of spread(r.y + M, r.y + r.d - M, rows)) {
       furniture.push({ kind: 'desk', rect: { x: cx - 0.8, y: cy - 0.1, w: 1.6, d: 0.75 }, h: 0.75 });
@@ -73,49 +74,19 @@ function conference(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
   return { furniture: [{ kind: 'table', rect: { x: tx, y: ty, w: tw, d: td }, h: 0.75 }], seats };
 }
 
-function cafeteria(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
-  const furniture: Furniture[] = [
-    { kind: 'counter', rect: { x: r.x + M, y: r.y + r.d - M - 0.8, w: r.w - 2 * M, d: 0.8 }, h: 1.0 },
-  ];
-  const seats: P2[] = [];
-  const cols = Math.max(1, Math.floor((r.w - 2 * M) / 2.4));
-  const rows = Math.max(1, Math.floor((r.d - 2 * M - 2) / 2.4));
-  for (const cx of spread(r.x + M, r.x + r.w - M, cols)) {
-    for (const cy of spread(r.y + M, r.y + r.d - M - 2, rows)) {
-      furniture.push({ kind: 'tableRound', rect: { x: cx - 0.45, y: cy - 0.45, w: 0.9, d: 0.9 }, h: 0.75 });
-      seats.push({ x: cx - 0.75, y: cy }, { x: cx + 0.75, y: cy });
-    }
-  }
-  return { furniture, seats };
-}
-
-function laboratory(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
-  const furniture: Furniture[] = [];
-  const seats: P2[] = [];
-  const long = r.d >= r.w;
-  const rows = Math.max(1, Math.floor(((long ? r.w : r.d) - 2 * M) / 2.4));
-  for (const c of spread(long ? r.x + M : r.y + M, long ? r.x + r.w - M : r.y + r.d - M, rows)) {
-    const len = (long ? r.d : r.w) - 2 * M - 1;
-    const start = (long ? r.y : r.x) + M + 0.5;
-    furniture.push({
-      kind: 'bench',
-      rect: long ? { x: c - 0.45, y: start, w: 0.9, d: len } : { x: start, y: c - 0.45, w: len, d: 0.9 },
-      h: 0.9,
-    });
-    for (const s of spread(start, start + len, Math.floor(len / 1.6))) {
-      seats.push(long ? { x: c - 0.85, y: s } : { x: s, y: c - 0.85 });
-    }
-  }
-  return { furniture, seats };
-}
-
 function servers(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
   const furniture: Furniture[] = [];
+  const m = margin(r);
   const long = r.w >= r.d;
-  const rows = 2;
-  for (const c of spread(long ? r.y + M : r.x + M, long ? r.y + r.d - M : r.x + r.w - M, rows)) {
-    const len = (long ? r.w : r.d) - 2 * M;
-    const start = (long ? r.x : r.y) + M;
+  const short = long ? r.d : r.w;
+  const rows = short - 2 * m >= 3.2 ? 2 : 1; // cuarto angosto: una sola fila de racks
+  const centers =
+    rows === 1
+      ? [(long ? r.y : r.x) + m + 0.55]
+      : spread(long ? r.y + m : r.x + m, long ? r.y + r.d - m : r.x + r.w - m, rows);
+  for (const c of centers) {
+    const len = (long ? r.w : r.d) - 2 * m;
+    const start = (long ? r.x : r.y) + m;
     const n = Math.floor(len / 0.7);
     for (let i = 0; i < n; i++) {
       const s = start + i * 0.7;
@@ -126,40 +97,44 @@ function servers(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
       });
     }
   }
-  return { furniture, seats: [{ x: r.x + r.w / 2, y: r.y + r.d / 2 }] };
+  return { furniture, seats: [{ x: r.x + r.w / 2, y: r.y + r.d - m }] };
 }
 
-function support(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
+function electrical(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
   const furniture: Furniture[] = [];
-  const n = Math.floor((r.w - 2 * M) / 1.0);
+  const m = margin(r);
+  const n = Math.max(1, Math.floor((r.w - 2 * m) / 0.9));
   for (let i = 0; i < n; i++) {
-    furniture.push({ kind: 'cabinet', rect: { x: r.x + M + i, y: r.y + r.d - M - 0.8, w: 0.85, d: 0.8 }, h: 1.9 });
+    furniture.push({ kind: 'cabinet', rect: { x: r.x + m + i * 0.9, y: r.y + r.d - m - 0.6, w: 0.8, d: 0.6 }, h: 1.9 });
   }
-  furniture.push({ kind: 'desk', rect: { x: r.x + M, y: r.y + M + 1, w: 2.4, d: 0.8 }, h: 0.75 });
-  return {
-    furniture,
-    seats: [
-      { x: r.x + M + 0.6, y: r.y + M + 0.5 },
-      { x: r.x + M + 1.8, y: r.y + M + 0.5 },
-    ],
-  };
+  return { furniture, seats: [{ x: r.x + r.w / 2, y: r.y + m }] };
 }
 
-function lobby(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
+function corridor(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
+  const long = r.d >= r.w;
+  const plants = [0.12, 0.5, 0.88].map((f) =>
+    long
+      ? { kind: 'plant' as const, rect: { x: r.x + r.w / 2 - 0.25, y: r.y + r.d * f - 0.25, w: 0.5, d: 0.5 }, h: 1.2 }
+      : { kind: 'plant' as const, rect: { x: r.x + r.w * f - 0.25, y: r.y + r.d / 2 - 0.25, w: 0.5, d: 0.5 }, h: 1.2 }
+  );
+  const seats = spread(long ? r.y + 1 : r.x + 1, long ? r.y + r.d - 1 : r.x + r.w - 1, 6).map((s) =>
+    long ? { x: r.x + r.w / 2, y: s } : { x: s, y: r.y + r.d / 2 }
+  );
+  return { furniture: plants, seats };
+}
+
+function reception(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
   const furniture: Furniture[] = [
-    { kind: 'counter', rect: { x: r.x + r.w * 0.55, y: r.y + r.d * 0.42, w: 3.2, d: 0.9 }, h: 1.1 },
-    { kind: 'sofa', rect: { x: r.x + M, y: r.y + M + 1, w: 0.9, d: 3 }, h: 0.8 },
-    { kind: 'sofa', rect: { x: r.x + M, y: r.y + r.d - M - 4, w: 0.9, d: 3 }, h: 0.8 },
+    { kind: 'counter', rect: { x: r.x + r.w * 0.5, y: r.y + r.d * 0.45, w: 3.2, d: 0.9 }, h: 1.1 },
+    { kind: 'sofa', rect: { x: r.x + M, y: r.y + M + 0.5, w: 0.9, d: 2.4 }, h: 0.8 },
+    { kind: 'sofa', rect: { x: r.x + M, y: r.y + r.d - M - 2.9, w: 0.9, d: 2.4 }, h: 0.8 },
     { kind: 'plant', rect: { x: r.x + r.w - M - 0.6, y: r.y + M, w: 0.6, d: 0.6 }, h: 1.4 },
     { kind: 'plant', rect: { x: r.x + r.w - M - 0.6, y: r.y + r.d - M - 0.6, w: 0.6, d: 0.6 }, h: 1.4 },
   ];
   const seats: P2[] = [
-    ...spread(r.y + M + 1, r.y + M + 4, 3).map((y) => ({ x: r.x + M + 1.3, y })),
-    ...spread(r.y + r.d - M - 4, r.y + r.d - M - 1, 3).map((y) => ({ x: r.x + M + 1.3, y })),
-    ...spread(r.x + 2.5, r.x + r.w - 2.5, 5).flatMap((x) => [
-      { x, y: r.y + r.d * 0.25 },
-      { x, y: r.y + r.d * 0.7 },
-    ]),
+    { x: r.x + r.w * 0.5 + 1.6, y: r.y + r.d * 0.45 + 1.3 },
+    ...spread(r.y + M + 0.5, r.y + M + 2.9, 2).map((y) => ({ x: r.x + M + 1.3, y })),
+    ...spread(r.x + 2.5, r.x + r.w - 2.5, 3).map((x) => ({ x, y: r.y + r.d * 0.25 })),
   ];
   return { furniture, seats };
 }
@@ -183,18 +158,18 @@ export function interiorOf(zone: Zone): Interior {
   const r = zone.rect;
   const base =
     zone.type === 'oficina'
-      ? offices(r)
-      : zone.type === 'conferencia'
-        ? conference(r)
-        : zone.type === 'cafeteria'
-          ? cafeteria(r)
-          : zone.type === 'laboratorio'
-            ? laboratory(r)
-            : zone.type === 'servidores'
-              ? servers(r)
-              : zone.type === 'soporte'
-                ? support(r)
-                : lobby(r);
+      ? offices(r, 2.2, 2.5)
+      : zone.type === 'cubiculos'
+        ? offices(r, 2.6, 2.4)
+        : zone.type === 'conferencia'
+          ? conference(r)
+          : zone.type === 'servidores'
+            ? servers(r)
+            : zone.type === 'electrico'
+              ? electrical(r)
+              : zone.type === 'pasillo'
+                ? corridor(r)
+                : reception(r);
   const nDiff = Math.min(4, Math.max(1, Math.round(zone.area / 90)));
   const long = r.w >= r.d;
   const diffusers = spread(long ? r.x : r.y, long ? r.x + r.w : r.y + r.d, nDiff).map((s) =>

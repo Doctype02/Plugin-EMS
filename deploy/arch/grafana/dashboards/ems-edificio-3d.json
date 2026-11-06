@@ -70,7 +70,7 @@
       ],
       "options": {
         "demoMode": false,
-        "limitKw": 145,
+        "limitKw": 30,
         "defaultView": "status",
         "azimuth": 0,
         "exploded": true,

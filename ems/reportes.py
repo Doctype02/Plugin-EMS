@@ -92,15 +92,44 @@ def temperaturas(res, ruta: Path, dia: str | None = None):
     _guardar(fig, ruta)
 
 
-def pronostico_fig(serie: pd.DataFrame, met: pd.DataFrame, ruta: Path):
+def pronostico_fig(serie: pd.DataFrame, met: pd.DataFrame, ruta: Path,
+                   titulo: str = "Pronóstico del día siguiente — semana de validación"):
     fig, ax = plt.subplots(figsize=(10, 3.8))
     ax.plot(serie.index, serie["real"], color=TXT, lw=1.6, label="Real")
     for i, m in enumerate([c for c in serie.columns if c != "real"]):
         ax.plot(serie.index, serie[m], color=SERIES[i], lw=1.4, alpha=0.95,
                 label=f"{m} (MAE {met.loc[m, 'mae_kw']:.1f} kW, RMSE {met.loc[m, 'rmse_kw']:.1f} kW)")
-    ax.set(ylabel="Potencia horaria (kW)", title="Pronóstico del día siguiente — semana de validación")
+    ax.set(ylabel="Potencia horaria (kW)", title=titulo)
     ax.legend(loc="upper left", ncol=2, fontsize=8)
     fig.autofmt_xdate()
+    _guardar(fig, ruta)
+
+
+def validacion_fig(series: pd.DataFrame, usos: pd.DataFrame, ruta: Path):
+    """Arriba: potencia horaria E+ vs gemelo en una semana. Abajo: usos finales anuales."""
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6.4), gridspec_kw={"height_ratios": [1.3, 1]})
+    ax1.plot(series.index, series["energyplus_kw"], color=TXT, lw=1.6, label="EnergyPlus")
+    ax1.plot(series.index, series["modelo_kw"], color=SERIES[0], lw=1.6, label="Gemelo digital (línea base)")
+    ax1.set(ylabel="Potencia total (kW)", title="Validación horaria contra EnergyPlus — semana de agosto")
+    ax1.legend(loc="upper right", ncol=2)
+    import matplotlib.dates as mdates
+
+    ax1.xaxis.set_major_locator(mdates.DayLocator(tz=series.index.tz))
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%a %d", tz=series.index.tz))
+    u = usos.drop(index="Total End Uses")
+    etiquetas = {"Cooling": "Enfriamiento", "Fans": "Ventiladores", "Interior Lighting": "Iluminación",
+                 "Interior Equipment": "Equipos"}
+    y = np.arange(len(u))
+    ax2.barh(y - 0.18, u["energyplus_kwh"] / 1000, height=0.34, color="#8a8985", label="EnergyPlus")
+    ax2.barh(y + 0.18, u["modelo_kwh"] / 1000, height=0.34, color=SERIES[0], label="Gemelo digital")
+    for yi, (ep, mo, d) in enumerate(zip(u["energyplus_kwh"], u["modelo_kwh"], u["diferencia_pct"])):
+        ax2.text(max(ep, mo) / 1000 + 0.8, yi, f"{d:+.1f} %", va="center", color=TXT2, fontsize=8)
+    ax2.set_yticks(y, [etiquetas.get(i, i) for i in u.index])
+    ax2.invert_yaxis()
+    ax2.set(xlabel="Energía anual (MWh)", title="Usos finales anuales")
+    ax2.legend(loc="lower right")
+    ax2.grid(axis="y", visible=False)
+    fig.tight_layout()
     _guardar(fig, ruta)
 
 
@@ -153,16 +182,18 @@ def auditoria(res_base, cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
          "e_kwh": g.loc[~g.critica, "e_luces_kwh"].sum()},
         {"uso": "Enchufes y equipos (zonas no críticas)", "clasificacion": "no crítica / deslastrable",
          "e_kwh": g.loc[~g.critica, "e_equipos_kwh"].sum()},
-        {"uso": "Servidores, seguridad, UPS (Z09, Z10)", "clasificacion": "crítica", "e_kwh": g.loc[g.critica, "e_total_kwh"].sum()},
-        {"uso": "Ascensores, bombas, iluminación exterior", "clasificacion": "crítica / mixta", "e_kwh": e_fija},
+        {"uso": "Cuarto de servidores y cuarto eléctrico (Z09, Z10)", "clasificacion": "crítica",
+         "e_kwh": g.loc[g.critica, "e_total_kwh"].sum()},
+        {"uso": "Cargas fijas del edificio", "clasificacion": "crítica / mixta", "e_kwh": e_fija},
     ])
+    uso = uso[uso["e_kwh"] > 0].copy()
     uso["participacion_pct"] = uso["e_kwh"] / uso["e_kwh"].sum() * 100
     uso["e_anual_mwh"] = uso["e_kwh"] / dias * 365 / 1000
     return g.round(3), uso.round(3)
 
 
 def tabla_md(df: pd.DataFrame, dec: int = 2) -> str:
-    df = df.reset_index() if df.index.name else df
+    df = df.reset_index() if (df.index.name or any(df.index.names) or not isinstance(df.index, pd.RangeIndex)) else df
     fmt = lambda v: f"{v:,.{dec}f}" if isinstance(v, (float, np.floating)) else str(v)
     filas = ["| " + " | ".join(map(str, df.columns)) + " |", "|" + "---|" * len(df.columns)]
     filas += ["| " + " | ".join(fmt(v) for v in r) + " |" for r in df.itertuples(index=False)]

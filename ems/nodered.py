@@ -13,6 +13,7 @@ import pandas as pd
 
 from .config import RAIZ
 from .control import Controlador
+from .edificio import BANDA_PROPORCIONAL_C, PLR_MIN
 
 HARNESS = RAIZ / "nodered" / "harness.js"
 
@@ -39,7 +40,8 @@ class ControladorNodeRed(Controlador):
             "dr_hist_kw": e["dr_histeresis_kw"], "dr_luces": e["dr_luces_nivel"], "dr_equipos": e["dr_equipos_nivel"],
             "dr_margen_confort": e["dr_margen_confort_c"], "confort_max": e["confort_max_c"],
             "confort_min": e["confort_min_c"], "alarma_servidor": e["alarma_servidor_c"],
-            "fan_frac": cfg["edificio"]["fan_frac"],
+            "plr_min": PLR_MIN, "banda_prop": BANDA_PROPORCIONAL_C,
+            "hvac": {z.id: [z.hvac_kw, z.cop, z.fan_kw] for z in self.zonas},
         })
 
     def _enviar(self, tipo: str, payload: dict) -> dict:

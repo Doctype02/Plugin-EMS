@@ -1,12 +1,19 @@
 """Gemelo digital del edificio: modelo térmico RC por zona, cargas, sensores, actuadores y medidor.
 
-Cada zona se modela como un nodo térmico (1R1C):
+Cada zona se modela como un nodo térmico (1R1C) con los parámetros del modelo E+ (config.zonas):
 
-    C·dT/dt = UA·(Text − T) + G_vent·(Text − T) + Q_personas + Q_luces + Q_equipos + Q_solar − Q_hvac
+    C·dT/dt = UA·(Text − T) + UA_suelo·(Tsuelo − T) + G_vent·(Text − T)
+              + Q_personas + Q_luces + Q_equipos + Q_solar,ventanas + Q_solar,opaco + Q_ventilador − Q_hvac
 
-con Q en kW, C en kWh/K y t en horas. El HVAC es un equipo DX con termostato on/off con histéresis
-(o modulante si el EMS envía `hvac_mod`, usado por el MPC). La potencia eléctrica HVAC incluye el
-ventilador. Los sensores agregan ruido y pueden fallar (congelado, ruidoso, fuera de rango).
+con Q en kW, C en kWh/K y t en horas. La ganancia solar usa la irradiancia sobre cada fachada.
+
+HVAC: terminal VRF modulante. Con el termostato local, la capacidad sigue el error de temperatura
+dentro de la banda (sp ± banda) y el terminal hace on/off con histéresis: enciende sobre sp + banda y
+apaga bajo sp − banda (a carga baja cicla). El EMS puede fijar la modulación (`hvac_mod`, MPC y
+limitador de demanda). La potencia eléctrica es capacidad × modulación / COP estacional del sistema
+VRF (calibrado con la simulación de E+), más el ventilador del terminal: continuo (línea base, como
+en E+) o sólo cuando hay ocupación o compresor (EMS).
+Los sensores agregan ruido y pueden fallar (congelado, ruidoso, fuera de rango, deriva).
 """
 from __future__ import annotations
 
@@ -15,12 +22,17 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .config import Zona, zonas
+from .config import RHO_CP, Zona, horario, zonas
 
-Q_PERSONA_KW = 0.075        # calor sensible por persona
+Q_PERSONA_KW = 0.075        # calor sensible por persona (actividad 120 W, schedule "Cargas" de E+)
+Q_PERSONA_LAT_KW = 0.045    # calor latente por persona
+W_INTERIOR = 0.0105         # humedad absoluta interior de diseño (≈ 24 °C, 55 %) kg/kg
+H_FG = 2501.0               # kJ/kg
 LUX_ARTIFICIAL = 500.0      # lux con luces al 100 %
-RHO_CP = 1.2 * 1.006        # kJ/(m3·K) → con m3/s da kW/K
-FP = {"hvac": 0.85, "luces": 0.95, "equipos": 0.92, "it": 0.97}
+EFICACIA_LUZ_DIA = 110.0    # lm/W de la radiación solar
+PLR_MIN = 0.15              # carga parcial mínima del terminal VRF antes de ciclar
+BANDA_PROPORCIONAL_C = 2.0  # el terminal pasa de PLR_MIN a capacidad plena entre sp − banda y sp − banda + 2 K
+FP = {"hvac": 0.90, "luces": 0.95, "equipos": 0.92, "it": 0.97}
 
 ACTUADORES = ("setpoint_c", "hvac_enable", "luces_nivel", "equipos_nivel", "hvac_mod", "ventilacion")
 
@@ -32,11 +44,34 @@ class EstadoZona:
     hvac_enable: bool = True
     luces_nivel: float = 1.0
     equipos_nivel: float = 1.0
-    hvac_mod: float | None = None     # None = termostato on/off
-    ventilacion: str = "dcv"          # "fija" (caudal de diseño) | "dcv" (por ocupación)
+    hvac_mod: float | None = None     # None = termostato local
+    ventilacion: str = "dcv"          # "fija" (ventilador continuo + aire exterior de diseño) | "dcv"
     hvac_on: bool = False
     t_medida: float = 0.0
     historial_medida: list = field(default_factory=list)
+
+
+def humedad_absoluta(t_c: float, hr_pct: float, p_kpa: float = 101.325) -> float:
+    psat = 0.61094 * math.exp(17.625 * t_c / (t_c + 243.04))
+    pv = max(min(hr_pct, 100.0), 0.0) / 100.0 * psat
+    return 0.622 * pv / (p_kpa - pv)
+
+
+def fraccion_carga(t_medida: float, sp: float, banda: float) -> float:
+    """Capacidad pedida por el terminal VRF (ley proporcional), acotada a [PLR_MIN, 1]."""
+    return float(min(1.0, max(PLR_MIN, (t_medida - sp + banda) / BANDA_PROPORCIONAL_C)))
+
+
+def modulacion_termostato(t_medida: float, sp: float, banda: float, encendido: bool) -> tuple[float, bool]:
+    """Terminal VRF: on/off con histéresis (enciende sobre sp + banda, apaga bajo sp − banda) y
+    capacidad proporcional al error mientras está encendido."""
+    if t_medida > sp + banda:
+        encendido = True
+    elif t_medida < sp - banda:
+        encendido = False
+    if not encendido:
+        return 0.0, False
+    return fraccion_carga(t_medida, sp, banda), True
 
 
 class Edificio:
@@ -48,16 +83,16 @@ class Edificio:
         self.banda = cfg["ems"]["banda_histeresis_c"]
         self.paso_h = self.e["paso_min"] / 60.0
         self.rng = np.random.default_rng(rng_semilla)
-        # perturbaciones activas (las fija el ejecutor de escenarios)
         self.carga_extra_kw: dict[str, float] = {}
         self.falla_hvac: set[str] = set()
         self.falla_sensor: dict[str, dict] = {}
         self.e_kwh = 0.0
         self._hist_p: list[float] = []
+        self._vt = 0.252  # transmitancia visible del vidrio del modelo
         self.reset()
 
     # ------------------------------------------------------------------ estado
-    def reset(self, t0: float = 26.0):
+    def reset(self, t0: float = 25.0):
         self.estado: dict[str, EstadoZona] = {}
         for z in self.zonas:
             t = z.setpoint_fijo if z.setpoint_fijo else t0
@@ -72,7 +107,7 @@ class Edificio:
                 continue
             z, s = self.zmap[zid], self.estado[zid]
             for k, v in cmd.items():
-                if k not in ACTUADORES or v is None and k != "hvac_mod":
+                if k not in ACTUADORES or (v is None and k != "hvac_mod"):
                     continue
                 if k == "setpoint_c":
                     s.setpoint_c = z.setpoint_fijo if z.setpoint_fijo else float(np.clip(v, 18, 30))
@@ -88,7 +123,7 @@ class Edificio:
                     s.ventilacion = "fija" if v == "fija" else "dcv"
 
     # ---------------------------------------------------------------- sensores
-    def _medir(self, zid: str, t_real: float, minuto: int) -> float:
+    def _medir(self, zid: str, t_real: float) -> float:
         s = self.estado[zid]
         m = t_real + self.rng.normal(0, 0.08)
         falla = self.falla_sensor.get(zid)
@@ -106,11 +141,29 @@ class Edificio:
         return round(float(m), 2)
 
     # -------------------------------------------------------------------- paso
-    def paso(self, clima: dict, ocupantes: dict[str, int], minuto_del_dia: int = 0) -> tuple[list[dict], dict]:
+    def paso(self, clima: dict, ocupantes: dict[str, int], minuto_del_dia: int = 0,
+             dia_semana: int = 0) -> tuple[list[dict], dict]:
         t_ext = clima["t_ext_c"]
         ghi = clima["irr_wm2"]
-        shr = self.e["shr"]
-        fs = self.e["fraccion_standby_equipos"]
+        irr = {o: clima.get(f"irr_{o}", ghi * 0.4) for o in ("N", "E", "S", "W")}
+        irr["H"] = clima.get("irr_H", ghi)
+        hora = minuto_del_dia / 60.0
+        w_ext = humedad_absoluta(t_ext, clima.get("hr_pct", 80.0))
+        dw = max(w_ext - W_INTERIOR, 0.0)
+        t_suelo = self.e["t_suelo_c"]
+        f_sol = self.e.get("factor_solar", 1.0)
+        v_pers = self.e["ventilacion_m3s_persona"]
+        no_crit = [z for z in self.zonas if not z.critica]
+        # radiación hacia el cielo: temperatura exterior equivalente para la conducción de la envolvente
+        t_eq = t_ext - self.e.get("delta_t_cielo_c", 0.0)
+        # temperatura media (por área) de cada planta en el paso anterior, para el acople por el entrepiso
+        t_planta = {}
+        for pl in (0, 1):
+            zs = [z for z in self.zonas if z.planta == pl]
+            if zs:
+                t_planta[pl] = sum(self.estado[z.id].t * z.area for z in zs) / sum(z.area for z in zs)
+        edificio_ocupado = any(ocupantes.get(z.id, 0) > 0 for z in no_crit)
+
         tel = []
         tot = {"hvac": 0.0, "luces": 0.0, "equipos": 0.0, "it": 0.0}
         q_kvar = 0.0
@@ -118,58 +171,65 @@ class Edificio:
         for z in self.zonas:
             s = self.estado[z.id]
             n = int(ocupantes.get(z.id, 0))
-            f_uso = min(n / max(z.ocupantes, 1), 1.0)
-            cap_disp = 0.0 if z.id in self.falla_hvac else z.hvac_kw
-            cop = z.cop * (1 - 0.015 * (t_ext - 30.0))
+            ocupado = n > 0 or (z.tipo == "pasillo" and edificio_ocupado)
+            cap = 0.0 if z.id in self.falla_hvac else z.hvac_kw
+            cop = z.cop * (1 - 0.012 * (t_ext - 30.0))
 
-            # --- termostato local (on/off con histéresis) o modulación externa
+            # --- capacidad del terminal VRF
             sp = z.setpoint_fijo or s.setpoint_c
             if not s.hvac_enable:
-                mod = 0.0
-                s.hvac_on = False
+                mod, s.hvac_on = 0.0, False
             elif s.hvac_mod is not None:
                 mod = s.hvac_mod
                 s.hvac_on = mod > 0
             else:
-                if s.t_medida > sp + self.banda:
-                    s.hvac_on = True
-                elif s.t_medida < sp - self.banda:
-                    s.hvac_on = False
-                mod = 1.0 if s.hvac_on else 0.0
+                mod, s.hvac_on = modulacion_termostato(s.t_medida, sp, self.banda, s.hvac_on)
+            if cap == 0.0:
+                mod = 0.0
 
-            # --- ventilación: caudal fijo de diseño (línea base) o DCV
+            # --- ventilador y aire exterior
             if not s.hvac_enable:
-                g_vent, fan_on = 0.0, False
+                fan_on, g_vent = False, 0.0
             elif s.ventilacion == "fija":
-                g_vent, fan_on = z.ocupantes * self.e["ventilacion_m3s_persona"] * RHO_CP, True
+                fan_on = True
+                g_vent = max(z.ocupantes, 0) * v_pers * RHO_CP
             else:
-                g_vent = n * self.e["ventilacion_m3s_persona"] * RHO_CP
-                fan_on = n > 0 or mod > 0
-            p_fan = self.e["fan_frac"] * z.hvac_kw * (1.0 if fan_on else 0.0) * (0.6 if s.ventilacion == "dcv" else 1.0)
+                fan_on = ocupado or mod > 0
+                g_vent = n * v_pers * RHO_CP
+            p_fan = z.fan_kw if fan_on else 0.0
 
-            # --- cargas internas
+            # --- cargas internas (horarios del modelo E+)
             p_luces = z.p_luces_max_kw * s.luces_nivel
-            nivel_eq = max(s.equipos_nivel, z.min_equipos)
-            p_eq = z.p_equipos_max_kw * (f_uso + (1 - f_uso) * fs) * nivel_eq + self.carga_extra_kw.get(z.id, 0.0)
-            p_it = z.it_kw * (1 + 0.03 * math.sin(minuto_del_dia / 1440 * 2 * math.pi)) if z.it_kw else 0.0
-            q_sol = z.ventana * z.shgc * 0.5 * ghi / 1000.0
-            q_int = n * Q_PERSONA_KW + p_luces + p_eq + p_it + p_fan + q_sol
+            f_eq = horario(self.cfg, z.horario_equipos, dia_semana, hora)
+            p_eq = z.p_equipos_max_kw * f_eq * max(s.equipos_nivel, z.min_equipos) + self.carga_extra_kw.get(z.id, 0.0)
+            p_it = z.it_kw * (1 + 0.02 * math.sin(minuto_del_dia / 1440 * 2 * math.pi)) if z.it_kw else 0.0
+            q_sol = f_sol * z.shgc * sum(a * irr[o] for o, a in z.ventanas.items()) / 1000.0
+            q_opaco = sum(k * irr[o] for o, k in z.sol_opaco.items())
+            q_int = n * Q_PERSONA_KW + p_luces + p_eq + p_it + p_fan + q_sol + q_opaco
+            # latente: personas + humedad del aire exterior (ventilación + infiltración)
+            caudal_ext = g_vent / RHO_CP + self.e["infiltracion_m3s_m2"] * (sum(z.muros.values()) + z.techo)
+            q_lat = n * Q_PERSONA_LAT_KW + 1.2 * caudal_ext * H_FG * dw
 
             # --- integración térmica (subpasos de 1 min, Euler explícito)
-            q_hvac_sens = mod * cap_disp * shr
+            t_otra = t_planta.get(1 - z.planta, s.t)
+            q_hvac_sens = mod * cap
             sub = max(int(self.e["paso_min"]), 1)
             dt = self.paso_h / sub
             t = s.t
             for _ in range(sub):
-                dTdt = ((z.ua + g_vent) * (t_ext - t) + q_int - q_hvac_sens) / z.c
+                dTdt = (z.ua * (t_eq - t) + (z.g_inf + g_vent) * (t_ext - t) + z.ua_suelo * (t_suelo - t)
+                        + z.ua_entrepiso * (t_otra - t) + q_int - q_hvac_sens) / z.c
                 t += dTdt * dt
             s.t = t
-            p_comp = mod * cap_disp / max(cop, 1.0)
+            # el VRF no controla humedad (en E+ la HR interior llega a 90 %+): sólo retira el latente que
+            # condensa su serpentín, ≈ fracción del sensible, limitado por la humedad disponible
+            q_lat_ret = min(q_lat, self.e.get("fraccion_latente_serpentin", 0.25) * q_hvac_sens) if mod > 0 else 0.0
+            p_comp = (q_hvac_sens + q_lat_ret) / max(cop, 1.0)
             p_hvac = p_comp + p_fan
 
-            s.t_medida = self._medir(z.id, s.t, minuto_del_dia)
-            lux_dia = z.lux_dia_max * ghi / max(self.cfg["clima"]["irr_max_wm2"], 1)
-            lux = lux_dia + LUX_ARTIFICIAL * s.luces_nivel if z.lux_dia_max or s.luces_nivel else 0.0
+            s.t_medida = self._medir(z.id, s.t)
+            lux_dia = EFICACIA_LUZ_DIA * self._vt * 0.25 * sum(a * irr[o] for o, a in z.ventanas.items()) / max(z.area, 1)
+            lux = lux_dia + LUX_ARTIFICIAL * s.luces_nivel
 
             p_zona = p_hvac + p_luces + p_eq + p_it
             tot["hvac"] += p_hvac
@@ -183,19 +243,17 @@ class Edificio:
             tel.append({
                 "zona": z.id, "nombre": z.nombre, "tipo": z.tipo, "critica": z.critica,
                 "temp_c": s.t_medida, "temp_real_c": round(s.t, 3), "setpoint_c": sp,
-                "ocupantes": n, "ocupado": n > 0, "lux": round(lux, 0),
+                "ocupantes": n, "ocupado": bool(ocupado), "lux": round(lux, 0),
                 "luces_nivel": round(s.luces_nivel, 3), "equipos_nivel": round(s.equipos_nivel, 3),
                 "hvac_on": bool(s.hvac_on), "hvac_enable": bool(s.hvac_enable),
-                "hvac_mod": round(mod, 3),
+                "hvac_mod": round(mod, 3), "q_frio_kw": round(q_hvac_sens + q_lat_ret, 3),
                 "p_luces_kw": round(p_luces, 3), "p_equipos_kw": round(p_eq + p_it, 3),
-                "p_hvac_kw": round(p_hvac, 3), "p_total_kw": round(p_zona, 3),
+                "p_hvac_kw": round(p_hvac, 3), "p_ventilador_kw": round(p_fan, 3), "p_total_kw": round(p_zona, 3),
             })
 
-        # --- cargas fijas del edificio
-        f_edif = sum(ocupantes.get(z.id, 0) for z in self.zonas if not z.critica) / \
-            max(sum(z.ocupantes for z in self.zonas if not z.critica), 1)
         p_fija = 0.0
-        for cf in self.cfg.get("cargas_fijas", []):
+        for cf in self.cfg.get("cargas_fijas") or []:
+            f_edif = sum(ocupantes.get(z.id, 0) for z in no_crit) / max(sum(z.ocupantes for z in no_crit), 1)
             if "kw_noche" in cf:
                 p = cf["kw_noche"] if ghi < 5 else 0.0
             else:
@@ -211,6 +269,8 @@ class Edificio:
         self._hist_p.append(p_total)
         n15 = max(int(round(15 / self.e["paso_min"])), 1)
         dem15 = float(np.mean(self._hist_p[-n15:]))
+        if len(self._hist_p) > 50:
+            self._hist_p = self._hist_p[-n15:]
         medidor = {
             "p_total_kw": round(p_total, 3), "p_critica_kw": round(p_crit, 3),
             "p_no_critica_kw": round(p_total - p_crit, 3),
@@ -220,5 +280,6 @@ class Edificio:
             "v_ll": self.e["v_ll"], "i_a": round(s_kva * 1000 / (math.sqrt(3) * self.e["v_ll"]), 2),
             "e_kwh": round(self.e_kwh, 3), "demanda_15min_kw": round(dem15, 3),
             "t_ext_c": round(t_ext, 2), "hr_pct": round(clima.get("hr_pct", 0), 1), "irr_wm2": round(ghi, 1),
+            **{f"irr_{o}": round(v, 1) for o, v in irr.items() if o != "H"},
         }
         return tel, medidor
