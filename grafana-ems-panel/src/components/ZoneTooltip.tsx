@@ -20,7 +20,7 @@ const W = 230;
 
 export const ZoneTooltip: React.FC<Props> = ({ zone, state, status, x, y, containerWidth, containerHeight }) => {
   const styles = useStyles2(getStyles);
-  const left = x + 16 + W > containerWidth ? x - W - 16 : x + 16;
+  const left = Math.max(4, x + 16 + W > containerWidth ? x - W - 16 : x + 16);
   const top = Math.min(y + 12, containerHeight - 170);
   const rows: Array<[string, string]> =
     state && Number.isFinite(state.temp)

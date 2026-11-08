@@ -21,7 +21,7 @@ const W = 250;
 export const VrfTooltip: React.FC<Props> = ({ unit, snapshot, x, y, containerWidth, containerHeight }) => {
   const styles = useStyles2(getStyles);
   const st = unitState(unit, snapshot);
-  const left = x + 16 + W > containerWidth ? x - W - 16 : x + 16;
+  const left = Math.max(4, x + 16 + W > containerWidth ? x - W - 16 : x + 16);
   const top = Math.max(4, Math.min(y + 12, containerHeight - 60 - unit.zones.length * 20 - 150));
   const cop = ZONE_BY_ID[unit.zones[0]]?.cop ?? 2;
   return (

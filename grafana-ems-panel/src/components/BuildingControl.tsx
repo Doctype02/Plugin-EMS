@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Glyph, GlyphName } from './Glyph';
 import { GrafanaTheme2, colorManipulator } from '@grafana/data';
 import { css, cx } from '@emotion/css';
 import { Button, Icon, RadioButtonGroup, useStyles2 } from '@grafana/ui';
@@ -39,31 +40,31 @@ const KW_PER_DEG = OFFICES.reduce((a, z) => {
 const QUICK_DURATIONS = [5, 15, 30, 60];
 
 type QuickKind = 'precool' | 'eco' | 'shed' | 'night';
-const QUICK: Array<{ kind: QuickKind; glyph: string; title: string; detail: string; effect: string }> = [
+const QUICK: Array<{ kind: QuickKind; glyph: GlyphName; title: string; detail: string; effect: string }> = [
   {
     kind: 'precool',
-    glyph: '❄',
+    glyph: 'snow',
     title: 'Pre-enfriar',
     detail: 'HVAC encendido a 23 °C en todas las zonas',
     effect: 'Llega fresco a la ocupación · más consumo ahora',
   },
   {
     kind: 'eco',
-    glyph: '🌿',
+    glyph: 'leaf',
     title: 'Modo eco',
     detail: 'Setpoint 25 °C y luces al 70 %',
     effect: `≈ −${(KW_PER_DEG * 1).toFixed(1)} kW de HVAC · confort aceptable`,
   },
   {
     kind: 'shed',
-    glyph: '⚡',
+    glyph: 'bolt',
     title: 'Deslastre',
     detail: 'Luces 60 %, enchufes 85 %, setpoint 25 °C',
     effect: 'Recorta el pico de demanda de inmediato',
   },
   {
     kind: 'night',
-    glyph: '🌙',
+    glyph: 'moon',
     title: 'Cierre',
     detail: 'HVAC y luces apagados, standby cortado',
     effect: 'Consumo mínimo · sólo cargas críticas',
@@ -215,7 +216,9 @@ export const BuildingControl: React.FC<Props> = ({
               onClick={() => quick(q.kind)}
               data-testid={`ems-quick-${q.kind}`}
             >
-              <span className={styles.tileGlyph}>{q.glyph}</span>
+              <span className={styles.tileGlyph}>
+                <Glyph name={q.glyph} size={18} />
+              </span>
               <span className={styles.tileTitle}>{q.title}</span>
               <span className={styles.tileDetail}>{q.detail}</span>
               <span className={styles.tileEffect}>{q.effect}</span>

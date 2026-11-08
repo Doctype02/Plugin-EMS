@@ -1,4 +1,5 @@
 import React from 'react';
+import { Glyph } from './Glyph';
 import { GrafanaTheme2 } from '@grafana/data';
 import { css, cx } from '@emotion/css';
 import { useStyles2, useTheme2 } from '@grafana/ui';
@@ -96,14 +97,20 @@ export const ZoneMiniMap: React.FC<Props> = ({ snapshot, manual, selected, disab
                     </text>
                   )}
                   {manual?.has(z.id) && (
-                    <text x={x + 3} y={y + 9} className={styles.badge}>
-                      ✋
-                    </text>
+                    <circle cx={x + 7} cy={y + 7} r={4.2} fill="#ff9830">
+                      <title>Control manual</title>
+                    </circle>
                   )}
                   {ev && (
-                    <text x={x + w - 3} y={y + 9} className={styles.badge} textAnchor="end">
-                      {EVENTS[ev]?.glyph}
-                    </text>
+                    <g>
+                      <circle
+                        cx={x + w - 8}
+                        cy={y + 8}
+                        r={6.5}
+                        fill={EVENTS[ev].level === 'crit' ? '#e02f44' : '#ff9830'}
+                      />
+                      <Glyph name={EVENTS[ev].glyph} x={x + w - 12.5} y={y + 3.5} size={9} color="#fff" />
+                    </g>
                   )}
                 </g>
               );

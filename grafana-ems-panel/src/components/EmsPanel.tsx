@@ -6,7 +6,7 @@ import { config } from '@grafana/runtime';
 import { EmsOptions } from 'types';
 import { BUILDING, FLOORS, VRF_UNITS, VrfUnit, ZONES, ZONE_BY_ID, Zone } from 'building/model';
 import { Azimuth, IsoConfig } from 'building/iso';
-import { SimOptions, simulate, simulateHistory } from 'building/simulator';
+import { SimOptions, instant, simulate, simulateHistory } from 'building/simulator';
 import { EmsParams, History, Overrides, Snapshot, Status, snapshotFromFrames, zoneStatuses } from 'building/telemetry';
 import { Command, LogEntry, applyLocal, describe, prune, sendToNodeRed, validate } from 'building/control';
 import { MAX_POWER_DENSITY, ViewMode, legendFor } from 'building/views';
@@ -24,7 +24,19 @@ import { SimulatePanel } from './SimulatePanel';
 import { EmergencyBanner } from './EmergencyBanner';
 import { HelpOverlay } from './HelpOverlay';
 import { VrfTooltip } from './VrfTooltip';
-import { ClockState, goLive, initialClock, setSpeed, setTime, simNow, tickMs, togglePlay } from 'building/clock';
+import { OverviewPanel } from './OverviewPanel';
+import { SceneCompass } from './SceneCompass';
+import {
+  ClockState,
+  goLive,
+  initialClock,
+  localParts,
+  setSpeed,
+  setTime,
+  simNow,
+  tickMs,
+  togglePlay,
+} from 'building/clock';
 import { SimEvent } from 'building/events';
 import { useStatusColors } from './useStatusColors';
 
@@ -297,7 +309,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const [hover, setHover] = useState<{ id: string; x: number; y: number; w: number; h: number }>();
   const [unitHover, setUnitHover] = useState<{ id: string; x: number; y: number; w: number; h: number }>();
   const [statusFilter, setStatusFilter] = useState<Status>();
-  const [sideTab, setSideTab] = useState<'alarms' | 'meter' | 'control' | 'simulate'>('alarms');
+  const [sideTab, setSideTab] = useState<'overview' | 'alarms' | 'control' | 'simulate'>('overview');
   const [help, setHelp] = useState(false);
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState<Set<string>>(() => new Set());
@@ -421,6 +433,20 @@ export const EmsPanel: React.FC<Props> = (props) => {
     setBusy(false);
   };
 
+  // curva de potencia del día (15 min): simulada en demostración, tendencia del medidor en vivo
+  const dayStart = localParts(now).dayStart;
+  const curveBucket = Math.floor(now / 900_000);
+  const dayCurve = useMemo<Array<[number, number]>>(() => {
+    if (!options.demoMode) {
+      return (history.EDIF?.pTotal ?? []) as Array<[number, number]>;
+    }
+    const out: Array<[number, number]> = [];
+    for (let t = dayStart; t <= dayStart + 86_400_000; t += 900_000) {
+      out.push([t, instant(t, sim).pTotal]);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options.demoMode, dayStart, sim, curveBucket, history]);
   const activeEventCount = events.filter((e) => e.start <= now && e.end > now).length;
   const selected = selectedId ? ZONE_BY_ID[selectedId] : undefined;
   const hovered = hover ? ZONE_BY_ID[hover.id] : undefined;
@@ -451,13 +477,13 @@ export const EmsPanel: React.FC<Props> = (props) => {
   ) : (
     <div className={styles.sideContent}>
       <TabsBar className={styles.sideTabs}>
+        <Tab label="Resumen" active={sideTab === 'overview'} onChangeTab={() => setSideTab('overview')} />
         <Tab
           label="Alarmas"
           active={sideTab === 'alarms'}
           counter={snapshot.alarms.length || null}
           onChangeTab={() => setSideTab('alarms')}
         />
-        <Tab label="Medidor" active={sideTab === 'meter'} onChangeTab={() => setSideTab('meter')} />
         <Tab
           label="Control"
           active={sideTab === 'control'}
@@ -471,7 +497,18 @@ export const EmsPanel: React.FC<Props> = (props) => {
           onChangeTab={() => setSideTab('simulate')}
         />
       </TabsBar>
-      {sideTab === 'simulate' ? (
+      {sideTab === 'overview' ? (
+        <OverviewPanel
+          snapshot={snapshot}
+          statuses={statuses}
+          statusColors={statusColors}
+          limitKw={params.limitKw}
+          dayCurve={dayCurve}
+          now={now}
+          onSelectZone={selectZone}
+          meter={<MeterCard meter={snapshot.meter} ems={snapshot.ems} limitKw={params.limitKw} history={history} />}
+        />
+      ) : sideTab === 'simulate' ? (
         <SimulatePanel
           now={now}
           snapshot={snapshot}
@@ -636,6 +673,9 @@ export const EmsPanel: React.FC<Props> = (props) => {
             onStop={() => runCommands({ kind: 'event_stop', id: '*' })}
           />
           {help && <HelpOverlay onClose={() => setHelp(false)} />}
+          {panelHeight >= 420 && (
+            <SceneCompass azimuth={azimuth} time={now} irradiance={snapshot.meter?.irr} tExt={snapshot.meter?.tExt} />
+          )}
 
           <Legend spec={legend} counts={counts} statusFilter={statusFilter} onStatusFilter={setStatusFilter} />
 
@@ -737,7 +777,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     right: ${theme.spacing(1)};
   `,
   sidebar: css`
-    width: 350px;
+    width: 380px;
     flex-shrink: 0;
     overflow-y: auto;
     padding: ${theme.spacing(1.5)};
@@ -750,7 +790,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     top: ${theme.spacing(1)};
     right: ${theme.spacing(1)};
     bottom: ${theme.spacing(1)};
-    width: min(350px, calc(100% - ${theme.spacing(2)}));
+    width: min(380px, calc(100% - ${theme.spacing(2)}));
     overflow-y: auto;
     padding: ${theme.spacing(1.5)};
     border-radius: ${theme.shape.radius.default};

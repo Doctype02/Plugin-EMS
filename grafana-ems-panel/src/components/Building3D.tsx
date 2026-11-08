@@ -1,9 +1,22 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Glyph } from './Glyph';
 import { GrafanaTheme2, colorManipulator } from '@grafana/data';
 import { css, cx, keyframes } from '@emotion/css';
 import { useStyles2, useTheme2 } from '@grafana/ui';
 import { BUILDING, FLOORS, VRF_UNITS, VRF_UNITS_STACKED, VrfUnit, ZONES, Zone } from 'building/model';
-import { IsoConfig, Prism, Pt, bounds, path, placement, pointDepth, prism, rotate, toScreen } from 'building/iso';
+import {
+  IsoConfig,
+  Prism,
+  Pt,
+  bounds,
+  path,
+  placement,
+  planeMatrix,
+  pointDepth,
+  prism,
+  rotate,
+  toScreen,
+} from 'building/iso';
 import { localParts } from 'building/clock';
 import { EVENTS, EventKind } from 'building/events';
 import { Snapshot, Status } from 'building/telemetry';
@@ -38,28 +51,27 @@ interface Props {
 export function skyColors(hour: number, dark: boolean): { top: string; bottom: string; night: number } {
   const night = hour < 5.5 || hour > 19 ? 1 : hour < 7 ? (7 - hour) / 1.5 : hour > 17.5 ? (hour - 17.5) / 1.5 : 0;
   const dusk = (hour > 5.5 && hour < 7.5) || (hour > 17 && hour < 19);
+  // fondo sobrio: sólo un matiz que sugiere la hora (día neutro, atardecer cálido, noche azulada)
   if (dark) {
     return night >= 1
-      ? { top: '#0b1022', bottom: '#151a2e', night }
+      ? { top: '#0f131c', bottom: '#151922', night }
       : dusk
-        ? { top: '#1d2140', bottom: '#4a3040', night }
-        : { top: '#142235', bottom: '#1e2a36', night };
+        ? { top: '#191a22', bottom: '#201d22', night }
+        : { top: '#161a20', bottom: '#1b1f25', night };
   }
   return night >= 1
-    ? { top: '#2a3358', bottom: '#4b5478', night }
+    ? { top: '#dde2ec', bottom: '#e9ecf2', night }
     : dusk
-      ? { top: '#8fa6d6', bottom: '#f3c9a1', night }
-      : { top: '#bcd8f2', bottom: '#eef5fb', night };
+      ? { top: '#eceef4', bottom: '#f6f0ea', night }
+      : { top: '#f1f4f7', bottom: '#f8f9fb', night };
 }
 
 const TREES: Array<[number, number, number]> = [
-  [-3, -3, 1.3],
-  [7, -3.6, 1.0],
-  [23.2, -2.6, 1.4],
-  [23.4, 11, 1.2],
-  [-2.8, 22, 1.4],
-  [12, 23.4, 1.0],
-  [23, 23, 1.3],
+  [-2.8, -2.8, 1.1],
+  [23, -2.6, 1.2],
+  [23.2, 11, 1.0],
+  [-2.6, 22.4, 1.2],
+  [22.8, 22.8, 1.1],
 ];
 
 const shade = (color: string, amount: number) => colorManipulator.darken(color, amount);
@@ -112,9 +124,9 @@ export const Building3D: React.FC<Props> = ({
   const visible = FLOORS.filter((f) => floors.includes(f.level));
   const slotOf = (level: number) =>
     exploded ? visible.findIndex((f) => f.level === level) : showAllFloors ? level : 0;
-  const roofSlot = exploded ? visible.length : undefined;
-  const slots = exploded ? visible.length + (showAllFloors ? 1 : 0) : showAllFloors ? FLOORS.length : 1;
-  const box = useMemo(() => bounds(iso, slots, exploded ? 2.5 : 3.5), [iso, slots, exploded]);
+  // en la vista explotada la azotea va en un recuadro en la esquina libre (no ocupa otro escalón)
+  const slots = exploded ? visible.length : showAllFloors ? FLOORS.length : 1;
+  const box = bounds(iso, slots, exploded ? 2.5 : 3.5);
   const ctx = { dark, statusColors, status: statuses, maxPowerDensity: MAX_POWER_DENSITY };
   const ink = theme.colors.text.primary;
   const ink2 = theme.colors.text.secondary;
@@ -145,27 +157,40 @@ export const Building3D: React.FC<Props> = ({
   const center = pointDepth(BUILDING.width / 2, BUILDING.depth / 2, iso);
   const tree = ([x, y, r]: [number, number, number], k: number) => {
     const base = toScreen(x, y, 0, iso);
-    const top = toScreen(x, y, r * 2.2, iso);
-    const R = r * iso.scale * 0.95;
-    const leaf = dark ? '#2f5a3a' : '#5c9e5f';
+    const top = toScreen(x, y, r * 2.4, iso);
+    const R = r * iso.scale * 0.85;
+    const leaf = dark ? '#3e5a48' : '#7fa48a';
+    const leafHi = dark ? '#4d6e58' : '#9cbfa5';
     return (
       <g key={`t${k}`} pointerEvents="none">
-        <ellipse cx={base.x} cy={base.y} rx={R * 0.9} ry={R * 0.45} fill="#000" opacity={0.12} />
+        <ellipse
+          cx={base.x + R * 0.4}
+          cy={base.y + R * 0.15}
+          rx={R * 1.1}
+          ry={R * 0.5}
+          fill="#000"
+          opacity={dark ? 0.3 : 0.1}
+        />
         <line
           x1={base.x}
           y1={base.y}
           x2={top.x}
-          y2={top.y + R * 0.5}
-          stroke={dark ? '#5a4632' : '#7a5a3a'}
-          strokeWidth={2.4}
+          y2={top.y + R * 0.6}
+          stroke={dark ? '#5b5348' : '#8c7f6e'}
+          strokeWidth={1.6}
         />
-        <circle cx={top.x} cy={top.y} r={R} fill={leaf} />
-        <circle cx={top.x - R * 0.35} cy={top.y - R * 0.3} r={R * 0.55} fill={colorManipulator.lighten(leaf, 0.15)} />
+        <ellipse cx={top.x} cy={top.y} rx={R} ry={R * 0.92} fill={leaf} />
+        <ellipse cx={top.x - R * 0.28} cy={top.y - R * 0.25} rx={R * 0.62} ry={R * 0.55} fill={leafHi} opacity={0.85} />
       </g>
     );
   };
-  const treesBack = TREES.filter(([x, y]) => pointDepth(x, y, iso) >= center);
-  const treesFront = TREES.filter(([x, y]) => pointDepth(x, y, iso) < center);
+  // sin árboles en el margen izquierdo, donde van los rótulos de piso
+  const leftEdge = Math.min(
+    ...[0, BUILDING.width].flatMap((x) => [0, BUILDING.depth].map((y) => toScreen(x, y, 0, iso).x))
+  );
+  const visibleTrees = TREES.filter(([x, y]) => toScreen(x, y, 0, iso).x > leftEdge + iso.scale * 2);
+  const treesBack = visibleTrees.filter(([x, y]) => pointDepth(x, y, iso) >= center);
+  const treesFront = visibleTrees.filter(([x, y]) => pointDepth(x, y, iso) < center);
 
   const levels = visible.map((floor) => {
     const { z: z0, dy } = placement(slotOf(floor.level), iso);
@@ -181,9 +206,29 @@ export const Building3D: React.FC<Props> = ({
     if (!showAllFloors) {
       return undefined;
     }
-    const base = roofSlot !== undefined ? placement(roofSlot, iso) : placement(FLOORS.length - 1, iso);
-    const z = roofSlot !== undefined ? base.z : base.z + SLAB + WALL;
-    return { z, dy: base.dy, slab: prism(FULL, z, ROOF_DECK, iso, 0, base.dy) };
+    if (exploded) {
+      // geometría en el origen y luego escalada/trasladada a la esquina superior izquierda libre
+      const slab = prism(FULL, 0, ROOF_DECK, iso, 0, 0);
+      const pts = [...slab.top, ...slab.sides.flatMap((sd) => sd.points)];
+      const rx0 = Math.min(...pts.map((q) => q.x));
+      const rx1 = Math.max(...pts.map((q) => q.x));
+      const ry0 = Math.min(...pts.map((q) => q.y)) - iso.scale * 3.2; // unidades y rótulos
+      const ry1 = Math.max(...pts.map((q) => q.y));
+      const pa = levels[levels.length - 1];
+      const pb = levels[0];
+      const paLeft = Math.min(...pa.slab.top.map((q) => q.x));
+      const pbTop = Math.min(...pb.slab.top.map((q) => q.y)) - iso.scale * (WALL + 1.5);
+      const pad = iso.scale * 1.2;
+      const availW = paLeft - box.x - pad;
+      const availH = pbTop - box.y - pad * 2.5;
+      const k = Math.max(0.35, Math.min(0.8, availW / (rx1 - rx0), availH / (ry1 - ry0)));
+      const tx = box.x + pad - rx0 * k;
+      const ty = box.y + pad * 2.2 - ry0 * k;
+      return { z: 0, dy: 0, slab, transform: `translate(${tx.toFixed(1)},${ty.toFixed(1)}) scale(${k.toFixed(3)})`, k };
+    }
+    const base = placement(FLOORS.length - 1, iso);
+    const z = base.z + SLAB + WALL;
+    return { z, dy: base.dy, slab: prism(FULL, z, ROOF_DECK, iso, 0, base.dy), transform: undefined, k: 1 };
   })();
 
   // líneas de proyección entre niveles (vista explotada)
@@ -191,7 +236,7 @@ export const Building3D: React.FC<Props> = ({
     if (!exploded) {
       return [];
     }
-    const slabs = [...levels.map((l) => l.slab), ...(roof ? [roof.slab] : [])];
+    const slabs = levels.map((l) => l.slab);
     const out: Pt[][] = [];
     for (let i = 0; i + 1 < slabs.length; i++) {
       out.push([slabs[i].top[3], slabs[i + 1].sides[0].points[0]]);
@@ -218,9 +263,6 @@ export const Building3D: React.FC<Props> = ({
     const pts: Pt[] = [toScreen(near.x, near.y, -0.2, iso, 0)];
     for (const l of levels) {
       pts.push(toScreen(near.x, near.y, l.z0, iso, l.dy), toScreen(near.x, near.y, l.z0 + SLAB, iso, l.dy));
-    }
-    if (roof) {
-      pts.push(toScreen(near.x, near.y, roof.z + ROOF_DECK, iso, roof.dy));
     }
     const kw = snapshot.meter?.pTotal ?? 0;
     return {
@@ -298,7 +340,7 @@ export const Building3D: React.FC<Props> = ({
             textAnchor="middle"
             className={styles.zoneId}
             fill={ink}
-            style={{ fontSize: 11 * fs }}
+            style={{ fontSize: 11 * fs, strokeWidth: 3 * fs }}
           >
             {zone.id}
             {manual.has(zone.id) ? ' · M' : ''}
@@ -309,7 +351,7 @@ export const Building3D: React.FC<Props> = ({
             textAnchor="middle"
             className={styles.zoneValue}
             fill={ink}
-            style={{ fontSize: 11 * fs }}
+            style={{ fontSize: 11 * fs, strokeWidth: 3 * fs }}
           >
             {zoneLabel(viewMode, zone, s)}
           </text>
@@ -342,6 +384,9 @@ export const Building3D: React.FC<Props> = ({
           <stop offset="0%" stopColor={sky.top} />
           <stop offset="100%" stopColor={sky.bottom} />
         </linearGradient>
+        <filter id={`${idPrefix}-soft`} x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation={iso.scale * 0.9} />
+        </filter>
         <radialGradient id={`${idPrefix}-fire`}>
           <stop offset="0%" stopColor="#ffdd55" stopOpacity={0.95} />
           <stop offset="45%" stopColor="#ff7a1a" stopOpacity={0.75} />
@@ -359,60 +404,57 @@ export const Building3D: React.FC<Props> = ({
         width={box.w * 3}
         height={box.h * 3}
         fill={`url(#${idPrefix}-sky)`}
-        opacity={0.55}
+        pointerEvents="none"
+        data-testid="ems-sky"
+        data-night={sky.night >= 1 ? 'si' : 'no'}
+      />
+      {/* terreno: plaza pavimentada con juntas, jardineras y acceso */}
+      <path
+        d={path(prism({ x: -4.5, y: -4.5, w: BUILDING.width + 9, d: BUILDING.depth + 9 }, -0.1, 0.05, iso).top)}
+        fill={dark ? '#1c1f24' : '#e6e8eb'}
+        stroke={dark ? '#2a2e35' : '#d3d7dc'}
+        opacity={exploded ? 0.7 : 1}
         pointerEvents="none"
       />
-      {(() => {
-        // sol o luna en una trayectoria según la hora
-        const day = hour >= 6 && hour <= 18.5;
-        const k = day ? (hour - 6) / 12.5 : ((hour + 24 - 18.5) % 24) / 11.5;
-        const cx = box.x + box.w * (0.92 - 0.84 * k);
-        const cy = box.y + box.h * (0.2 - 0.14 * Math.sin(Math.PI * Math.min(Math.max(k, 0), 1)));
-        return (
-          <g pointerEvents="none" data-testid="ems-sky" data-night={sky.night >= 1 ? 'si' : 'no'}>
-            {day ? (
-              <>
-                <circle cx={cx} cy={cy} r={22} fill="#ffd54f" opacity={0.18} />
-                <circle cx={cx} cy={cy} r={11} fill="#ffcc33" />
-              </>
-            ) : (
-              <>
-                <circle cx={cx} cy={cy} r={10} fill={dark ? '#d8dce8' : '#f2f4fa'} />
-                <circle cx={cx + 4} cy={cy - 3} r={9} fill={sky.top} />
-                {[
-                  [0.15, 0.08],
-                  [0.3, 0.14],
-                  [0.55, 0.06],
-                  [0.7, 0.12],
-                  [0.85, 0.05],
-                ].map(([a, b]) => (
-                  <circle key={a} cx={box.x + box.w * a} cy={box.y + box.h * b} r={1.1} fill="#fff" opacity={0.7} />
-                ))}
-              </>
-            )}
+      <g transform={planeMatrix(-0.04, iso)} pointerEvents="none" opacity={exploded ? 0.35 : 0.6}>
+        {Array.from({ length: 15 }, (_, i) => -4.5 + i * 2).map((v) => (
+          <g key={v}>
+            <line
+              x1={v}
+              y1={-4.5}
+              x2={v}
+              y2={BUILDING.depth + 4.5}
+              stroke={dark ? '#2a2e35' : '#d3d7dc'}
+              strokeWidth={0.04}
+            />
+            <line
+              x1={-4.5}
+              y1={v}
+              x2={BUILDING.width + 4.5}
+              y2={v}
+              stroke={dark ? '#2a2e35' : '#d3d7dc'}
+              strokeWidth={0.04}
+            />
           </g>
-        );
-      })()}
-      {/* terreno: césped, acera y entrada */}
+        ))}
+      </g>
       <path
-        d={path(prism({ x: -5, y: -5, w: BUILDING.width + 10, d: BUILDING.depth + 10 }, -0.1, 0.05, iso).top)}
-        fill={dark ? '#1d2a1f' : '#dfe9d5'}
-        opacity={exploded ? 0.55 : 1}
+        d={path(prism({ x: 13, y: -4.5, w: 4, d: 4.5 }, -0.04, 0.05, iso).top)}
+        fill={dark ? '#2a2e35' : '#d6dade'}
+        opacity={exploded ? 0.7 : 1}
         pointerEvents="none"
       />
-      <path
-        d={path(prism({ x: -1.5, y: -1.5, w: BUILDING.width + 3, d: BUILDING.depth + 3 }, -0.05, 0.05, iso).top)}
-        fill={dark ? '#2a2a28' : '#e9e7e0'}
-        stroke={theme.colors.border.weak}
-        opacity={exploded ? 0.6 : 1}
-        pointerEvents="none"
-      />
-      <path
-        d={path(prism({ x: 13, y: -5, w: 4, d: 3.5 }, -0.04, 0.05, iso).top)}
-        fill={dark ? '#333331' : '#d8d5cc'}
-        opacity={exploded ? 0.6 : 1}
-        pointerEvents="none"
-      />
+      {levels.map((l) => (
+        <path
+          key={`sh${l.floor.level}`}
+          d={path(prism(FULL, l.z0 - 0.3, 0.05, iso, 0, l.dy).top)}
+          fill="#000"
+          opacity={dark ? 0.45 : 0.16}
+          filter={`url(#${idPrefix}-soft)`}
+          transform={`translate(${iso.scale * 0.9},${iso.scale * 1.4})`}
+          pointerEvents="none"
+        />
+      ))}
       {treesBack.map(tree)}
 
       {connectors.map(([a, b], i) => (
@@ -522,29 +564,40 @@ export const Building3D: React.FC<Props> = ({
         <g pointerEvents="none">
           <g transform={`translate(${(riser.base.x + 8).toFixed(1)},${(riser.base.y - 34).toFixed(1)})`}>
             <rect x={6} y={-10} width={70} height={18} rx={4} fill={theme.colors.background.primary} stroke="#eda100" />
+            <Glyph name="bolt" x={10} y={-8} size={14} color="#eda100" />
             <text x={41} y={3} textAnchor="middle" fontSize={10} fill={ink}>
-              ⚡ {riser.kw.toFixed(0)} kW
+              {riser.kw.toFixed(0)} kW
             </text>
           </g>
         </g>
       )}
 
       {roof && (
-        <g data-testid="ems-roof">
+        <g data-testid="ems-roof" transform={roof.transform}>
           {exploded && (
             <>
+              <path
+                d={path(
+                  prism({ x: -0.6, y: -0.6, w: BUILDING.width + 1.2, d: BUILDING.depth + 1.2 }, -0.4, 0.05, iso).top
+                )}
+                fill="#000"
+                opacity={dark ? 0.35 : 0.12}
+                filter={`url(#${idPrefix}-soft)`}
+                transform={`translate(${iso.scale * 0.8},${iso.scale * 1.2})`}
+              />
               {roof.slab.sides.map((sd, i) => (
                 <path key={i} d={path(sd.points)} fill={shade(slabColor, i ? 0.25 : 0.12)} />
               ))}
               <path d={path(roof.slab.top)} fill={slabColor} stroke={shade(slabColor, 0.2)} strokeWidth={0.6} />
               <text
-                x={roof.slab.sides[0].points[0].x - iso.scale * 1.2}
-                y={roof.slab.sides[0].points[0].y}
-                textAnchor="end"
-                className={styles.floorLabel}
+                x={Math.min(...roof.slab.top.map((q) => q.x))}
+                y={Math.max(...roof.slab.sides.flatMap((sd) => sd.points).map((q) => q.y)) + 16 / roof.k}
+                textAnchor="start"
+                className={styles.insetLabel}
                 fill={ink2}
+                style={{ fontSize: 11 / roof.k }}
               >
-                Azotea · unidades VRF
+                AZOTEA · UNIDADES VRF
               </text>
             </>
           )}
@@ -654,9 +707,13 @@ export const Building3D: React.FC<Props> = ({
                   >
                     {animate && <animate attributeName="r" values="11;12.5;11" dur="1.2s" repeatCount="indefinite" />}
                   </circle>
-                  <text y={4} textAnchor="middle" fontSize={12}>
-                    {EVENTS[kinds[0] ?? 'incendio'].glyph}
-                  </text>
+                  <Glyph
+                    name={EVENTS[kinds[0] ?? 'incendio'].glyph}
+                    x={-7}
+                    y={-7}
+                    size={14}
+                    color={EVENTS[kinds[0] ?? 'incendio'].level === 'crit' ? '#f2495c' : '#ff9830'}
+                  />
                 </g>
               </g>
             );
@@ -716,6 +773,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     paint-order: stroke;
     stroke: ${colorManipulator.alpha(theme.colors.background.primary, 0.7)};
     stroke-width: 3px;
+  `,
+  insetLabel: css`
+    font-weight: ${theme.typography.fontWeightMedium};
+    letter-spacing: 0.08em;
   `,
   floorLabel: css`
     font-size: 12px;

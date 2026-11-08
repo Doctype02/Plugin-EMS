@@ -142,7 +142,9 @@ export const ZoneInterior: React.FC<Props> = ({
             <path
               key={i}
               d={path(w)}
-              fill={lit ? colorManipulator.alpha('#ffe08a', 0.75) : colorManipulator.alpha(P.glass, 0.85)}
+              fill={
+                lit ? colorManipulator.alpha('#fff1c7', P.dark ? 0.32 : 0.6) : colorManipulator.alpha(P.glass, 0.85)
+              }
             />
           ))}
       </g>

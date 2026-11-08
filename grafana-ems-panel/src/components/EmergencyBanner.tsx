@@ -1,4 +1,5 @@
 import React from 'react';
+import { Glyph, GlyphName } from './Glyph';
 import { GrafanaTheme2, colorManipulator } from '@grafana/data';
 import { css, cx, keyframes } from '@emotion/css';
 import { Button, useStyles2 } from '@grafana/ui';
@@ -19,7 +20,7 @@ export function emergencyMessage(
   snapshot: Snapshot,
   events: SimEvent[],
   now: number
-): { level: 'crit' | 'warn'; glyph: string; title: string; detail: string } | undefined {
+): { level: 'crit' | 'warn'; glyph: GlyphName; title: string; detail: string } | undefined {
   const act = events.filter((e) => isActive(e, now));
   const fire =
     act.find((e) => e.kind === 'incendio') ??
@@ -28,7 +29,7 @@ export function emergencyMessage(
     const people = Object.values(snapshot.zones).reduce((a, z) => a + z.occupants, 0);
     return {
       level: 'crit',
-      glyph: '🔥',
+      glyph: 'fire',
       title: `INCENDIO${fire.zone ? ` en ${fire.zone}` : ''} — evacuación ${people ? `en curso (${people} personas dentro)` : 'completa'}`,
       detail: 'Climatización del edificio detenida para no propagar humo · iluminación de evacuación encendida',
     };
@@ -37,7 +38,7 @@ export function emergencyMessage(
   if (m && m.gridOk === false) {
     return {
       level: 'crit',
-      glyph: '⚡',
+      glyph: 'bolt',
       title: 'CORTE DE ENERGÍA — sin tensión en la acometida',
       detail:
         (m.upsMinutes ?? 0) > 0
@@ -77,7 +78,9 @@ export const EmergencyBanner: React.FC<Props> = ({ snapshot, events, now, canSto
       role="alert"
       data-testid="ems-emergency"
     >
-      <span className={styles.glyph}>{msg.glyph}</span>
+      <span className={styles.glyph}>
+        <Glyph name={msg.glyph} size={22} />
+      </span>
       <div className={styles.text}>
         <div className={styles.title}>{msg.title}</div>
         <div className={styles.detail}>{msg.detail}</div>
@@ -102,10 +105,11 @@ const pulse = keyframes`
 const getStyles = (theme: GrafanaTheme2) => ({
   banner: css`
     position: absolute;
-    left: 50%;
-    top: ${theme.spacing(6)};
-    transform: translateX(-50%);
-    width: min(620px, calc(100% - ${theme.spacing(2)}));
+    /* entre la leyenda (izquierda) y la brújula (derecha) */
+    left: 300px;
+    right: 215px;
+    bottom: ${theme.spacing(1)};
+    min-width: 260px;
     display: flex;
     align-items: center;
     gap: ${theme.spacing(1)};

@@ -1,3 +1,4 @@
+import { colorManipulator } from '@grafana/data';
 import { Zone } from './model';
 import { Status, ZoneState } from './telemetry';
 
@@ -97,9 +98,32 @@ export function zoneFill(mode: ViewMode, zone: Zone, s: ZoneState | undefined, c
         return '#2a78d6';
       }
       return s.hvacEnable ? (ctx.dark ? '#3c4b5c' : '#b7d3f6') : ctx.dark ? '#2f2f2c' : '#e4e3df';
-    default:
-      return ctx.statusColors[ctx.status[zone.id] ?? 'offline'];
+    default: {
+      // tinte sobrio: el color de estado mezclado con el piso neutro (el borde y el rótulo llevan el color pleno)
+      const st = ctx.status[zone.id] ?? 'offline';
+      const base = ctx.dark ? '#2e3238' : '#eef0f2';
+      return mixHex(ctx.statusColors[st], base, st === 'ok' ? 0.28 : 0.55);
+    }
   }
+}
+
+/** Mezcla dos colores (#rrggbb o rgb()) en proporción t del primero. */
+export function mixHex(a: string, b: string, t: number): string {
+  const parse = (c: string): number[] => {
+    const hex = colorManipulator.asHexString(c).replace('#', '');
+    const h =
+      hex.length === 3
+        ? hex
+            .split('')
+            .map((x) => x + x)
+            .join('')
+        : hex.slice(0, 6);
+    return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  };
+  const ca = parse(a);
+  const cb = parse(b);
+  const m = ca.map((v, i) => Math.round(v * t + cb[i] * (1 - t)));
+  return `#${m.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 }
 
 export function legendFor(mode: ViewMode, ctx: ViewContext): LegendSpec {

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Glyph } from './Glyph';
 import { GrafanaTheme2, colorManipulator } from '@grafana/data';
 import { css, cx } from '@emotion/css';
 import { Button, Icon, RadioButtonGroup, Switch, useStyles2, useTheme2 } from '@grafana/ui';
@@ -117,7 +118,7 @@ const EventsSection: React.FC<Props> = ({
               onClick={() => pick(k)}
               data-testid={`ems-event-${k}`}
             >
-              <span className={styles.glyph}>{EVENTS[k].glyph}</span>
+              <Glyph name={EVENTS[k].glyph} size={16} className={styles[`ico_${EVENTS[k].level}`]} />
               {EVENTS[k].label}
             </button>
           ))}
@@ -216,7 +217,7 @@ const EventsSection: React.FC<Props> = ({
           const frac = Math.min(1, Math.max(0, (now - e.start) / (e.end - e.start)));
           return (
             <div key={e.id} className={styles.active}>
-              <span className={styles.glyph}>{EVENTS[e.kind].glyph}</span>
+              <Glyph name={EVENTS[e.kind].glyph} size={16} className={styles[`ico_${EVENTS[e.kind].level}`]} />
               <div className={styles.activeText}>
                 <div>{describeEvent(e)}</div>
                 <div className={styles.progress}>
@@ -621,6 +622,15 @@ const getStyles = (theme: GrafanaTheme2) => {
     permission: css`
       color: ${theme.colors.warning.text};
       font-size: ${theme.typography.bodySmall.fontSize};
+    `,
+    ico_crit: css`
+      color: ${theme.colors.error.text};
+    `,
+    ico_warn: css`
+      color: ${theme.colors.warning.text};
+    `,
+    ico_info: css`
+      color: ${theme.colors.info.text};
     `,
     glyph: css`
       font-size: 16px;

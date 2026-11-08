@@ -31,10 +31,12 @@ sparklines y pantalla completa. El plano y los equipos son propios del edificio 
    *Ahora* vuelve a la hora real de Panamá.
 2. **Explora**: pasa el mouse por una zona o por una unidad VRF de la azotea (ventana con capacidad, carga,
    potencia, COP, estado y zonas que atiende); clic en una zona para su detalle y control.
-3. **Controla** (pestaña *Control*): plano de zonas con su temperatura, parámetros del EMS con su efecto
+3. **Resumen** (pestaña por defecto): estado general, curva de demanda del día (medida y prevista) frente al
+   límite, energía, costo y CO₂ del día, desglose HVAC/iluminación/equipos, tabla de zonas y medidor general.
+4. **Controla** (pestaña *Control*): plano de zonas con su temperatura, parámetros del EMS con su efecto
    estimado, acciones rápidas de 5 min a 1 h, zonas en manual con el tiempo restante.
-4. **Simula** (pestaña *Simular*): alarmas y accidentes, y «¿qué pasaría si…?».
-5. Botón **?** del escenario: guía breve.
+5. **Simula** (pestaña *Simular*): alarmas y accidentes, y «¿qué pasaría si…?».
+6. Botón **?** del escenario: guía breve.
 
 ## Qué muestra
 
@@ -68,7 +70,11 @@ sparklines y pantalla completa. El plano y los equipos son propios del edificio 
   VRF-C: servidores) con carcasa, rejillas del serpentín, ventiladores, tuberías de refrigerante y franja LED
   de estado: azul enfriando, naranja con compresores limitados por DR, gris en espera, rojo intermitente en
   falla. Ventana emergente al pasar el mouse.
-- **Entorno**: cielo y sol/luna según la hora simulada, césped, acera, entrada y árboles.
+- **Composición**: en la vista en corte las dos plantas ocupan la escena y la azotea va en un recuadro en la
+  esquina libre; sombras suaves bajo cada nivel, plaza con juntas, acceso y árboles discretos.
+- **Brújula** con la orientación de la vista y la posición real del sol en Panamá a la hora simulada
+  (elevación, azimut, irradiancia y temperatura exterior). Íconos de línea propios (sin emojis) y paleta
+  sobria: el estado de cada zona es un tinte del piso con el color pleno en el borde y el rótulo.
 - **Eventos** sobre el edificio: marcador sobre cada zona afectada, fuego y humo en un incendio, edificio
   oscurecido en un corte de energía, banner de emergencia con acciones.
 - **Encabezado**: cuatro indicadores por vista (potencia, demanda de 15 min frente al límite, personas,

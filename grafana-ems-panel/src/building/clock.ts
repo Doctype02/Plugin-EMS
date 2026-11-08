@@ -108,3 +108,33 @@ export function dayPeriod(hour: number, dow: number): string {
   }
   return 'Cierre';
 }
+
+/** Posición del sol en Ciudad de Panamá (NOAA simplificado): azimut desde el norte (°) y elevación (°). */
+export function sunPosition(t: number, lat = 8.97, lon = -79.5): { azimuth: number; elevation: number } {
+  const rad = Math.PI / 180;
+  const d = new Date(t);
+  const start = Date.UTC(d.getUTCFullYear(), 0, 0);
+  const doy = (t - start) / 86_400_000;
+  const g = ((2 * Math.PI) / 365) * (doy - 1);
+  const decl =
+    0.006918 -
+    0.399912 * Math.cos(g) +
+    0.070257 * Math.sin(g) -
+    0.006758 * Math.cos(2 * g) +
+    0.000907 * Math.sin(2 * g);
+  const eqt =
+    229.18 *
+    (0.000075 +
+      0.001868 * Math.cos(g) -
+      0.032077 * Math.sin(g) -
+      0.014615 * Math.cos(2 * g) -
+      0.040849 * Math.sin(2 * g));
+  const utcMin = d.getUTCHours() * 60 + d.getUTCMinutes() + d.getUTCSeconds() / 60;
+  const tst = utcMin + eqt + 4 * lon;
+  const ha = (tst / 4 - 180) * rad;
+  const phi = lat * rad;
+  const cosZ = Math.sin(phi) * Math.sin(decl) + Math.cos(phi) * Math.cos(decl) * Math.cos(ha);
+  const zen = Math.acos(Math.min(1, Math.max(-1, cosZ)));
+  const az = Math.atan2(Math.sin(ha), Math.cos(ha) * Math.sin(phi) - Math.tan(decl) * Math.cos(phi)) / rad + 180;
+  return { azimuth: (az + 360) % 360, elevation: 90 - zen / rad };
+}

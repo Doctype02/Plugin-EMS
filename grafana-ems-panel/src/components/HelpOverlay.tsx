@@ -2,26 +2,31 @@ import React from 'react';
 import { GrafanaTheme2 } from '@grafana/data';
 import { css } from '@emotion/css';
 import { Button, useStyles2 } from '@grafana/ui';
+import { Glyph, GlyphName } from './Glyph';
 
-const STEPS: Array<[string, string, string]> = [
+const STEPS: Array<[GlyphName, string, string]> = [
   [
-    '🕒',
+    'clock',
     'Elige la hora',
     'Mueve la barra de tiempo, cambia el día o acelera la simulación (hasta 1 hora por segundo).',
   ],
   [
-    '🏢',
+    'cursor',
     'Explora el edificio',
     'Pasa el mouse sobre una zona o una unidad VRF de la azotea; haz clic en una zona para ver su detalle.',
   ],
-  ['🎛', 'Controla', 'Pestaña Control: setpoint, límite de demanda, acciones rápidas o control manual de cada zona.'],
   [
-    '🔥',
+    'sliders',
+    'Controla',
+    'Pestaña Control: setpoint, límite de demanda, acciones rápidas o control manual de cada zona.',
+  ],
+  [
+    'fire',
     'Simula',
     'Pestaña Simular: incendio, corte de energía, fallas… y «¿qué pasaría si?» una temperatura se mantiene horas.',
   ],
   [
-    '🎨',
+    'building',
     'Cambia la vista',
     'Arriba: estado, temperatura, ocupación, potencia, iluminación o HVAC. Gira el edificio o sepáralo por pisos.',
   ],
@@ -35,7 +40,9 @@ export const HelpOverlay: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <div className={styles.title}>Cómo usar el panel</div>
         {STEPS.map(([g, t, d]) => (
           <div key={t} className={styles.step}>
-            <span className={styles.glyph}>{g}</span>
+            <span className={styles.glyph}>
+              <Glyph name={g} size={20} />
+            </span>
             <div>
               <div className={styles.stepTitle}>{t}</div>
               <div className={styles.stepDetail}>{d}</div>

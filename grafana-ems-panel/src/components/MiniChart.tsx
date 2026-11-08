@@ -17,10 +17,28 @@ interface Props {
   xLabel: (x: number) => string;
   yUnit: string;
   height?: number;
+  /** Línea vertical (p. ej. «ahora»). */
+  marker?: { x: number; label: string };
+  /** Eje x fijo (si no, el rango de los datos). */
+  xDomain?: [number, number];
+  /** Ticks del eje x (si no, 5 equiespaciados). */
+  xTicks?: number[];
+  /** Rellena bajo la primera serie. */
+  area?: boolean;
 }
 
 /** Gráfico de líneas liviano en SVG para las proyecciones (sin dependencias). */
-export const MiniChart: React.FC<Props> = ({ series, rules = [], xLabel, yUnit, height = 140 }) => {
+export const MiniChart: React.FC<Props> = ({
+  series,
+  rules = [],
+  xLabel,
+  yUnit,
+  height = 140,
+  marker,
+  xDomain,
+  xTicks,
+  area,
+}) => {
   const styles = useStyles2(getStyles);
   const W = 280;
   const H = height;
@@ -30,17 +48,18 @@ export const MiniChart: React.FC<Props> = ({ series, rules = [], xLabel, yUnit, 
   if (!xs.length) {
     return null;
   }
-  const x0 = Math.min(...xs);
-  const x1 = Math.max(...xs);
-  let y0 = Math.min(...ys);
+  const x0 = xDomain ? xDomain[0] : Math.min(...xs);
+  const x1 = xDomain ? xDomain[1] : Math.max(...xs);
+  const dataMin = Math.min(...ys);
+  let y0 = Math.min(0, dataMin);
   let y1 = Math.max(...ys);
   const span = Math.max(y1 - y0, 1);
-  y0 -= span * 0.08;
+  y0 = dataMin >= 0 && y0 === 0 ? 0 : y0 - span * 0.08;
   y1 += span * 0.08;
   const sx = (x: number) => pad.l + ((x - x0) / Math.max(x1 - x0, 1e-9)) * (W - pad.l - pad.r);
   const sy = (y: number) => pad.t + (1 - (y - y0) / (y1 - y0)) * (H - pad.t - pad.b);
   const ticks = [0, 0.5, 1].map((k) => y0 + (y1 - y0) * k);
-  const xt = [0, 0.25, 0.5, 0.75, 1].map((k) => x0 + (x1 - x0) * k);
+  const xt = xTicks ?? [0, 0.25, 0.5, 0.75, 1].map((k) => x0 + (x1 - x0) * k);
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" className={styles.svg} role="img">
@@ -73,6 +92,23 @@ export const MiniChart: React.FC<Props> = ({ series, rules = [], xLabel, yUnit, 
             </text>
           </g>
         ))}
+        {area && series[0] && series[0].points.length > 1 && (
+          <path
+            d={`M${sx(series[0].points[0][0])},${sy(y0)}L${series[0].points
+              .map(([x, y]) => `${sx(x).toFixed(1)},${sy(y).toFixed(1)}`)
+              .join('L')}L${sx(series[0].points[series[0].points.length - 1][0])},${sy(y0)}Z`}
+            fill={series[0].color}
+            opacity={0.14}
+          />
+        )}
+        {marker && (
+          <g>
+            <line x1={sx(marker.x)} x2={sx(marker.x)} y1={pad.t} y2={H - pad.b} className={styles.marker} />
+            <text x={sx(marker.x) + 3} y={H - pad.b - 4} className={styles.axis}>
+              {marker.label}
+            </text>
+          </g>
+        )}
         {series.map((s) => (
           <polyline
             key={s.name}
@@ -112,6 +148,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
   axis: css`
     font-size: 9px;
     fill: ${theme.colors.text.secondary};
+  `,
+  marker: css`
+    stroke: ${theme.colors.text.secondary};
+    stroke-width: 1;
+    stroke-dasharray: 2 2;
   `,
   rule: css`
     font-size: 9px;

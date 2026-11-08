@@ -11,6 +11,7 @@
  */
 import { VRF_UNITS, ZONE_BY_ID } from './model';
 import { AlarmLevel } from './telemetry';
+import type { GlyphName } from '../components/Glyph';
 
 export type EventKind =
   | 'incendio'
@@ -38,8 +39,8 @@ export interface SimEvent {
 
 export interface EventDef {
   label: string;
-  /** Emoji corto para listas y el banner (sin depender del set de íconos). */
-  glyph: string;
+  /** Ícono de línea (components/Glyph.tsx). */
+  glyph: GlyphName;
   level: AlarmLevel;
   target: EventTarget;
   description: string;
@@ -55,7 +56,7 @@ const noCritica = (id: string) => !ZONE_BY_ID[id]?.critical;
 export const EVENTS: Record<EventKind, EventDef> = {
   incendio: {
     label: 'Incendio',
-    glyph: '🔥',
+    glyph: 'fire',
     level: 'crit',
     target: 'zona',
     description:
@@ -64,7 +65,7 @@ export const EVENTS: Record<EventKind, EventDef> = {
   },
   corte_energia: {
     label: 'Corte de energía',
-    glyph: '⚡',
+    glyph: 'bolt',
     level: 'crit',
     target: 'edificio',
     description:
@@ -74,7 +75,7 @@ export const EVENTS: Record<EventKind, EventDef> = {
   },
   falla_vrf: {
     label: 'Falla de unidad VRF',
-    glyph: '❄',
+    glyph: 'fan',
     level: 'crit',
     target: 'unidad',
     description: 'La unidad exterior deja de enfriar: todas las zonas que atiende se calientan.',
@@ -82,7 +83,7 @@ export const EVENTS: Record<EventKind, EventDef> = {
   },
   falla_terminal: {
     label: 'Falla de terminal (zona)',
-    glyph: '🛠',
+    glyph: 'wrench',
     level: 'warn',
     target: 'zona',
     description: 'El terminal VRF de una zona deja de enfriar.',
@@ -90,7 +91,7 @@ export const EVENTS: Record<EventKind, EventDef> = {
   },
   puerta_abierta: {
     label: 'Puerta o ventana abierta',
-    glyph: '🚪',
+    glyph: 'door',
     level: 'warn',
     target: 'zona',
     description: 'Entra aire exterior caliente y húmedo: sube la carga del VRF y la temperatura.',
@@ -100,7 +101,7 @@ export const EVENTS: Record<EventKind, EventDef> = {
   },
   sensor: {
     label: 'Falla de sensor',
-    glyph: '🌡',
+    glyph: 'thermometer',
     level: 'crit',
     target: 'zona',
     description: 'El sensor de temperatura se congela: el EMS lo detecta y pasa la zona a modo seguro.',
@@ -108,7 +109,7 @@ export const EVENTS: Record<EventKind, EventDef> = {
   },
   ola_calor: {
     label: 'Ola de calor',
-    glyph: '☀',
+    glyph: 'sun',
     level: 'info',
     target: 'edificio',
     description: 'La temperatura exterior sube: más carga de enfriamiento y riesgo de superar el límite de demanda.',
@@ -117,7 +118,7 @@ export const EVENTS: Record<EventKind, EventDef> = {
   },
   sobreocupacion: {
     label: 'Sobreocupación',
-    glyph: '👥',
+    glyph: 'users',
     level: 'warn',
     target: 'zona',
     description: 'Más personas que el aforo de diseño (reunión, evento).',
@@ -127,7 +128,7 @@ export const EVENTS: Record<EventKind, EventDef> = {
   },
   pico_carga: {
     label: 'Pico de carga',
-    glyph: '📈',
+    glyph: 'trend',
     level: 'warn',
     target: 'zona',
     description: 'Equipos adicionales conectados: el limitador de demanda debe responder.',
