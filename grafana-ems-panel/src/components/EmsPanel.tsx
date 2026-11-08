@@ -7,8 +7,28 @@ import { EmsOptions } from 'types';
 import { BUILDING, FLOORS, VRF_UNITS, VrfUnit, ZONES, ZONE_BY_ID, Zone } from 'building/model';
 import { Azimuth, IsoConfig } from 'building/iso';
 import { SimOptions, instant, simulate, simulateHistory } from 'building/simulator';
-import { EmsParams, History, Overrides, Snapshot, Status, snapshotFromFrames, zoneStatuses } from 'building/telemetry';
-import { Command, LogEntry, applyLocal, describe, prune, sendToNodeRed, validate } from 'building/control';
+import {
+  EmsParams,
+  History,
+  OccupancyOverrides,
+  Overrides,
+  Snapshot,
+  Status,
+  snapshotFromFrames,
+  zoneStatuses,
+} from 'building/telemetry';
+import {
+  Command,
+  LogEntry,
+  applyLocal,
+  applyOccupancy,
+  describe,
+  prune,
+  pruneOccupancy,
+  sendToNodeRed,
+  validate,
+  validateOccupancy,
+} from 'building/control';
 import { MAX_POWER_DENSITY, ViewMode, legendFor } from 'building/views';
 import { AlarmList, alarmKey } from './AlarmList';
 import { Building3D } from './Building3D';
@@ -284,6 +304,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const theme = useTheme2();
   const statusColors = useStatusColors();
   const [overrides, setOverrides] = useState<Overrides>({});
+  const [occupancy, setOccupancy] = useState<OccupancyOverrides>({});
   const [params, setParams] = useState<EmsParams>({ limitKw: options.limitKw, spOccupied: 24 });
   const [log, setLog] = useState<LogEntry[]>([]);
   const [busy, setBusy] = useState(false);
@@ -292,12 +313,16 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const [demoIncidents, setDemoIncidents] = useState(true);
   const simClock = useSimClock(options.demoMode, options.demoSpeed);
   const sim = useMemo<SimOptions>(
-    () => ({ limitKw: params.limitKw, spOccupied: params.spOccupied, overrides, events, demoIncidents }),
-    [params, overrides, events, demoIncidents]
+    () => ({ limitKw: params.limitKw, spOccupied: params.spOccupied, overrides, events, demoIncidents, occupancy }),
+    [params, overrides, events, demoIncidents, occupancy]
   );
   const { snapshot, history, now } = useSnapshot(props, sim, simClock.now, simClock.real);
   const activeOverrides = useMemo(() => prune(overrides, now), [overrides, now]);
-  const manual = useMemo(() => new Set(Object.keys(activeOverrides)), [activeOverrides]);
+  const activeOccupancy = useMemo(() => pruneOccupancy(occupancy, now), [occupancy, now]);
+  const manual = useMemo(
+    () => new Set([...Object.keys(activeOverrides), ...Object.keys(activeOccupancy).filter((k) => k !== '*')]),
+    [activeOverrides, activeOccupancy]
+  );
   const permission = controlPermission(options.allowControl);
   const user = config?.bootData?.user?.login;
 
@@ -392,9 +417,11 @@ export const EmsPanel: React.FC<Props> = (props) => {
     let next = activeOverrides;
     let nextParams = params;
     let nextEvents = events;
+    let nextOcc = activeOccupancy;
     setBusy(true);
     for (const c of commands) {
-      const problem = c.kind === 'override' ? validate(c.cmd) : undefined;
+      const problem =
+        c.kind === 'override' ? validate(c.cmd) : c.kind === 'occupancy' ? validateOccupancy(c) : undefined;
       if (problem) {
         entries.push({ at: stamp(), ok: false, text: problem });
         continue;
@@ -404,6 +431,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
           await sendToNodeRed(options.controlUrl, c, user);
         }
         next = applyLocal(next, c, stamp(), user);
+        nextOcc = applyOccupancy(nextOcc, c, stamp(), user);
         if (c.kind === 'params') {
           nextParams = { ...nextParams, ...c.params };
         }
@@ -429,6 +457,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
     setOverrides(next);
     setParams(nextParams);
     setEvents(nextEvents);
+    setOccupancy(nextOcc);
     setLog((l) => [...entries.reverse(), ...l].slice(0, 30));
     setBusy(false);
   };
@@ -463,10 +492,11 @@ export const EmsPanel: React.FC<Props> = (props) => {
       onClose={() => setSelectedId(undefined)}
       control={
         <ZoneControl
-          key={`${selected.id}-${activeOverrides[selected.id]?.since ?? 0}`}
+          key={`${selected.id}-${activeOverrides[selected.id]?.since ?? 0}-${activeOccupancy[selected.id]?.since ?? 0}`}
           zone={selected}
           state={snapshot.zones[selected.id]}
           override={activeOverrides[selected.id]}
+          occupancy={activeOccupancy[selected.id]}
           canControl={permission.canControl}
           reason={permission.reason}
           busy={busy}
@@ -525,6 +555,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
         <BuildingControl
           params={params}
           overrides={activeOverrides}
+          occupancy={activeOccupancy}
           log={log}
           snapshot={snapshot}
           now={now}

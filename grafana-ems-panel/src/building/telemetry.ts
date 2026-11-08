@@ -34,6 +34,8 @@ export interface ZoneState {
   fire?: boolean;
   /** Sin suministro de red (corte de energía). */
   noPower?: boolean;
+  /** La cantidad de personas la fijó el operador (escenario). */
+  peopleForced?: boolean;
   updatedAt: number;
 }
 
@@ -109,6 +111,19 @@ export interface EmsAlarm {
   message: string;
   value?: number;
 }
+
+/** Cantidad de personas forzada por el operador (escenario de simulación): por zona o para todo el edificio ('*'). */
+export interface OccupancyOverride {
+  /** Personas fijas en la zona. */
+  people?: number;
+  /** Porcentaje del horario normal de ocupación (sólo para '*'). */
+  pct?: number;
+  since: number;
+  until: number;
+  user?: string;
+}
+
+export type OccupancyOverrides = Record<string, OccupancyOverride>;
 
 export interface Snapshot {
   time: number;

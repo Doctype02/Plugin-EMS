@@ -37,6 +37,33 @@ if (b.tipo === "parametros") {
     if (!Object.keys(p).length) return [null, null, responder(400, { ok: false, mensaje: "Parámetros inválidos" })];
     return [null, { topic: `${base}/ems/parametros`, payload: p }, responder(200, { ok: true, mensaje: "parámetros publicados", parametros: p })];
 }
+if (b.tipo === "ocupacion") {
+    // escenario de simulación: personas fijas en una zona o % del horario en todo el edificio ('*')
+    const zona = b.zona;
+    if (zona !== "*" && (!zonaValida(zona) || ["Z08", "Z09", "Z10"].includes(zona))) {
+        return [null, null, responder(400, { ok: false, mensaje: `Zona ${zona} no admite fijar personas` })];
+    }
+    const p = { accion: "ocupacion", zona, usuario: b.usuario || "" };
+    if (b.liberar) {
+        p.liberar = true;
+    } else {
+        const dur = Number(b.duracion_min);
+        if (!(dur > 0 && dur <= 10080)) return [null, null, responder(400, { ok: false, mensaje: "Duración inválida" })];
+        p.duracion_min = dur;
+        if (zona === "*") {
+            if (!(typeof b.porcentaje === "number" && b.porcentaje >= 0 && b.porcentaje <= 200)) {
+                return [null, null, responder(400, { ok: false, mensaje: "Porcentaje entre 0 y 200" })];
+            }
+            p.porcentaje = b.porcentaje;
+        } else {
+            if (!(Number.isInteger(b.personas) && b.personas >= 0 && b.personas <= 100)) {
+                return [null, null, responder(400, { ok: false, mensaje: "Personas inválidas" })];
+            }
+            p.personas = b.personas;
+        }
+    }
+    return [{ topic: `${base}/sim/control`, payload: p }, null, responder(200, { ok: true, mensaje: "ocupación publicada" })];
+}
 if (b.tipo === "evento") {
     // simulación de fallas y accidentes en el gemelo digital (ems/eventos.py)
     const tipos = ["incendio", "corte_energia", "falla_vrf", "falla_terminal", "puerta_abierta", "sensor",
@@ -55,4 +82,4 @@ if (b.tipo === "evento") {
     for (const k of ["zona", "unidad", "intensidad"]) if (b[k] !== undefined && b[k] !== null) ev[k] = b[k];
     return [{ topic: `${base}/sim/control`, payload: ev }, null, responder(200, { ok: true, mensaje: "evento publicado", id: ev.id })];
 }
-return [null, null, responder(400, { ok: false, mensaje: "tipo debe ser override, liberar, parametros o evento" })];
+return [null, null, responder(400, { ok: false, mensaje: "tipo debe ser override, liberar, parametros, evento u ocupacion" })];

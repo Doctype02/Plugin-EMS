@@ -128,3 +128,15 @@ def test_endpoint_http_eventos_simulados(h):
     assert h("http", {"tipo": "evento", "evento": "ola_calor", "duracion_min": 0})["status"] == 400
     fin = h("http", {"tipo": "evento", "accion": "detener", "id": "e1"})
     assert fin["status"] == 200 and fin["mqtt"]["payload"]["operacion"] == "detener"
+
+
+def test_endpoint_http_ocupacion(h):
+    r = h("http", {"tipo": "ocupacion", "zona": "Z03", "personas": 30, "duracion_min": 60})
+    assert r["status"] == 200 and r["mqtt"]["topic"] == "ems/edificio1/sim/control"
+    assert r["mqtt"]["payload"] == {"accion": "ocupacion", "zona": "Z03", "usuario": "", "duracion_min": 60, "personas": 30}
+    r = h("http", {"tipo": "ocupacion", "zona": "*", "porcentaje": 50, "duracion_min": 240})
+    assert r["status"] == 200 and r["mqtt"]["payload"]["porcentaje"] == 50
+    assert h("http", {"tipo": "ocupacion", "zona": "Z09", "personas": 2, "duracion_min": 5})["status"] == 400
+    assert h("http", {"tipo": "ocupacion", "zona": "*", "porcentaje": 300, "duracion_min": 5})["status"] == 400
+    lib = h("http", {"tipo": "ocupacion", "zona": "Z03", "liberar": True})
+    assert lib["status"] == 200 and lib["mqtt"]["payload"]["liberar"] is True

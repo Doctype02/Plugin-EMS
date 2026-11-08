@@ -123,6 +123,9 @@ class Puente:
                 self.influx.alarma(a)
             elif partes[-1] == "control" and data.get("accion") == "evento":
                 self._evento(ed, t, data)
+            elif partes[-1] == "control" and data.get("accion") == "ocupacion":
+                err = ed.fijar_ocupacion(data)
+                print(f"[live] ocupación {data.get('zona')}: {err or 'aplicada'}")
             elif partes[-1] == "control":
                 acc = data.get("accion")
                 if acc == "pausa":

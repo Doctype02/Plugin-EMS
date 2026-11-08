@@ -10,7 +10,18 @@
  */
 import { ENVELOPE, ZONES, Zone, thermal } from './model';
 import { EVENTS, EventKind, SimEvent, activeEvents, affectsZone } from './events';
-import { EmsAlarm, EmsState, History, MeterState, Overrides, Snapshot, ZoneOverride, ZoneState } from './telemetry';
+import {
+  EmsAlarm,
+  EmsState,
+  History,
+  MeterState,
+  OccupancyOverride,
+  OccupancyOverrides,
+  Overrides,
+  Snapshot,
+  ZoneOverride,
+  ZoneState,
+} from './telemetry';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -27,6 +38,24 @@ export interface SimOptions {
   events?: SimEvent[];
   /** Incidente de demostración diario (desactívelo para controlar los eventos a mano). */
   demoIncidents?: boolean;
+  /** Cantidad de personas forzada por el operador (por zona o '*' para el edificio). */
+  occupancy?: OccupancyOverrides;
+}
+
+function activeOcc(key: string, t: number, opts: SimOptions): OccupancyOverride | undefined {
+  const o = opts.occupancy?.[key];
+  return o && t >= o.since && t < o.until ? o : undefined;
+}
+
+/** Personas en la zona según el horario, con el ajuste del operador (zona fija > % del edificio). */
+function plannedOccupants(z: Zone, t: number, c: Clock, opts: SimOptions): number {
+  const fixed = activeOcc(z.id, t, opts);
+  if (fixed?.people !== undefined && z.occupants > 0) {
+    return fixed.people;
+  }
+  const noise = 1 + 0.1 * (hash(z.id, Math.floor(t / (5 * MIN))) - 0.5);
+  const pct = activeOcc('*', t, opts)?.pct ?? 100;
+  return Math.round(occupancyFraction(z, c) * z.occupants * noise * (pct / 100));
 }
 
 export function activeOverride(zone: Zone, t: number, opts: SimOptions): ZoneOverride | undefined {
@@ -275,12 +304,12 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
   const w = weather(t, opts.events);
   const inc = incident(t, opts.demoIncidents !== false);
   const ev = zoneEvents(z, t, opts.events);
-  const noise = 1 + 0.1 * (hash(z.id, Math.floor(t / (5 * MIN))) - 0.5);
-  let occupants = Math.round(occupancyFraction(z, c) * z.occupants * noise);
-  if (inc?.zone === z.id && inc.kind === 'sobreocupacion') {
+  const forced = activeOcc(z.id, t, opts)?.people !== undefined && z.occupants > 0;
+  let occupants = plannedOccupants(z, t, c, opts);
+  if (!forced && inc?.zone === z.id && inc.kind === 'sobreocupacion') {
     occupants = Math.round(z.occupants * 1.2);
   }
-  if (ev.overcrowd > 0 && z.occupants > 0) {
+  if (!forced && ev.overcrowd > 0 && z.occupants > 0) {
     occupants = Math.round(z.occupants * (1 + ev.overcrowd));
   }
   if (ev.fireAnywhere) {
@@ -436,6 +465,7 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     events: ev.kinds.length ? ev.kinds : undefined,
     fire: !!ev.fire,
     noPower: sinRed,
+    peopleForced: forced || activeOcc('*', t, opts)?.pct !== undefined || undefined,
     override: !!ov,
     updatedAt: t,
     wantsCooling: hvacOn,
@@ -459,7 +489,7 @@ interface Core {
 function core(t: number, opts: SimOptions): Core {
   const zones: Record<string, ZoneCore> = {};
   const c = clock(t);
-  const buildingOccupied = ZONES.some((z) => !z.critical && occupancyFraction(z, c) > 0);
+  const buildingOccupied = ZONES.some((z) => !z.critical && plannedOccupants(z, t, c, opts) > 0);
   for (const z of ZONES) {
     zones[z.id] = zoneCore(z, t, opts, buildingOccupied);
   }

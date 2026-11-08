@@ -4,7 +4,7 @@
  * en vivo se envían por HTTP al flujo de Node-RED, que los publica por MQTT y los respeta en sus reglas.
  */
 import { ZONE_BY_ID } from './model';
-import { EmsParams, Overrides, ZoneOverride } from './telemetry';
+import { EmsParams, OccupancyOverrides, Overrides, ZoneOverride } from './telemetry';
 import { SimEvent, describeEvent } from './events';
 
 export interface ZoneCommand {
@@ -22,7 +22,58 @@ export type Command =
   | { kind: 'params'; params: Partial<EmsParams> }
   /** Simulación de un evento (falla, accidente, condición extrema) en el gemelo digital. */
   | { kind: 'event'; event: SimEvent }
-  | { kind: 'event_stop'; id: string | '*' };
+  | { kind: 'event_stop'; id: string | '*' }
+  /** Cantidad de personas: fija en una zona (`people`) o % del horario en todo el edificio (`zone: '*'`, `pct`). */
+  | { kind: 'occupancy'; zone: string | '*'; people?: number; pct?: number; durationMin: number }
+  | { kind: 'occupancy_release'; zone: string | '*' };
+
+/** Personas máximas admitidas al fijar una zona (el doble del aforo de diseño). */
+export const maxPeople = (zoneId: string) => Math.max(2 * (ZONE_BY_ID[zoneId]?.occupants ?? 0), 0);
+
+/** Valida un comando de ocupación; devuelve el motivo si no se puede aplicar. */
+export function validateOccupancy(c: Extract<Command, { kind: 'occupancy' }>): string | undefined {
+  if (!(c.durationMin > 0 && c.durationMin <= 7 * 24 * 60)) {
+    return 'Duración inválida';
+  }
+  if (c.zone === '*') {
+    return c.pct === undefined || c.pct < 0 || c.pct > 200 ? 'El porcentaje debe estar entre 0 y 200 %' : undefined;
+  }
+  const z = ZONE_BY_ID[c.zone];
+  if (!z) {
+    return `Zona desconocida: ${c.zone}`;
+  }
+  if (z.occupants === 0) {
+    return `${z.id} no es una zona con personas`;
+  }
+  if (c.people === undefined || !Number.isInteger(c.people) || c.people < 0 || c.people > maxPeople(c.zone)) {
+    return `Personas entre 0 y ${maxPeople(c.zone)} (el doble del aforo)`;
+  }
+  return undefined;
+}
+
+/** Aplica un comando de ocupación al conjunto local. */
+export function applyOccupancy(occ: OccupancyOverrides, c: Command, now: number, user?: string): OccupancyOverrides {
+  if (c.kind === 'occupancy_release') {
+    if (c.zone === '*') {
+      const { ['*']: _b, ...rest } = occ;
+      return rest;
+    }
+    const { [c.zone]: _z, ...rest } = occ;
+    return rest;
+  }
+  if (c.kind !== 'occupancy') {
+    return occ;
+  }
+  return {
+    ...occ,
+    [c.zone]: { people: c.people, pct: c.pct, since: now, until: now + c.durationMin * 60_000, user },
+  };
+}
+
+/** Quita las ocupaciones forzadas vencidas. */
+export function pruneOccupancy(occ: OccupancyOverrides, now: number): OccupancyOverrides {
+  return Object.fromEntries(Object.entries(occ).filter(([, v]) => v.until > now));
+}
 
 export interface LogEntry {
   at: number;
@@ -142,6 +193,23 @@ export function toPayload(command: Command, user?: string): Record<string, unkno
     }
     case 'event_stop':
       return { tipo: 'evento', accion: 'detener', id: command.id, usuario: user };
+    case 'occupancy': {
+      const body: Record<string, unknown> = {
+        tipo: 'ocupacion',
+        zona: command.zone,
+        duracion_min: command.durationMin,
+        usuario: user,
+      };
+      if (command.people !== undefined) {
+        body.personas = command.people;
+      }
+      if (command.pct !== undefined) {
+        body.porcentaje = command.pct;
+      }
+      return body;
+    }
+    case 'occupancy_release':
+      return { tipo: 'ocupacion', zona: command.zone, liberar: true, usuario: user };
     default: {
       const body: Record<string, unknown> = { tipo: 'parametros', usuario: user };
       if (command.params.limitKw !== undefined) {
@@ -173,6 +241,12 @@ export function describe(command: Command): string {
       return `Simulación: ${describeEvent(command.event)} por ${durationLabel(Math.round((command.event.end - command.event.start) / 60_000))}`;
     case 'event_stop':
       return command.id === '*' ? 'Fin de todas las simulaciones de eventos' : 'Fin de la simulación del evento';
+    case 'occupancy':
+      return command.zone === '*'
+        ? `Ocupación del edificio al ${command.pct} % del horario por ${durationLabel(command.durationMin)}`
+        : `${command.zone}: ${command.people} personas por ${durationLabel(command.durationMin)}`;
+    case 'occupancy_release':
+      return command.zone === '*' ? 'Ocupación del edificio según horario' : `${command.zone}: personas según horario`;
     default:
       return [
         command.params.limitKw !== undefined ? `límite de demanda ${command.params.limitKw} kW` : undefined,

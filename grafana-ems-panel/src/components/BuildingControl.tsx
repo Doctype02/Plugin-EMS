@@ -5,12 +5,14 @@ import { css, cx } from '@emotion/css';
 import { Button, Icon, RadioButtonGroup, useStyles2 } from '@grafana/ui';
 import { ZONES, ZONE_BY_ID, thermal } from 'building/model';
 import { Command, LogEntry, durationLabel } from 'building/control';
-import { EmsParams, Overrides, Snapshot } from 'building/telemetry';
+import { EmsParams, OccupancyOverrides, Overrides, Snapshot } from 'building/telemetry';
 import { ZoneMiniMap } from './ZoneMiniMap';
 
 interface Props {
   params: EmsParams;
   overrides: Overrides;
+  /** Personas forzadas por el operador (por zona y '*' para el edificio). */
+  occupancy: OccupancyOverrides;
   log: LogEntry[];
   snapshot: Snapshot;
   now: number;
@@ -38,6 +40,12 @@ const KW_PER_DEG = OFFICES.reduce((a, z) => {
   return a + (th.ua + th.gInf + th.uaGround) / z.cop;
 }, 0);
 const QUICK_DURATIONS = [5, 15, 30, 60];
+const OCC_PRESETS = [
+  { label: 'Vacío', pct: 0 },
+  { label: 'Media', pct: 50 },
+  { label: 'Normal', pct: 100 },
+  { label: 'Evento', pct: 130 },
+];
 
 type QuickKind = 'precool' | 'eco' | 'shed' | 'night';
 const QUICK: Array<{ kind: QuickKind; glyph: GlyphName; title: string; detail: string; effect: string }> = [
@@ -75,6 +83,7 @@ const QUICK: Array<{ kind: QuickKind; glyph: GlyphName; title: string; detail: s
 export const BuildingControl: React.FC<Props> = ({
   params,
   overrides,
+  occupancy,
   log,
   snapshot,
   now,
@@ -89,12 +98,19 @@ export const BuildingControl: React.FC<Props> = ({
   const [limit, setLimit] = useState(params.limitKw);
   const [sp, setSp] = useState(params.spOccupied);
   const [duration, setDuration] = useState(15);
+  const building = occupancy['*'];
+  const [pct, setPct] = useState(building?.pct ?? 100);
+  const [occDuration, setOccDuration] = useState(60);
+  const zoneOcc = Object.entries(occupancy).filter(([k]) => k !== '*');
+  const people = ZONES.reduce((a, z) => a + (snapshot.zones[z.id]?.occupants ?? 0), 0);
+  const capacity = ZONES.reduce((a, z) => a + z.occupants, 0);
   const disabled = !canControl || busy;
   const active = Object.entries(overrides);
+  const nManual = new Set([...active.map(([k]) => k), ...Object.keys(occupancy).filter((k) => k !== '*')]).size;
   const changed = limit !== params.limitKw || sp !== params.spOccupied;
   const m = snapshot.meter;
   const dr = snapshot.ems?.drActive;
-  const manual = new Set(Object.keys(overrides));
+  const manual = new Set([...Object.keys(overrides), ...Object.keys(occupancy).filter((k) => k !== '*')]);
 
   const quick = (kind: QuickKind) => {
     const cmds: Command[] = OFFICES.map((z) => ({
@@ -116,8 +132,8 @@ export const BuildingControl: React.FC<Props> = ({
     <div className={styles.box} data-testid="ems-building-control">
       <div className={styles.status}>
         <div className={styles.statusMain}>
-          <span className={cx(styles.dot, manual.size ? styles.dotWarn : styles.dotOk)} />
-          {manual.size ? `EMS con ${manual.size} zona${manual.size > 1 ? 's' : ''} en manual` : 'EMS en automático'}
+          <span className={cx(styles.dot, nManual ? styles.dotWarn : styles.dotOk)} />
+          {nManual ? `EMS con ${nManual} zona${nManual > 1 ? 's' : ''} en manual` : 'EMS en automático'}
         </div>
         <div className={styles.pills}>
           <span className={cx(styles.pill, dr && styles.pillWarn)}>DR {dr ? 'activo' : 'en espera'}</span>
@@ -192,6 +208,80 @@ export const BuildingControl: React.FC<Props> = ({
         </Button>
       </section>
 
+      <section className={styles.card} data-testid="ems-building-occupancy">
+        <div className={styles.cardTitle}>
+          <Glyph name="users" size={16} /> Personas en el edificio
+          <span className={styles.paramValue}>
+            {people} <small>/ {capacity}</small>
+          </span>
+        </div>
+        <div className={styles.presets}>
+          {OCC_PRESETS.map((p) => (
+            <button
+              key={p.pct}
+              type="button"
+              className={cx(styles.preset, pct === p.pct && styles.presetOn)}
+              onClick={() => setPct(p.pct)}
+              disabled={disabled}
+            >
+              <b>{p.label}</b>
+              <span>{p.pct} %</span>
+            </button>
+          ))}
+        </div>
+        <Param
+          label="Ocupación respecto al horario normal"
+          value={pct}
+          unit="%"
+          min={0}
+          max={200}
+          step={10}
+          onChange={setPct}
+          note={
+            pct === 0
+              ? 'Edificio vacío: luces apagadas, HVAC en vacancia y standby cortado'
+              : `≈ ${Math.round((capacity * pct) / 100)} personas en jornada · ≈ ${((capacity * pct * 0.075) / 100).toFixed(1)} kW de calor de personas${pct > 100 ? ' · sobre el aforo de diseño' : ''}`
+          }
+        />
+        <div className={styles.durationRow}>
+          <span className={styles.muted}>Durante</span>
+          <RadioButtonGroup
+            size="sm"
+            value={occDuration}
+            onChange={setOccDuration}
+            options={[30, 60, 240, 480].map((d) => ({ value: d, label: durationLabel(d) }))}
+          />
+        </div>
+        <div className={styles.durationRow}>
+          <Button
+            size="sm"
+            icon="check"
+            disabled={disabled}
+            onClick={() => onCommand({ kind: 'occupancy', zone: '*', pct, durationMin: occDuration })}
+            data-testid="ems-occupancy-apply"
+          >
+            Aplicar ocupación
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={disabled || !building}
+            onClick={() => {
+              setPct(100);
+              onCommand({ kind: 'occupancy_release', zone: '*' });
+            }}
+          >
+            Según horario
+          </Button>
+        </div>
+        {building && (
+          <div className={styles.warn}>
+            Edificio al {building.pct} % hasta {fmtTime(building.until)}
+          </div>
+        )}
+        <div className={styles.muted}>Para fijar las personas de una zona, tócala en el plano y usa «Personas».</div>
+      </section>
+
       <section className={styles.card}>
         <div className={styles.cardTitle}>
           <Icon name="bolt" /> Acciones rápidas
@@ -229,21 +319,51 @@ export const BuildingControl: React.FC<Props> = ({
 
       <section className={styles.card}>
         <div className={styles.cardTitle}>
-          <Icon name="user" /> En manual ({active.length})
-          {active.length > 0 && (
+          <Icon name="user" /> En manual ({nManual})
+          {nManual > 0 && (
             <Button
               size="sm"
               variant="secondary"
               fill="text"
               disabled={disabled}
-              onClick={() => onCommand({ kind: 'release', zone: '*' })}
+              onClick={() =>
+                onCommand([
+                  { kind: 'release', zone: '*' },
+                  ...zoneOcc.map(([id]): Command => ({ kind: 'occupancy_release', zone: id })),
+                ])
+              }
               data-testid="ems-release-all"
             >
               Todo a automático
             </Button>
           )}
         </div>
-        {active.length === 0 && <div className={styles.muted}>Todas las zonas siguen las reglas del EMS.</div>}
+        {nManual === 0 && <div className={styles.muted}>Todas las zonas siguen las reglas del EMS.</div>}
+        {zoneOcc.map(([id, o]) => (
+          <div key={`occ-${id}`} className={styles.item}>
+            <button type="button" className={styles.link} onClick={() => onSelectZone(id)}>
+              {id} · {o.people} personas
+            </button>
+            <div className={styles.progress} title={`hasta ${fmtTime(o.until)}`}>
+              <div
+                style={{
+                  width: `${Math.min(1, Math.max(0, (o.until - now) / Math.max(o.until - o.since, 1))) * 100}%`,
+                }}
+              />
+            </div>
+            <span className={styles.muted}>{Math.max(0, Math.ceil((o.until - now) / 60_000))} min</span>
+            <Button
+              size="sm"
+              variant="secondary"
+              fill="text"
+              icon="times"
+              disabled={disabled}
+              tooltip="Personas según horario"
+              aria-label={`Personas de ${id} según horario`}
+              onClick={() => onCommand({ kind: 'occupancy_release', zone: id })}
+            />
+          </div>
+        ))}
         {active.map(([id, ov]) => {
           const frac = Math.min(1, Math.max(0, (ov.until - now) / Math.max(ov.until - ov.since, 1)));
           return (
@@ -413,6 +533,34 @@ const getStyles = (theme: GrafanaTheme2) => ({
     font-weight: ${theme.typography.fontWeightRegular};
     font-size: 11px;
     color: ${theme.colors.text.secondary};
+  `,
+  presets: css`
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: ${theme.spacing(0.5)};
+  `,
+  preset: css`
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: ${theme.spacing(0.5)};
+    border: 1px solid ${theme.colors.border.weak};
+    border-radius: ${theme.shape.radius.default};
+    background: ${theme.colors.background.primary};
+    color: ${theme.colors.text.primary};
+    font-size: 12px;
+    cursor: pointer;
+    span {
+      font-size: 11px;
+      color: ${theme.colors.text.secondary};
+    }
+    &:hover:not(:disabled) {
+      border-color: ${theme.colors.border.strong};
+    }
+  `,
+  presetOn: css`
+    border-color: ${theme.colors.primary.main};
+    box-shadow: inset 0 0 0 1px ${theme.colors.primary.main};
   `,
   durationRow: css`
     display: flex;

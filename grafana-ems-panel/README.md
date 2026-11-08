@@ -88,8 +88,8 @@ sparklines y pantalla completa. El plano y los equipos son propios del edificio 
 
 Requiere rol **Editor** o **Admin** en Grafana y la opción *Permitir control del edificio*.
 
-- **Por zona** (en el detalle): HVAC auto/encender/apagar, setpoint fijo (20–28 °C), nivel de luces y
-  corte de standby de enchufes, durante 5 min, 15 min, 30 min, 1 h o 4 h (tiempo simulado en demostración). El control manual tiene prioridad sobre las reglas
+- **Por zona** (en el detalle): HVAC auto/encender/apagar, setpoint fijo (20–28 °C), nivel de luces,
+  corte de standby de enchufes y cantidad de personas, durante 5 min, 15 min, 30 min, 1 h o 4 h (tiempo simulado en demostración). El control manual tiene prioridad sobre las reglas
   del EMS y el limitador de demanda hasta que vence; *Volver a automático* lo libera. Las zonas en manual
   muestran una insignia **M**. Las zonas críticas (Z09, Z10) no se pueden controlar.
 - **Del edificio** (pestaña *Control*): plano de zonas (clic para controlarla), límite de demanda y setpoint
@@ -102,6 +102,21 @@ Requiere rol **Editor** o **Admin** en Grafana y la opción *Permitir control de
   El flujo de Node-RED valida el comando, lo publica en `ems/edificio1/ems/override` o
   `…/ems/parametros` y sus reglas lo respetan. El navegador del usuario debe poder llegar a esa URL (CORS
   habilitado en el flujo). La duración de los overrides se cuenta en tiempo real del servidor.
+
+## Control de la cantidad de personas
+
+Escenario de simulación (el EMS reacciona a las personas: luces, setpoint por ocupación, ventilación y calor
+interno ≈ 75 W sensibles por persona):
+
+- **Por zona** (detalle de la zona → *Personas* → *Fijar*): número exacto de 0 al doble del aforo, durante
+  5 min a 4 h. Con 0 la zona pasa a vacancia; sobre el aforo sube la carga térmica. Tiene prioridad sobre el
+  horario y sobre el evento de sobreocupación.
+- **Edificio** (pestaña *Control* → *Personas en el edificio*): % del horario normal (Vacío 0 %, Media 50 %,
+  Normal 100 %, Evento 130 %, hasta 200 %) durante 30 min a 8 h; *Según horario* lo libera.
+- Las zonas con personas fijadas aparecen en *En manual* y con la marca de control manual.
+- En vivo: `POST /ems/control {tipo: "ocupacion", zona | "*", personas | porcentaje, duracion_min}` →
+  Node-RED → `ems/edificio1/sim/control {accion: "ocupacion", …}` → gemelo en Python
+  (`Edificio.fijar_ocupacion`).
 
 ## Simular alarmas, accidentes y «¿qué pasaría si…?»
 
@@ -209,7 +224,7 @@ npm run dev        # webpack en modo watch
 ```
 
 ```bash
-npm run test:ci    # 47 pruebas unitarias (proyección, simulador, eventos, confort, reloj, control…)
+npm run test:ci    # 50 pruebas unitarias (proyección, simulador, eventos, confort, reloj, control…)
 ```
 
 ```bash

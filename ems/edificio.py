@@ -89,6 +89,8 @@ class Edificio:
         self.falla_hvac: set[str] = set()
         self.falla_sensor: dict[str, dict] = {}
         self.eventos: dict[str, Evento] = {}
+        # personas forzadas por el operador: {zona | "*": {"personas" | "porcentaje", "restante_min"}}
+        self.ocupacion_forzada: dict[str, dict] = {}
         self._fin_eventos: list[Evento] = []
         self.unidades = {u["id"]: list(u["zonas"]) for u in cfg.get("sistemas_vrf", [])}
         self.e_kwh = 0.0
@@ -165,6 +167,40 @@ class Edificio:
             if ev and ev.tipo == "sensor" and self.falla_sensor.get(ev.zona, {}).get("evento") == ev.id:
                 self.falla_sensor.pop(ev.zona, None)
 
+    def fijar_ocupacion(self, d: dict) -> str | None:
+        """Fija las personas de una zona o el % del horario de todo el edificio ('*'). Devuelve el error."""
+        zona = d.get("zona")
+        if d.get("liberar"):
+            if zona == "*":
+                self.ocupacion_forzada.pop("*", None)
+            elif zona in self.ocupacion_forzada:
+                self.ocupacion_forzada.pop(zona)
+            return None
+        dur = d.get("duracion_min", 60)
+        if not isinstance(dur, (int, float)) or not 0 < dur <= 7 * 24 * 60:
+            return "duración inválida"
+        if zona == "*":
+            pct = d.get("porcentaje")
+            if not isinstance(pct, (int, float)) or not 0 <= pct <= 200:
+                return "porcentaje fuera de rango (0–200)"
+            self.ocupacion_forzada["*"] = {"porcentaje": float(pct), "restante_min": float(dur)}
+            return None
+        z = self.zmap.get(zona)
+        if z is None or z.ocupantes <= 0:
+            return f"zona sin personas o inválida: {zona}"
+        n = d.get("personas")
+        if not isinstance(n, int) or not 0 <= n <= 2 * z.ocupantes:
+            return f"personas entre 0 y {2 * z.ocupantes}"
+        self.ocupacion_forzada[zona] = {"personas": n, "restante_min": float(dur)}
+        return None
+
+    def _ocupantes(self, z: Zona, n_horario: int) -> int:
+        f = self.ocupacion_forzada.get(z.id)
+        if f is not None and z.ocupantes > 0:
+            return int(f["personas"])
+        g = self.ocupacion_forzada.get("*")
+        return int(round(n_horario * g["porcentaje"] / 100)) if g else n_horario
+
     def _efectos(self) -> dict:
         """Efectos agregados de los eventos activos."""
         ef = {"sin_frio": set(), "fuego": {}, "evac": None, "corte": None, "puerta": {}, "dt_ext": 0.0,
@@ -225,7 +261,7 @@ class Edificio:
             zs = [z for z in self.zonas if z.planta == pl]
             if zs:
                 t_planta[pl] = sum(self.estado[z.id].t * z.area for z in zs) / sum(z.area for z in zs)
-        edificio_ocupado = any(ocupantes.get(z.id, 0) > 0 for z in no_crit)
+        edificio_ocupado = any(self._ocupantes(z, int(ocupantes.get(z.id, 0))) > 0 for z in no_crit)
 
         tel = []
         tot = {"hvac": 0.0, "luces": 0.0, "equipos": 0.0, "it": 0.0}
@@ -233,8 +269,8 @@ class Edificio:
         p_crit = 0.0
         for z in self.zonas:
             s = self.estado[z.id]
-            n = int(ocupantes.get(z.id, 0))
-            if z.id in ef["sobre"] and z.ocupantes > 0:
+            n = self._ocupantes(z, int(ocupantes.get(z.id, 0)))
+            if z.id in ef["sobre"] and z.ocupantes > 0 and z.id not in self.ocupacion_forzada:
                 n = int(round(z.ocupantes * (1 + ef["sobre"][z.id])))
             if ef["evac"] is not None:
                 n = int(round(n * max(0.0, 1 - ef["evac"] / m_ev.MIN_EVACUACION)))
@@ -378,4 +414,10 @@ class Edificio:
         if self.eventos:
             medidor["eventos"] = sorted({ev.tipo for ev in self.eventos.values()})
         self._fin_eventos = self._avanzar_eventos()
+        for k in list(self.ocupacion_forzada):
+            self.ocupacion_forzada[k]["restante_min"] -= self.e["paso_min"]
+            if self.ocupacion_forzada[k]["restante_min"] <= 0:
+                self.ocupacion_forzada.pop(k)
+        if self.ocupacion_forzada:
+            medidor["ocupacion_forzada"] = sorted(self.ocupacion_forzada)
         return tel, medidor

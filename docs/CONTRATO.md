@@ -116,6 +116,13 @@ from(bucket: "ems") |> range(start: 0)
 
 Edificio de 2 plantas (PB/PA) de 20 × 20 m según el modelo OpenStudio/EnergyPlus; 3 sistemas VRF: VRF-A (Z04–Z08), VRF-B (Z01, Z02, Z03, Z10), VRF-C (Z09). Parámetros completos en `config/edificio.yaml`. Las zonas críticas ignoran `hvac_enable=false`, `equipos_nivel` y `setpoint_c` (setpoint fijo).
 
+### Cantidad de personas (panel → Node-RED → gemelo)
+
+`POST /ems/control` con `{tipo: "ocupacion", zona: "Z01".."Z07", personas, duracion_min}` (0 al doble del
+aforo), `{tipo: "ocupacion", zona: "*", porcentaje, duracion_min}` (0–200 % del horario) o
+`{tipo: "ocupacion", zona, liberar: true}`. Se publica en `ems/edificio1/sim/control` con `accion: "ocupacion"`;
+el medidor informa `ocupacion_forzada: [zonas]` mientras dure.
+
 ### Eventos simulados (panel → Node-RED → gemelo)
 
 `POST /ems/control` con `{tipo: "evento", accion: "iniciar", id, evento, zona?, unidad?, duracion_min, intensidad?}`

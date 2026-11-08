@@ -86,3 +86,22 @@ def test_puerta_abierta_y_pico_de_carga_suben_el_consumo(cfg):
     assert med["p_total_kw"] > mb["p_total_kw"] + 8
     _, tel2, _, _ = correr(cfg, {"evento": "puerta_abierta", "zona": "Z03", "duracion_min": 60, "intensidad": 100})
     assert tel2["Z03"]["q_frio_kw"] > base["Z03"]["q_frio_kw"] or tel2["Z03"]["temp_real_c"] > base["Z03"]["temp_real_c"]
+
+
+def test_ocupacion_forzada_por_zona_y_edificio(cfg):
+    ed = Edificio(cfg)
+    ocup = {z.id: z.ocupantes for z in ed.zonas}
+    assert ed.fijar_ocupacion({"zona": "Z03", "personas": 35, "duracion_min": 10}) is None
+    assert ed.fijar_ocupacion({"zona": "Z09", "personas": 1, "duracion_min": 10})  # sin personas
+    assert ed.fijar_ocupacion({"zona": "Z03", "personas": 99, "duracion_min": 10})  # > 2 × aforo
+    tel, _ = ed.paso(CLIMA, ocup, 12 * 60, 1)
+    t = {z["zona"]: z for z in tel}
+    assert t["Z03"]["ocupantes"] == 35 and t["Z02"]["ocupantes"] == 15
+    tel, _ = ed.paso(CLIMA, ocup, 12 * 60, 1)
+    tel, med = ed.paso(CLIMA, ocup, 12 * 60, 1)  # vence a los 10 min
+    assert {z["zona"]: z for z in tel}["Z03"]["ocupantes"] == 20 and "ocupacion_forzada" not in med
+    assert ed.fijar_ocupacion({"zona": "*", "porcentaje": 0, "duracion_min": 60}) is None
+    tel, _ = ed.paso(CLIMA, ocup, 12 * 60, 1)
+    assert sum(z["ocupantes"] for z in tel) == 0
+    ed.fijar_ocupacion({"zona": "*", "liberar": True})
+    assert not ed.ocupacion_forzada

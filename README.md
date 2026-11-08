@@ -59,7 +59,7 @@ python -m ems todo          # todo el análisis → resultados/ (≈1 min)
 ```
 
 ```bash
-pytest -q                   # 36 pruebas
+pytest -q                   # 38 pruebas
 ```
 
 Comandos individuales: `auditoria`, `pronostico`, `escenarios`, `pruebas`, `sensibilidad`, `paridad`,

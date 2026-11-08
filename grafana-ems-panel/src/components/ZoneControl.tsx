@@ -3,17 +3,19 @@ import { GrafanaTheme2 } from '@grafana/data';
 import { css } from '@emotion/css';
 import { Alert, Button, RadioButtonGroup, Slider, useStyles2 } from '@grafana/ui';
 import { Zone } from 'building/model';
-import { Command, DURATIONS, ZoneCommand, durationLabel, validate } from 'building/control';
-import { ZoneOverride, ZoneState } from 'building/telemetry';
+import { Command, DURATIONS, ZoneCommand, durationLabel, maxPeople, validate } from 'building/control';
+import { OccupancyOverride, ZoneOverride, ZoneState } from 'building/telemetry';
 
 interface Props {
   zone: Zone;
   state?: ZoneState;
   override?: ZoneOverride;
+  /** Personas fijadas por el operador en esta zona. */
+  occupancy?: OccupancyOverride;
   canControl: boolean;
   reason?: string;
   busy: boolean;
-  onCommand: (c: Command) => void;
+  onCommand: (c: Command | Command[]) => void;
 }
 
 type Mode = 'auto' | 'on' | 'off';
@@ -27,7 +29,16 @@ const fmtTime = (t: number) =>
   });
 
 /** Control manual de una zona: setpoint, HVAC, iluminación y enchufes por un tiempo limitado. */
-export const ZoneControl: React.FC<Props> = ({ zone, state, override, canControl, reason, busy, onCommand }) => {
+export const ZoneControl: React.FC<Props> = ({
+  zone,
+  state,
+  override,
+  occupancy,
+  canControl,
+  reason,
+  busy,
+  onCommand,
+}) => {
   const styles = useStyles2(getStyles);
   const [setpoint, setSetpoint] = useState(override?.setpoint ?? state?.setpoint ?? 24);
   const [useSetpoint, setUseSetpoint] = useState(override?.setpoint !== undefined);
@@ -38,6 +49,9 @@ export const ZoneControl: React.FC<Props> = ({ zone, state, override, canControl
     override?.plugs === undefined ? 'auto' : override.plugs > 0.5 ? 'on' : 'off'
   );
   const [duration, setDuration] = useState(15);
+  const hasPeople = zone.occupants > 0;
+  const [peopleMode, setPeopleMode] = useState<'auto' | 'manual'>(occupancy?.people !== undefined ? 'manual' : 'auto');
+  const [people, setPeople] = useState(occupancy?.people ?? state?.occupants ?? zone.occupants);
 
   if (zone.critical) {
     return (
@@ -55,8 +69,33 @@ export const ZoneControl: React.FC<Props> = ({ zone, state, override, canControl
     plugs: plugs === 'auto' ? undefined : plugs === 'on' ? 1 : 0.1,
     durationMin: duration,
   };
-  const error = validate(cmd);
+  const hvacChange = validate(cmd) === undefined;
+  const peopleChange = hasPeople && (peopleMode === 'manual' || occupancy !== undefined);
+  const error = hvacChange || peopleChange ? undefined : validate(cmd);
   const disabled = !canControl || busy;
+  const max = maxPeople(zone.id);
+  const apply = () => {
+    const cmds: Command[] = [];
+    if (hvacChange) {
+      cmds.push({ kind: 'override', cmd });
+    }
+    if (hasPeople && peopleMode === 'manual') {
+      cmds.push({ kind: 'occupancy', zone: zone.id, people, durationMin: duration });
+    } else if (hasPeople && occupancy) {
+      cmds.push({ kind: 'occupancy_release', zone: zone.id });
+    }
+    onCommand(cmds);
+  };
+  const release = () => {
+    const cmds: Command[] = [];
+    if (override) {
+      cmds.push({ kind: 'release', zone: zone.id });
+    }
+    if (occupancy) {
+      cmds.push({ kind: 'occupancy_release', zone: zone.id });
+    }
+    onCommand(cmds);
+  };
 
   return (
     <div className={styles.box} data-testid="ems-zone-control">
@@ -64,6 +103,11 @@ export const ZoneControl: React.FC<Props> = ({ zone, state, override, canControl
         <div className={styles.manual}>
           Control manual hasta {fmtTime(override.until)}
           {override.user ? ` · ${override.user}` : ''}
+        </div>
+      )}
+      {occupancy?.people !== undefined && (
+        <div className={styles.manual}>
+          {occupancy.people} personas fijadas hasta {fmtTime(occupancy.until)}
         </div>
       )}
       {!canControl && <div className={styles.muted}>{reason ?? 'Sin permiso para controlar el edificio'}</div>}
@@ -132,6 +176,67 @@ export const ZoneControl: React.FC<Props> = ({ zone, state, override, canControl
           ]}
         />
       </div>
+      {hasPeople && (
+        <>
+          <div className={styles.row}>
+            <span className={styles.label}>Personas</span>
+            <RadioButtonGroup
+              size="sm"
+              disabled={disabled}
+              value={peopleMode}
+              onChange={setPeopleMode}
+              options={[
+                { value: 'auto', label: 'Horario' },
+                { value: 'manual', label: 'Fijar' },
+              ]}
+            />
+          </div>
+          {peopleMode === 'manual' && (
+            <div className={styles.people} data-testid="ems-control-people">
+              <Button
+                size="sm"
+                variant="secondary"
+                icon="minus"
+                aria-label="Menos personas"
+                disabled={disabled || people <= 0}
+                onClick={() => setPeople((p) => Math.max(0, p - 1))}
+              />
+              <input
+                type="range"
+                className={styles.range}
+                min={0}
+                max={max}
+                step={1}
+                value={people}
+                disabled={disabled}
+                aria-label="Cantidad de personas"
+                onChange={(e) => setPeople(Number(e.currentTarget.value))}
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                icon="plus"
+                aria-label="Más personas"
+                disabled={disabled || people >= max}
+                onClick={() => setPeople((p) => Math.min(max, p + 1))}
+              />
+              <span className={styles.peopleValue}>
+                {people}
+                <small> / {zone.occupants}</small>
+              </span>
+            </div>
+          )}
+          {peopleMode === 'manual' && (
+            <div className={people > zone.occupants ? styles.warnText : styles.muted}>
+              {people === 0
+                ? 'Zona vacía: el EMS apaga luces y pasa el HVAC a vacancia.'
+                : people > zone.occupants
+                  ? `Sobre el aforo de diseño (${zone.occupants}): más calor interno (≈ ${((people * 75) / 1000).toFixed(1)} kW sensibles) y ventilación.`
+                  : `≈ ${((people * 75) / 1000).toFixed(1)} kW de calor sensible de las personas.`}
+            </div>
+          )}
+        </>
+      )}
       <div className={styles.row}>
         <span className={styles.label}>Duración</span>
         <RadioButtonGroup
@@ -148,7 +253,7 @@ export const ZoneControl: React.FC<Props> = ({ zone, state, override, canControl
           icon="check"
           disabled={disabled || !!error}
           tooltip={error}
-          onClick={() => onCommand({ kind: 'override', cmd })}
+          onClick={apply}
           data-testid="ems-control-apply"
         >
           Aplicar
@@ -157,8 +262,8 @@ export const ZoneControl: React.FC<Props> = ({ zone, state, override, canControl
           size="sm"
           variant="secondary"
           icon="sync"
-          disabled={disabled || !override}
-          onClick={() => onCommand({ kind: 'release', zone: zone.id })}
+          disabled={disabled || (!override && !occupancy)}
+          onClick={release}
           data-testid="ems-control-release"
         >
           Volver a automático
@@ -186,6 +291,30 @@ const getStyles = (theme: GrafanaTheme2) => ({
   `,
   label: css`
     color: ${theme.colors.text.secondary};
+    font-size: ${theme.typography.bodySmall.fontSize};
+  `,
+  people: css`
+    display: flex;
+    align-items: center;
+    gap: ${theme.spacing(0.75)};
+  `,
+  range: css`
+    flex: 1;
+    accent-color: ${theme.colors.primary.main};
+  `,
+  peopleValue: css`
+    min-width: 54px;
+    text-align: right;
+    font-size: ${theme.typography.h5.fontSize};
+    font-weight: ${theme.typography.fontWeightMedium};
+    font-variant-numeric: tabular-nums;
+    small {
+      font-size: ${theme.typography.bodySmall.fontSize};
+      color: ${theme.colors.text.secondary};
+    }
+  `,
+  warnText: css`
+    color: ${theme.colors.warning.text};
     font-size: ${theme.typography.bodySmall.fontSize};
   `,
   slider: css`
