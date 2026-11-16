@@ -26,6 +26,7 @@ Variables que lee el simulador (todas opcionales; sin `INFLUX_URL` no escribe a 
 | `EMS_CONTROL` | `externo` | `externo` = obedece a Node-RED; `interno` = reglas Python; `baseline` = sin EMS |
 | `EMS_VELOCIDAD` | `300` | segundos simulados por segundo real (300 → 1 paso de 5 min por segundo) |
 | `EMS_INICIO` | hoy 00:00 (America/Panama) | inicio del tiempo simulado: ISO-8601, o `ahora` (con `EMS_VELOCIDAD=1` el tiempo simulado coincide con el reloj: recomendado para despliegue permanente) |
+| `EMS_ESTADO` | — (el servicio usa `/var/lib/ems/estado.json`) | archivo JSON donde `live` guarda el estado físico cada paso y del que lo restaura al arrancar si tiene < 6 h; evita el pico de arranque en frío tras un reinicio |
 | `EMS_DIAS` | `1` | días a simular en modo live (`0` = infinito, reinicia cada día) |
 | `EMS_FV` | `fv.habilitado` del YAML (`true`) | variante del edificio: `si` = con paneles fotovoltaicos (ConPV), `no` = sin paneles |
 

@@ -24,7 +24,7 @@ EMS); la física sigue con el estado real. La humedad de cada zona se integra co
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
@@ -136,6 +136,32 @@ class Edificio:
         self.e_kwh = 0.0
         self.e_fv_kwh = 0.0
         self._hist_p = []
+
+    # ------------------------------------------------------- persistencia (live)
+    _CAMPOS_ESTADO = ("t", "setpoint_c", "hvac_enable", "luces_nivel", "equipos_nivel", "hvac_mod", "ventilacion",
+                      "hvac_on", "t_medida", "w", "hr_medida", "ocupado_medido")
+
+    def exportar_estado(self) -> dict:
+        """Estado físico mínimo para continuar tras un reinicio sin arrancar «en frío»."""
+        return {"zonas": {zid: {k: v for k, v in asdict(s).items() if k in self._CAMPOS_ESTADO}
+                          for zid, s in self.estado.items()},
+                "e_kwh": self.e_kwh, "e_fv_kwh": self.e_fv_kwh, "hist_p": self._hist_p[-12:]}
+
+    def restaurar_estado(self, d: dict) -> int:
+        """Restaura lo exportado con `exportar_estado`; ignora zonas o campos desconocidos. Devuelve zonas restauradas."""
+        n = 0
+        for zid, campos in (d.get("zonas") or {}).items():
+            s = self.estado.get(zid)
+            if s is None:
+                continue
+            for k, v in campos.items():
+                if k in self._CAMPOS_ESTADO:
+                    setattr(s, k, v)
+            n += 1
+        self.e_kwh = float(d.get("e_kwh", self.e_kwh))
+        self.e_fv_kwh = float(d.get("e_fv_kwh", self.e_fv_kwh))
+        self._hist_p = [float(x) for x in d.get("hist_p", [])][-12:]
+        return n
 
     def aplicar(self, comandos: dict[str, dict]):
         """Aplica comandos de actuadores. Las zonas críticas no aceptan deslastre."""

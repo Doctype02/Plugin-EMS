@@ -11,6 +11,9 @@ Group=ems
 EnvironmentFile=/etc/ems/ems.env
 WorkingDirectory=/opt/Plugin-EMS
 Environment=MPLBACKEND=Agg PYTHONUNBUFFERED=1
+# estado del gemelo entre reinicios (evita el pico de arranque en frío)
+StateDirectory=ems
+Environment=EMS_ESTADO=/var/lib/ems/estado.json
 ExecStart=/opt/Plugin-EMS/.venv/bin/python -m ems live
 Restart=always
 RestartSec=5

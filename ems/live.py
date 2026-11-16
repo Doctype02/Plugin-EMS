@@ -206,6 +206,41 @@ class Puente:
         except Exception as exc:  # el pronóstico no debe tumbar la demo
             print(f"[live] pronóstico omitido: {exc}")
 
+    # ------------------------------------------------- persistencia del estado
+    def _ruta_estado(self) -> str | None:
+        return os.getenv("EMS_ESTADO") or None
+
+    def _guardar(self, ed: Edificio, t):
+        ruta = self._ruta_estado()
+        if not ruta:
+            return
+        try:
+            tmp = f"{ruta}.tmp"
+            with open(tmp, "w") as f:
+                json.dump({"ts": t.isoformat(), "edificio": self.edif, **ed.exportar_estado()}, f)
+            os.replace(tmp, ruta)
+        except OSError as exc:
+            print(f"[live] no se pudo guardar el estado: {exc}")
+
+    def _restaurar(self, ed: Edificio, inicio: pd.Timestamp, max_h: float = 6.0):
+        """Continúa desde el último estado guardado si es reciente: evita el pico de arranque en frío."""
+        ruta = self._ruta_estado()
+        if not ruta or not os.path.exists(ruta):
+            return
+        try:
+            with open(ruta) as f:
+                d = json.load(f)
+            ts = pd.Timestamp(d["ts"])
+            ini = inicio if inicio.tzinfo else inicio.tz_localize(self.tz)
+            edad_h = abs((ini - ts).total_seconds()) / 3600
+            if d.get("edificio") != self.edif or edad_h > max_h:
+                print(f"[live] estado guardado descartado ({edad_h:.1f} h de antigüedad)")
+                return
+            n = ed.restaurar_estado(d)
+            print(f"[live] estado restaurado de {ts} ({n} zonas, e_kwh {ed.e_kwh:.1f})")
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"[live] estado guardado ilegible: {exc}")
+
     def correr(self):
         if threading.current_thread() is threading.main_thread():
             signal.signal(signal.SIGTERM, lambda *a: setattr(self, "activo", False))
@@ -216,6 +251,7 @@ class Puente:
         ctrl = None if self.control == "externo" else crear("baseline" if self.control == "baseline" else "reglas_dr", cfg)
         ed = Edificio(cfg)
         inicio = pd.Timestamp(self.inicio)
+        self._restaurar(ed, inicio)
         tel = med = None
         lat_ultima = 0.0
         while self.activo:
@@ -260,6 +296,7 @@ class Puente:
                 self._pub("medidor/general", {"ts": ts, **med})
                 self.influx.medidor(t, med)
                 self.influx.flush(forzar=True)  # un paso = un lote (con velocidad 1 hay 1 paso cada 5 min)
+                self._guardar(ed, t)
                 espera = paso * 60 / self.velocidad - (time.time() - t_real)
                 if espera > 0:
                     time.sleep(espera)

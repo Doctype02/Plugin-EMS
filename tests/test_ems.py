@@ -227,3 +227,27 @@ def test_precio_tarifa_horaria(cfg):
     dom_10 = pd.Timestamp("2026-11-08 10:00", tz="America/Panama")
     assert control.precio(cfg, lun_10) == cfg["tarifa"]["precio_punta_usd_kwh"]
     assert control.precio(cfg, dom_10) == cfg["tarifa"]["precio_fuera_punta_usd_kwh"]
+
+
+def test_estado_live_se_restaura(cfg, tmp_path, monkeypatch):
+    from ems.edificio import Edificio
+    from ems.live import Puente
+
+    a = Edificio(cfg)
+    a.estado["Z08"].t, a.estado["Z08"].hvac_on, a.e_kwh, a._hist_p = 23.1, True, 812.5, [40.0, 41.0, 42.0]
+    b = Edificio(cfg)
+    assert b.restaurar_estado(a.exportar_estado()) == len(a.estado)
+    assert b.estado["Z08"].t == 23.1 and b.estado["Z08"].hvac_on and b.e_kwh == 812.5 and b._hist_p == [40.0, 41.0, 42.0]
+
+    ruta = tmp_path / "estado.json"
+    monkeypatch.setenv("EMS_ESTADO", str(ruta))
+    p = Puente.__new__(Puente)
+    p.edif, p.tz = "edificio1", cfg["edificio"]["zona_horaria"]
+    t = pd.Timestamp("2026-11-16 10:00", tz=p.tz)
+    p._guardar(a, t)
+    c = Edificio(cfg)
+    p._restaurar(c, t + pd.Timedelta(minutes=10))
+    assert c.estado["Z08"].t == 23.1 and c.e_kwh == 812.5
+    d = Edificio(cfg)
+    p._restaurar(d, t + pd.Timedelta(hours=12))  # demasiado antiguo: arranque normal
+    assert d.e_kwh == 0.0
