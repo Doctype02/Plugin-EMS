@@ -8,6 +8,9 @@ test('muestra el edificio con las 26 zonas', async ({ gotoPanelEditPage, readPro
   const panel = panelEditPage.panel.locator;
 
   await expect(panel.getByTestId('ems-building')).toBeVisible();
+  // por defecto se ve una planta; "Edificio" abre la vista de conjunto con todas
+  await expect(panel.getByTestId('ems-floor-selector')).toBeVisible();
+  await panel.getByTestId('ems-floorsel-all').click();
   for (const zona of ZONAS) {
     await expect(panel.getByTestId(`ems-zone-${zona}`)).toHaveCount(1);
   }
@@ -18,6 +21,23 @@ test('muestra el edificio con las 26 zonas', async ({ gotoPanelEditPage, readPro
   await expect(panel.getByTestId('ems-roof-VRF-P4')).toHaveCount(1);
   // modo demostración con FV automática: campos fotovoltaicos en la azotea
   await expect(panel.getByTestId('ems-pv-FV-1')).toHaveCount(1);
+  // la azotea a tamaño completo rotula cada campo FV
+  await panel.getByTestId('ems-floorsel-roof').click();
+  await expect(panel.getByTestId('ems-pv-label-FV-1')).toBeVisible();
+});
+
+test('el selector cambia de planta', async ({ gotoPanelEditPage, readProvisionedDashboard }) => {
+  const dashboard = await readProvisionedDashboard({ fileName: 'dashboard.json' });
+  const panelEditPage = await gotoPanelEditPage({ dashboard, id: '1' });
+  const panel = panelEditPage.panel.locator;
+
+  await panel.getByTestId('ems-floorsel-P3').click();
+  await expect(panel.getByTestId('ems-floor-P3')).toHaveCount(1);
+  await expect(panel.getByTestId('ems-floor-PB')).toHaveCount(0);
+  await expect(panel.getByTestId('ems-scene-title')).toContainText('P3');
+  await panel.getByTestId('ems-floorsel-all').click();
+  await panel.getByTestId('ems-level-label-P1').click();
+  await expect(panel.getByTestId('ems-scene-title')).toContainText('P1');
 });
 
 test('abre el detalle de la zona al hacer clic', async ({ gotoPanelEditPage, readProvisionedDashboard }) => {
@@ -25,6 +45,7 @@ test('abre el detalle de la zona al hacer clic', async ({ gotoPanelEditPage, rea
   const panelEditPage = await gotoPanelEditPage({ dashboard, id: '1' });
   const panel = panelEditPage.panel.locator;
 
+  await panel.getByTestId('ems-floorsel-PB').click();
   await panel.getByTestId('ems-zone-Z06').click();
   await expect(panel.getByTestId('ems-detail')).toContainText('Cuarto de servidores');
   await expect(panel.getByTestId('ems-detail')).toContainText('carga crítica');
@@ -56,9 +77,10 @@ test('la vista exterior apila los pisos', async ({ gotoPanelEditPage, readProvis
   const panelEditPage = await gotoPanelEditPage({ dashboard, id: '1' });
   const panel = panelEditPage.panel.locator;
 
+  await panel.getByTestId('ems-floorsel-all').click();
   await panel.getByTestId('ems-explode').click();
   await expect(panel.getByTestId('ems-floor-P4')).toBeVisible();
-  await expect(panel.getByText('Azotea · unidades VRF')).toHaveCount(0);
+  await expect(panel.getByTestId('ems-level-label-P4')).toBeVisible();
 });
 
 test('muestra el interior animado en la vista en corte', async ({ gotoPanelEditPage, readProvisionedDashboard }) => {
@@ -67,6 +89,7 @@ test('muestra el interior animado en la vista en corte', async ({ gotoPanelEditP
   const panel = panelEditPage.panel.locator;
 
   await expect(panel.getByTestId('ems-building')).toHaveAttribute('data-animated', 'si');
+  await panel.getByTestId('ems-floorsel-all').click();
   await expect(panel.getByTestId('ems-riser')).toBeVisible();
   await panel.getByTestId('ems-animate').click();
   await expect(panel.getByTestId('ems-building')).toHaveAttribute('data-animated', 'no');
@@ -77,6 +100,7 @@ test('controla una zona en modo demostración', async ({ gotoPanelEditPage, read
   const panelEditPage = await gotoPanelEditPage({ dashboard, id: '1' });
   const panel = panelEditPage.panel.locator;
 
+  await panel.getByTestId('ems-floorsel-PB').click();
   await panel.getByTestId('ems-zone-Z02').click();
   const control = panel.getByTestId('ems-zone-control');
   await expect(control).toBeVisible();
@@ -92,6 +116,7 @@ test('las zonas críticas no se pueden controlar', async ({ gotoPanelEditPage, r
   const panelEditPage = await gotoPanelEditPage({ dashboard, id: '1' });
   const panel = panelEditPage.panel.locator;
 
+  await panel.getByTestId('ems-floorsel-PB').click();
   await panel.getByTestId('ems-zone-Z06').click();
   await expect(panel.getByTestId('ems-control-locked')).toBeVisible();
 });

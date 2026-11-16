@@ -41,17 +41,31 @@ interface Props {
   iso: IsoConfig;
   animate: boolean;
   palette: ScenePalette;
+  /** Primera línea del rótulo ("Z07 · Oficina 1"); vacía = rótulo de una sola línea. */
+  title?: string;
+  /** Valor según la vista (línea destacada del rótulo). */
   label: string;
   manual: boolean;
   statusColor: string;
-  /** Escala del rótulo flotante (crece cuando hay muchos niveles en la vista explotada). */
+  /** Contorno de la zona (color de estado o de la vista). */
+  outline?: string;
+  /** Unidades del SVG por px de pantalla: el rótulo se dibuja en px. */
   labelScale?: number;
-  /** Desplazamiento vertical del rótulo (px) para no encimarse con otros. */
+  /** Desplazamiento vertical del rótulo (unidades) para no encimarse con otros. */
   labelOffset?: number;
+  /** Opacidad del mobiliario y las personas (menos detalle cuando la escala es pequeña). */
+  detail?: number;
+  hovered?: boolean;
 }
 
-/** Ancho del rótulo flotante (sin escalar). */
-export const tagWidth = (text: string, manual: boolean) => text.length * 6.2 + 18 + (manual ? 16 : 0);
+/** Tamaño del rótulo flotante en px (dos líneas si lleva título). */
+export function tagSize(title: string, value: string, manual: boolean): { w: number; h: number } {
+  const w = Math.max(title.length * 6.4, value.length * (title ? 8.6 : 7.2)) + 24 + (manual ? 18 : 0);
+  return { w: Math.ceil(w), h: title ? 38 : 22 };
+}
+
+/** Ancho del rótulo de una línea (compatibilidad). */
+export const tagWidth = (text: string, manual: boolean) => tagSize('', text, manual).w;
 
 /**
  * Punto de anclaje del rótulo: el centro de la parte principal; en los pasillos largos, el extremo más
@@ -78,7 +92,7 @@ export function tagAnchor(zone: Zone, z0: number, dy: number, iso: IsoConfig): P
       }
     }
   }
-  return toScreen(x, y, z0 + SLAB + WALL_FULL + 1.1, iso, dy);
+  return toScreen(x, y, z0 + SLAB + WALL_FULL + 0.4, iso, dy);
 }
 
 const shade = (c: string, a: number) => colorManipulator.darken(c, a);
@@ -129,11 +143,15 @@ export const ZoneInterior: React.FC<Props> = ({
   iso,
   animate,
   palette: P,
+  title = '',
   label,
   manual,
   statusColor,
+  outline: outlineColor,
   labelScale = 1,
   labelOffset = 0,
+  detail = 1,
+  hovered = false,
 }) => {
   const s = iso.scale;
   const zf = z0 + SLAB;
@@ -403,8 +421,11 @@ export const ZoneInterior: React.FC<Props> = ({
   // --- rótulo flotante (Building3D lo desplaza si se encima con el de otra zona del mismo nivel)
   const anchor = tagAnchor(zone, z0, dy, iso);
   const tagPt = { x: anchor.x, y: anchor.y + labelOffset };
-  const text = `${zone.id} · ${label}`;
-  const tw = tagWidth(text, manual);
+  const tag = tagSize(title, label, manual);
+  const tw = tag.w;
+  const th = tag.h;
+  const leader = (anchor.y + s * 1.2 - tagPt.y) / labelScale; // px hasta el piso de la zona
+  const border = highlight ?? colorManipulator.alpha(P.ink2, 0.35);
 
   const multi = floors.length > 1;
   return (
@@ -414,8 +435,10 @@ export const ZoneInterior: React.FC<Props> = ({
           key={`top${k}`}
           d={path(floor.top)}
           fill={fill}
-          stroke={multi ? fill : (highlight ?? shade(fill, 0.3))}
-          strokeWidth={multi ? 0.8 : highlight ? (selected ? 3 : 2) : 0.6}
+          stroke={multi ? fill : (outlineColor ?? highlight ?? shade(fill, 0.3))}
+          strokeWidth={multi ? 0.8 : highlight ? (selected ? 3.5 : 2.5) : 1.6}
+          vectorEffect="non-scaling-stroke"
+          style={hovered ? { filter: 'brightness(1.12)' } : undefined}
         />
       ))}
       {multi &&
@@ -429,8 +452,9 @@ export const ZoneInterior: React.FC<Props> = ({
               y1={a.y}
               x2={b.x}
               y2={b.y}
-              stroke={highlight ?? shade(fill, 0.3)}
-              strokeWidth={highlight ? (selected ? 3 : 2) : 0.6}
+              stroke={outlineColor ?? highlight ?? shade(fill, 0.3)}
+              strokeWidth={highlight ? (selected ? 3.5 : 2.5) : 1.6}
+              vectorEffect="non-scaling-stroke"
             />
           );
         })}
@@ -447,7 +471,9 @@ export const ZoneInterior: React.FC<Props> = ({
         </g>
       )}
       {edges.filter((e) => e.back).map(wallFace)}
-      <g pointerEvents="none">{objs.map((o) => o.el)}</g>
+      <g pointerEvents="none" opacity={detail}>
+        {objs.map((o) => o.el)}
+      </g>
       <g pointerEvents="none">
         {diffusers}
         {air}
@@ -455,27 +481,55 @@ export const ZoneInterior: React.FC<Props> = ({
       {edges.filter((e) => !e.back).map(wallFace)}
       <g
         pointerEvents="none"
-        transform={`translate(${tagPt.x.toFixed(1)},${tagPt.y.toFixed(1)}) scale(${labelScale.toFixed(2)})`}
+        transform={`translate(${tagPt.x.toFixed(1)},${tagPt.y.toFixed(1)}) scale(${labelScale.toFixed(4)})`}
+        data-testid={`ems-tag-${zone.id}`}
       >
-        <line x1={0} y1={0} x2={0} y2={s * 0.9} stroke={P.ink2} strokeWidth={0.8} opacity={0.6} />
+        <line x1={0} y1={th / 2} x2={0} y2={Math.max(th / 2, leader)} stroke={P.ink2} strokeWidth={1} opacity={0.7} />
+        <circle cx={0} cy={Math.max(th / 2, leader)} r={2.2} fill={P.ink2} opacity={0.8} />
         <rect
           x={-tw / 2}
-          y={-11}
+          y={-th / 2}
           width={tw}
-          height={18}
-          rx={9}
+          height={th}
+          rx={6}
           fill={P.surface}
-          stroke={highlight ?? colorManipulator.alpha(P.ink2, 0.4)}
-          strokeWidth={highlight ? 1.5 : 0.8}
+          fillOpacity={0.94}
+          stroke={border}
+          strokeWidth={highlight ? 2 : 1}
         />
-        <circle cx={-tw / 2 + 9} cy={-2} r={3.2} fill={statusColor} />
-        <text x={-tw / 2 + 16} y={2} fontSize={10.5} fill={P.ink} style={{ fontVariantNumeric: 'tabular-nums' }}>
-          {text}
-        </text>
+        <rect x={-tw / 2} y={-th / 2} width={5} height={th} rx={2} fill={statusColor} />
+        {title ? (
+          <>
+            <text x={-tw / 2 + 13} y={-4} fontSize={11.5} fill={P.ink2}>
+              {title}
+            </text>
+            <text
+              x={-tw / 2 + 13}
+              y={13}
+              fontSize={15}
+              fontWeight={600}
+              fill={P.ink}
+              style={{ fontVariantNumeric: 'tabular-nums' }}
+            >
+              {label}
+            </text>
+          </>
+        ) : (
+          <text
+            x={-tw / 2 + 12}
+            y={4.5}
+            fontSize={12.5}
+            fontWeight={500}
+            fill={P.ink}
+            style={{ fontVariantNumeric: 'tabular-nums' }}
+          >
+            {label}
+          </text>
+        )}
         {manual && (
           <g data-testid={`ems-manual-${zone.id}`}>
-            <rect x={tw / 2 - 17} y={-8} width={13} height={12} rx={3} fill="#eda100" />
-            <text x={tw / 2 - 10.5} y={1.5} fontSize={9} fontWeight={700} textAnchor="middle" fill="#1a1a19">
+            <rect x={tw / 2 - 19} y={-th / 2 + 4} width={14} height={14} rx={3} fill="#eda100" />
+            <text x={tw / 2 - 12} y={-th / 2 + 15} fontSize={10} fontWeight={700} textAnchor="middle" fill="#1a1a19">
               M
             </text>
           </g>

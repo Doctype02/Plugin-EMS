@@ -58,16 +58,22 @@ una prueba compara los parámetros térmicos del panel con los de `ems/config.py
 
 ## Qué muestra
 
-- **Edificio 3D** (SVG, sin dependencias). Dos formas de verlo; se gira en pasos de 90° y se puede mostrar
-  un solo piso con el selector (Todos, PB, P1…P4):
-  - _En corte_ (vista explotada): las 5 plantas escalonadas en diagonal (los rótulos crecen un poco y se
-    reacomodan para no encimarse; para ver una planta en detalle, elíjala en el selector), con muros de fondo
-    completos y ventanas, fachada de vidrio con antepecho, divisiones bajas, el núcleo del elevador y el
-    **interior de cada zona**: estaciones de los cubículos, escritorios de las oficinas y bancadas de la
-    oficina abierta, mesa de la sala de conferencias (en L, sin muro entre sus partes), mostrador y sofás de
-    la recepción, racks del cuarto de servidores, cubículos y lavamanos de los baños (con su PTAC de pared)
-    y plantas del pasillo.
-  - _Exterior_: pisos apilados con fachadas, ventanas y los PTAC en la fachada de los baños.
+- **Edificio 3D** (SVG, sin dependencias), con un **selector de plantas** a la izquierda en forma de corte del
+  edificio (Edificio, Azotea, P4…PB): cada fila muestra el peor estado de la planta (barra de color), la
+  temperatura media, los kW y un indicador de alarmas. Al abrir el panel se muestra la planta de la alarma
+  más grave (sin alarmas, la PB; opción *Planta inicial*). La escena se encuadra con el tamaño real del
+  panel (nada recortado) y los rótulos tienen tamaño fijo en pantalla; se gira en pasos de 90°:
+  - _Planta_ (vista explotada): una planta grande en corte con rótulos de zona «Z07 · Oficina 1 / 24.5°»
+    (sin encimarse), contorno de cada zona con el color de su estado, muros de fondo completos y ventanas,
+    fachada de vidrio con antepecho, divisiones bajas, el núcleo del elevador y el **interior de cada zona**
+    (atenuado cuando la escala es pequeña): estaciones de los cubículos, escritorios de las oficinas y
+    bancadas de la oficina abierta, mesa de la sala de conferencias (en L), mostrador y sofás de la
+    recepción, racks del cuarto de servidores, cubículos y lavamanos de los baños (con su PTAC de pared) y
+    plantas del pasillo. Apagada la vista explotada, la planta se ve por fuera.
+  - _Azotea_: las 6 unidades VRF con su potencia y los 6 campos FV con su generación, a tamaño completo.
+  - _Edificio_: el volumen apilado (PB abajo, azotea arriba) con cada planta como una franja separada; la
+    fachada de cada zona lleva el color de la vista y una tarjeta por planta (estado, °C, kW, alarmas y
+    evento activo) lleva a esa planta con un clic. Con la vista explotada apagada, el volumen es compacto.
 - **Animaciones internas**:
   - personas sentadas en su puesto y ~30 % caminando hacia el pasillo y de regreso;
   - aire frío que baja de los difusores cuando el compresor enfría (difusor naranja y en pausa si el

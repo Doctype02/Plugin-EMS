@@ -101,8 +101,8 @@ export function zoneFill(mode: ViewMode, zone: Zone, s: ZoneState | undefined, c
     default: {
       // tinte sobrio: el color de estado mezclado con el piso neutro (el borde y el rótulo llevan el color pleno)
       const st = ctx.status[zone.id] ?? 'offline';
-      const base = ctx.dark ? '#2e3238' : '#eef0f2';
-      return mixHex(ctx.statusColors[st], base, st === 'ok' ? 0.28 : 0.55);
+      const base = ctx.dark ? '#394049' : '#f1f3f5';
+      return mixHex(ctx.statusColors[st], base, st === 'ok' ? 0.36 : st === 'offline' ? 0.2 : 0.72);
     }
   }
 }

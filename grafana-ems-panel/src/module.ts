@@ -3,7 +3,7 @@ import { EmsOptions } from './types';
 import { EmsPanel } from './components/EmsPanel';
 import { VIEW_LABELS, ViewMode } from './building/views';
 import { SPEEDS } from './building/clock';
-import { LIMIT_KW, LIMIT_RANGE } from './building/model';
+import { FLOORS, LIMIT_KW, LIMIT_RANGE } from './building/model';
 
 export const plugin = new PanelPlugin<EmsOptions>(EmsPanel).setPanelOptions((builder) =>
   builder
@@ -29,10 +29,26 @@ export const plugin = new PanelPlugin<EmsOptions>(EmsPanel).setPanelOptions((bui
         ],
       },
     })
+    .addSelect({
+      path: 'defaultFloor',
+      name: 'Planta inicial',
+      description:
+        'Automática: la planta con la alarma más grave (sin alarmas, la planta baja). Se cambia con el selector de plantas del panel',
+      defaultValue: 'auto',
+      settings: {
+        options: [
+          { value: 'auto', label: 'Automática (alarma más grave)' },
+          { value: 'all', label: 'Edificio completo' },
+          { value: 'roof', label: 'Azotea' },
+          ...[...FLOORS].reverse().map((f) => ({ value: String(f.level), label: `${f.short} · ${f.name}` })),
+        ],
+      },
+    })
     .addBooleanSwitch({
       path: 'exploded',
       name: 'Vista explotada',
-      description: 'Separa los pisos para ver las zonas de cada nivel',
+      description:
+        'Planta: interior en corte (apagado = exterior). Edificio: plantas separadas (apagado = volumen compacto)',
       defaultValue: true,
     })
     .addNumberInput({

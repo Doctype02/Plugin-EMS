@@ -243,9 +243,14 @@ function guessMeasurement(keys: string[], tags: Record<string, string>): Measure
 export function framesToRows(series: DataFrame[]): Row[] {
   const rows: Row[] = [];
   for (const frame of series) {
-    const timeField = frame.fields.find((f) => f.type === FieldType.time);
+    // Flux devuelve _start/_stop (límites del rango) además de _time: la marca de cada lectura es _time
+    const timeFields = frame.fields.filter((f) => f.type === FieldType.time);
+    const timeField =
+      timeFields.find((f) => f.name === '_time' || f.name === 'Time' || f.name === 'time') ??
+      timeFields.find((f) => f.name !== '_start' && f.name !== '_stop') ??
+      timeFields[0];
     const stringCols = frame.fields.filter((f) => f.type === FieldType.string);
-    const valueFields = frame.fields.filter((f) => f !== timeField && f.type !== FieldType.string);
+    const valueFields = frame.fields.filter((f) => f.type !== FieldType.time && f.type !== FieldType.string);
     const frameTags: Record<string, string> = {};
     for (const f of frame.fields) {
       Object.assign(frameTags, f.labels ?? {});

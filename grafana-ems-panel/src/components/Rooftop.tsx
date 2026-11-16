@@ -3,6 +3,7 @@ import { colorManipulator } from '@grafana/data';
 import { BUILDING, HvacSystem, PV, Rect, VrfUnit, ZONE_BY_ID } from 'building/model';
 import { IsoConfig, Pt, path, planeMatrix, prism, toScreen } from 'building/iso';
 import { Snapshot } from 'building/telemetry';
+import { declutter } from 'building/layout';
 
 interface Props {
   units: VrfUnit[];
@@ -22,6 +23,10 @@ interface Props {
   onLeaveUnit?: () => void;
   /** Dibuja los campos fotovoltaicos (variante con FV). */
   pv?: boolean;
+  /** Rótulos de unidades y campos FV (por defecto, salvo en la vista compacta). */
+  showLabels?: boolean;
+  /** Unidades del SVG por px de pantalla: los rótulos se dibujan en px. */
+  labelScale?: number;
 }
 
 const shade = (c: string, a: number) => colorManipulator.darken(c, a);
@@ -147,7 +152,11 @@ export const Rooftop: React.FC<Props> = ({
   onHoverUnit,
   onLeaveUnit,
   pv = false,
+  showLabels,
+  labelScale = 1,
 }) => {
+  const labels = showLabels ?? !compact;
+  const ls = labelScale;
   const casing = dark ? '#c9ccd1' : '#eef0f2';
   const W = BUILDING.width;
   const D = BUILDING.depth;
@@ -179,12 +188,66 @@ export const Rooftop: React.FC<Props> = ({
     `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(',')})`;
   const cell = mix(dark ? [24, 32, 52] : [34, 46, 74], [44, 104, 205], gen);
   const frame = dark ? '#8b9099' : '#c3c7cd';
-  const biggest = PV.fields.reduce((a, f) => (f.areaM2 > a.areaM2 ? f : a), PV.fields[0]);
   const items = [
     ...segments,
     hatch,
     ...units.map((u) => ({ kind: 'unit' as const, u, p: prism(u.rect, z + 0.15, height, iso, 0, dy) })),
   ].sort((a, b) => b.p.depth - a.p.depth);
+
+  // --- rótulos (px): kW de cada VRF y generación de cada campo FV, sin encimarse
+  type RoofLabel = {
+    id: string;
+    x: number;
+    y: number;
+    wPx: number;
+    name: string;
+    value: string;
+    color: string;
+    dot: string;
+    pvField?: string;
+  };
+  const placed: RoofLabel[] = [];
+  if (labels) {
+    for (const u of units) {
+      const st = unitState(u, snapshot);
+      const pt = toScreen(u.rect.x + u.rect.w / 2, u.rect.y + u.rect.d / 2, z + 0.15 + height + 0.9, iso, dy);
+      const value =
+        st.mode === 'falla' ? 'FALLA' : st.mode === 'sin_energia' ? 'sin energía' : `${st.kw.toFixed(1)} kW`;
+      placed.push({
+        id: u.id,
+        x: pt.x,
+        y: pt.y,
+        wPx: (u.id.length + value.length + 2) * 7.3 + 26,
+        name: u.id,
+        value,
+        color: LED[st.mode],
+        dot: LED[st.mode],
+      });
+    }
+    if (pv) {
+      const totalArea = PV.fields.reduce((a, f) => a + f.areaM2, 0) || 1;
+      for (const f of PV.fields) {
+        const kw = (pPv * f.areaM2) / totalArea;
+        const pt = toScreen(f.rect.x + f.rect.w / 2, f.rect.y + f.rect.d / 2, z + 0.5, iso, dy);
+        const value = `${kw.toFixed(1)} kW`;
+        placed.push({
+          id: f.id,
+          x: pt.x,
+          y: pt.y,
+          wPx: (f.id.length + value.length + 2) * 7.3 + 26,
+          name: f.id,
+          value,
+          color: '#f2cc0c',
+          dot: gen > 0.02 ? '#f2cc0c' : '#8e8e8e',
+          pvField: f.id,
+        });
+      }
+    }
+  }
+  const offsets = declutter(
+    placed.map((l) => ({ id: l.id, x: l.x, y: l.y, w: l.wPx * ls, h: 22 * ls })),
+    4 * ls
+  );
 
   return (
     <>
@@ -273,7 +336,6 @@ export const Rooftop: React.FC<Props> = ({
         const pipeB = toScreen(u.rect.x + 0.3, u.rect.y - 1.0, z + 0.4, iso, dy);
         const pipeC = toScreen(u.rect.x + 0.3, u.rect.y - 1.0, z, iso, dy);
         const top = p.top;
-        const labelY = Math.min(...top.map((q) => q.y)) - 8;
         return (
           <g
             key={u.id}
@@ -400,60 +462,60 @@ export const Rooftop: React.FC<Props> = ({
                 </g>
               ))}
             </g>
-            {/* rótulo con estado */}
-            <g
-              transform={`translate(${p.center.x.toFixed(1)},${labelY.toFixed(1)}) scale(${compact ? 0.75 : 1})`}
-              pointerEvents="none"
-            >
-              <rect
-                x={compact ? -24 : -42}
-                y={-11}
-                width={compact ? 48 : 84}
-                height={15}
-                rx={7.5}
-                fill={surface}
-                stroke={led}
-                strokeWidth={1.2}
-                opacity={0.95}
-              />
-              <circle cx={compact ? -15 : -33} cy={-3.5} r={3} fill={led} />
-              <text x={compact ? 3 : 4} y={0} textAnchor="middle" fontSize={8.5} fontWeight={600} fill={labelColor}>
-                {compact ? u.id : `${u.id} · ${st.mode === 'falla' ? 'FALLA' : `${st.kw.toFixed(1)} kW`}`}
-              </text>
-            </g>
           </g>
         );
       })}
-      {pv && !compact && biggest && (
-        <g
-          transform={(() => {
-            const c = toScreen(
-              biggest.rect.x + biggest.rect.w / 2,
-              biggest.rect.y + biggest.rect.d / 2,
-              z + 1.2,
-              iso,
-              dy
-            );
-            return `translate(${c.x.toFixed(1)},${c.y.toFixed(1)})`;
-          })()}
-          pointerEvents="none"
-          data-testid="ems-pv-label"
-        >
-          <rect
-            x={-40}
-            y={-11}
-            width={80}
-            height={15}
-            rx={7.5}
-            fill={surface}
-            stroke="#f2cc0c"
-            strokeWidth={1.2}
-            opacity={0.95}
-          />
-          <circle cx={-31} cy={-3.5} r={3} fill={gen > 0.02 ? '#f2cc0c' : '#8e8e8e'} />
-          <text x={4} y={0} textAnchor="middle" fontSize={8.5} fontWeight={600} fill={labelColor}>
-            FV · {pPv.toFixed(1)} kW
-          </text>
+      {pv &&
+        labels &&
+        pvFields.map(({ f }) => {
+          const r = { x: f.rect.x + 0.15, y: f.rect.y + 0.15, w: f.rect.w - 0.3, d: f.rect.d - 0.3 };
+          const pts = [
+            toScreen(r.x, r.y, z + 0.4, iso, dy),
+            toScreen(r.x + r.w, r.y, z + 0.4, iso, dy),
+            toScreen(r.x + r.w, r.y + r.d, z + 0.4, iso, dy),
+            toScreen(r.x, r.y + r.d, z + 0.4, iso, dy),
+          ];
+          return (
+            <path
+              key={`fo-${f.id}`}
+              d={path(pts)}
+              fill="none"
+              stroke={colorManipulator.alpha('#f2cc0c', 0.7)}
+              strokeWidth={1.2}
+              strokeDasharray="5 4"
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+          );
+        })}
+      {labels && (
+        <g pointerEvents="none" data-testid="ems-roof-labels">
+          {placed.map((l) => (
+            <g
+              key={l.id}
+              transform={`translate(${l.x.toFixed(1)},${(l.y + (offsets[l.id] ?? 0)).toFixed(1)}) scale(${ls.toFixed(4)})`}
+              data-testid={
+                l.pvField ? (l.pvField === 'total' ? 'ems-pv-label' : `ems-pv-label-${l.pvField}`) : undefined
+              }
+            >
+              <rect
+                x={-l.wPx / 2}
+                y={-11}
+                width={l.wPx}
+                height={22}
+                rx={11}
+                fill={surface}
+                fillOpacity={0.95}
+                stroke={l.color}
+                strokeWidth={1.5}
+              />
+              <circle cx={-l.wPx / 2 + 11} cy={0} r={4} fill={l.dot} />
+              <text x={-l.wPx / 2 + 20} y={4.5} fontSize={12.5} fill={labelColor}>
+                <tspan fontWeight={700}>{l.name}</tspan>
+                <tspan>{`  ${l.value}`}</tspan>
+              </text>
+            </g>
+          ))}
         </g>
       )}
     </>

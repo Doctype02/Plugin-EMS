@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.1
+
+- Visualización más legible: vista por defecto de **una planta grande** (la de la alarma más grave, si no la
+  PB; nueva opción *Planta inicial*) con un **selector de plantas en corte** (Edificio, Azotea, P4…PB: peor
+  estado, °C media, kW y alarmas); **azotea** a tamaño completo con kW de cada VRF y generación de cada campo
+  FV; **vista de conjunto** como volumen apilado con las plantas separadas en franjas coloreadas y una
+  tarjeta por planta (reemplaza las 5 plantas diminutas en diagonal). Encuadre calculado con el tamaño real
+  del área (nada recortado), rótulos de zona más grandes con nombre corto y sin encimarse, más contraste en
+  losas, muros y estado de las zonas (oscuro y claro), mobiliario atenuado a escala pequeña, leyenda y
+  brújula compactas que no tapan la planta.
+
 ## 1.3.0
 
 Edificio nuevo de **5 plantas** (PB, P1–P4, 20 × 20 m, 2000 m²) y **26 zonas** (Z01–Z26) del modelo

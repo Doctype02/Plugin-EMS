@@ -121,3 +121,22 @@ describe('lectura de data frames (contrato InfluxDB)', () => {
     expect(zoneStatus(ZONE_BY_ID.Z02, undefined, [])).toBe('offline');
   });
 });
+
+describe('marca de tiempo de Flux', () => {
+  it('usa _time y no _start/_stop', () => {
+    const t = Date.UTC(2026, 10, 16, 1, 20);
+    const frame = toDataFrame({
+      fields: [
+        { name: '_start', type: FieldType.time, values: [t - 6 * 3600_000] },
+        { name: '_stop', type: FieldType.time, values: [t + 60_000] },
+        { name: '_time', type: FieldType.time, values: [t] },
+        { name: 'zona', type: FieldType.string, values: ['Z07'] },
+        { name: 'temp_c', type: FieldType.number, values: [24.5] },
+        { name: 'setpoint_c', type: FieldType.number, values: [24] },
+      ],
+    });
+    const { snapshot } = snapshotFromFrames([frame]);
+    expect(snapshot.zones.Z07.updatedAt).toBe(t);
+    expect(snapshot.zones.Z07.temp).toBe(24.5);
+  });
+});

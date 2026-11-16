@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GrafanaTheme2, PanelProps } from '@grafana/data';
 import { css, cx } from '@emotion/css';
-import { Button, IconButton, RadioButtonGroup, Tab, TabsBar, useStyles2, useTheme2 } from '@grafana/ui';
+import { Button, IconButton, Tab, TabsBar, useStyles2, useTheme2 } from '@grafana/ui';
 import { config } from '@grafana/runtime';
 import { EmsOptions } from 'types';
 import { BUILDING, FLOORS, LIMIT_KW, VRF_UNITS, VrfUnit, ZONES, ZONE_BY_ID, Zone } from 'building/model';
@@ -41,11 +41,13 @@ import { ZoneDetail } from './ZoneDetail';
 import { ZoneTooltip } from './ZoneTooltip';
 import { TimeBar } from './TimeBar';
 import { SimulatePanel } from './SimulatePanel';
-import { EmergencyBanner } from './EmergencyBanner';
+import { EmergencyBanner, emergencyMessage } from './EmergencyBanner';
 import { HelpOverlay } from './HelpOverlay';
 import { VrfTooltip } from './VrfTooltip';
 import { OverviewPanel } from './OverviewPanel';
 import { SceneCompass } from './SceneCompass';
+import { FloorKey, FloorSelector } from './FloorSelector';
+import { autoFloor, floorSummary, roofSummary } from 'building/layout';
 import {
   ClockState,
   goLive,
@@ -59,6 +61,7 @@ import {
 } from 'building/clock';
 import { SimEvent } from 'building/events';
 import { useStatusColors } from './useStatusColors';
+import { useElementSize } from './useElementSize';
 
 interface Props extends PanelProps<EmsOptions> {}
 
@@ -344,7 +347,8 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const [viewMode, setViewMode] = useState<ViewMode>(options.defaultView);
   const [azimuth, setAzimuth] = useState<Azimuth>(options.azimuth);
   const [exploded, setExploded] = useState(options.exploded);
-  const [floor, setFloor] = useState<'all' | number>('all');
+  // planta elegida por el operador; sin elegir, la de la opción «Planta inicial» (auto = la de la alarma más grave)
+  const [floorChoice, setFloor] = useState<FloorKey>();
   const [selectedId, setSelectedId] = useState<string>();
   const [hover, setHover] = useState<{ id: string; x: number; y: number; w: number; h: number }>();
   const [unitHover, setUnitHover] = useState<{ id: string; x: number; y: number; w: number; h: number }>();
@@ -368,8 +372,31 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const panelWidth = fullscreen.active ? window.innerWidth : width;
   const panelHeight = fullscreen.active ? window.innerHeight : height;
   const docked = options.showSidebar && panelWidth >= SIDEBAR_MIN_PANEL_WIDTH;
+  const sidebarWidth = panelWidth >= 1400 ? 380 : 330;
+  // ancho del área de la escena (sin el panel lateral) para decidir qué controles caben
+  const sceneWidth = panelWidth - (docked ? sidebarWidth + 8 : 0);
+  const selectorCompact = sceneWidth < 900 || panelHeight < 420;
+  const canvas = useElementSize(sceneRef);
+  const canvasWidth = canvas.w || sceneWidth - (selectorCompact ? 64 : 156);
+  // escena baja: la leyenda sube a la barra superior y la planta usa toda la altura
+  const shortScene = canvas.h > 0 && canvas.h < 400;
 
   const statuses = useMemo(() => zoneStatuses(snapshot), [snapshot]);
+  const defaultFloor = options.defaultFloor ?? 'auto';
+  const floor: FloorKey =
+    floorChoice ??
+    (defaultFloor === 'auto'
+      ? autoFloor(statuses, snapshot)
+      : defaultFloor === 'all' || defaultFloor === 'roof'
+        ? defaultFloor
+        : Number(defaultFloor));
+  const levelSummaries = useMemo(
+    () => [
+      roofSummary(snapshot, statuses),
+      ...[...FLOORS].reverse().map((f) => floorSummary(f.level, snapshot, statuses)),
+    ],
+    [snapshot, statuses]
+  );
   const counts = useMemo(() => {
     const c: Record<Status, number> = { ok: 0, warning: 0, critical: 0, offline: 0 };
     ZONES.forEach((z) => c[statuses[z.id]]++);
@@ -396,7 +423,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
     () => ({ azimuth, layout: exploded ? 'exploded' : 'stacked', scale: 10 }),
     [azimuth, exploded]
   );
-  const floors = floor === 'all' ? FLOORS.map((f) => f.level) : [floor];
+  const floors = floor === 'all' || floor === 'roof' ? FLOORS.map((f) => f.level) : [floor];
   const legend = legendFor(viewMode, {
     dark: theme.isDark,
     statusColors,
@@ -644,140 +671,217 @@ export const EmsPanel: React.FC<Props> = (props) => {
       )}
 
       <div className={styles.body}>
-        <div className={styles.scene} ref={sceneRef}>
-          <Building3D
-            idPrefix={`ems-${id}`}
-            snapshot={snapshot}
-            statuses={shownStatuses}
-            statusColors={statusColors}
-            viewMode={viewMode}
-            iso={iso}
-            floors={floors}
-            selectedId={selectedId}
-            hoveredId={hover?.id}
-            unacknowledged={unacknowledged}
-            manual={manual}
-            animate={animate}
-            onHover={onHover}
-            onLeave={() => setHover(undefined)}
-            onSelect={(z) => setSelectedId((cur) => (cur === z.id ? undefined : z.id))}
-            hoveredUnit={unitHover?.id}
-            onHoverUnit={onHoverUnit}
-            onLeaveUnit={() => setUnitHover(undefined)}
-            pv={pvVisible}
-          />
-
-          <div className={styles.topLeft}>
-            <IconButton
-              name={fullscreen.active ? 'compress-arrows' : 'expand-arrows-alt'}
-              tooltip={fullscreen.active ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'}
-              onClick={fullscreen.toggle}
-            />
-            <IconButton
-              name="history-alt"
-              tooltip="Girar a la izquierda"
-              onClick={() => rotate(-1)}
-              data-testid="ems-rotate-left"
-            />
-            <IconButton
-              name="sync"
-              tooltip="Girar a la derecha"
-              onClick={() => rotate(1)}
-              data-testid="ems-rotate-right"
-            />
-            <IconButton
-              name={exploded ? 'gf-layout-simple' : 'layer-group'}
-              tooltip={exploded ? 'Vista exterior (pisos unidos)' : 'Vista explotada (ver cada piso)'}
-              onClick={() => setExploded((e) => !e)}
-              data-testid="ems-explode"
-            />
-            <IconButton
-              name={animate ? 'pause' : 'play'}
-              tooltip={animate ? 'Pausar animaciones' : 'Reanudar animaciones'}
-              onClick={() => setAnimate((a) => !a)}
-              data-testid="ems-animate"
-            />
-            <IconButton
-              name="question-circle"
-              tooltip="Cómo usar el panel"
-              onClick={() => setHelp(true)}
-              data-testid="ems-help-button"
-            />
-            <RadioButtonGroup
-              size="sm"
+        <div className={styles.scene}>
+          {panelHeight >= 300 && (
+            <FloorSelector
+              levels={levelSummaries}
               value={floor}
               onChange={(v) => setFloor(v)}
-              options={[
-                { value: 'all' as const, label: 'Todos' },
-                ...FLOORS.map((f) => ({ value: f.level, label: f.short })),
-              ]}
+              statusColors={statusColors}
+              compact={selectorCompact}
+              pv={pvVisible}
             />
-          </div>
-
-          <EmergencyBanner
-            snapshot={snapshot}
-            events={events}
-            now={now}
-            canStop={permission.canControl}
-            onShow={() => {
-              setSelectedId(undefined);
-              setSideTab(snapshot.alarms.length ? 'alarms' : 'simulate');
-              setOverlayOpen(true);
-            }}
-            onStop={() => runCommands({ kind: 'event_stop', id: '*' })}
-          />
-          {help && <HelpOverlay onClose={() => setHelp(false)} />}
-          {panelHeight >= 420 && (
-            <SceneCompass azimuth={azimuth} time={now} irradiance={snapshot.meter?.irr} tExt={snapshot.meter?.tExt} />
           )}
-
-          <Legend spec={legend} counts={counts} statusFilter={statusFilter} onStatusFilter={setStatusFilter} />
-
-          {!docked && !selected && (
-            <div className={styles.topRight}>
-              <Button
-                size="sm"
-                variant={snapshot.alarms.some((a) => a.level !== 'info') ? 'destructive' : 'secondary'}
-                icon="bell"
-                onClick={() => setOverlayOpen((o) => !o)}
-              >
-                Alarmas {snapshot.alarms.length}
-              </Button>
-            </div>
-          )}
-          {!docked && (selected || overlayOpen) && (
-            <aside className={styles.overlay}>
-              {!selected && (
-                <div className={styles.overlayClose}>
-                  <IconButton name="times" tooltip="Cerrar" onClick={() => setOverlayOpen(false)} />
-                </div>
-              )}
-              {sidebar}
-            </aside>
-          )}
-          {unitHover && (
-            <VrfTooltip
-              unit={VRF_UNITS.find((u) => u.id === unitHover.id)!}
+          <div className={styles.canvas} ref={sceneRef}>
+            <Building3D
+              idPrefix={`ems-${id}`}
               snapshot={snapshot}
-              x={unitHover.x}
-              y={unitHover.y}
-              containerWidth={unitHover.w}
-              containerHeight={unitHover.h}
+              statuses={shownStatuses}
+              statusColors={statusColors}
+              viewMode={viewMode}
+              iso={iso}
+              floors={floors}
+              roofOnly={floor === 'roof'}
+              selectedId={selectedId}
+              hoveredId={hover?.id}
+              unacknowledged={unacknowledged}
+              manual={manual}
+              animate={animate}
+              onHover={onHover}
+              onLeave={() => setHover(undefined)}
+              onSelect={(z) => setSelectedId((cur) => (cur === z.id ? undefined : z.id))}
+              hoveredUnit={unitHover?.id}
+              onHoverUnit={onHoverUnit}
+              onLeaveUnit={() => setUnitHover(undefined)}
+              pv={pvVisible}
+              insets={{
+                top: 56,
+                right: 8,
+                bottom: (emergencyMessage(snapshot, events, now) ? 66 : 0) + (shortScene ? 8 : 46),
+                left: 8,
+              }}
+              onSelectFloor={(k) => setFloor(k)}
             />
-          )}
-          {hovered && hover && (
-            <ZoneTooltip
-              zone={hovered}
-              state={snapshot.zones[hovered.id]}
-              status={statuses[hovered.id]}
-              x={hover.x}
-              y={hover.y}
-              containerWidth={hover.w}
-              containerHeight={hover.h}
+
+            <div className={styles.topLeft} style={{ right: shortScene ? 260 : 200 }}>
+              <div className={styles.toolbar}>
+                <IconButton
+                  name={fullscreen.active ? 'compress-arrows' : 'expand-arrows-alt'}
+                  tooltip={fullscreen.active ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'}
+                  onClick={fullscreen.toggle}
+                />
+                <IconButton
+                  name="history-alt"
+                  tooltip="Girar a la izquierda"
+                  onClick={() => rotate(-1)}
+                  data-testid="ems-rotate-left"
+                />
+                <IconButton
+                  name="sync"
+                  tooltip="Girar a la derecha"
+                  onClick={() => rotate(1)}
+                  data-testid="ems-rotate-right"
+                />
+                <IconButton
+                  name={exploded ? 'gf-layout-simple' : 'layer-group'}
+                  tooltip={
+                    floor === 'all'
+                      ? exploded
+                        ? 'Volumen compacto (plantas unidas)'
+                        : 'Separar las plantas'
+                      : exploded
+                        ? 'Vista exterior de la planta'
+                        : 'Vista interior de la planta'
+                  }
+                  onClick={() => setExploded((e) => !e)}
+                  data-testid="ems-explode"
+                />
+                <IconButton
+                  name={animate ? 'pause' : 'play'}
+                  tooltip={animate ? 'Pausar animaciones' : 'Reanudar animaciones'}
+                  onClick={() => setAnimate((a) => !a)}
+                  data-testid="ems-animate"
+                />
+                <IconButton
+                  name="question-circle"
+                  tooltip="Cómo usar el panel"
+                  onClick={() => setHelp(true)}
+                  data-testid="ems-help-button"
+                />
+              </div>
+              <div className={styles.sceneTitle} data-testid="ems-scene-title">
+                {(() => {
+                  const sm = floor === 'all' ? undefined : levelSummaries.find((l) => l.key === floor);
+                  if (!sm) {
+                    return (
+                      <>
+                        <span className={styles.titleMain}>Edificio</span>
+                        <span className={styles.titleSub}>
+                          {FLOORS.length} plantas + azotea · {fmt(snapshot.meter?.pTotal, 1, 'kW')}
+                        </span>
+                      </>
+                    );
+                  }
+                  return (
+                    <>
+                      <span className={styles.titleDot} style={{ background: statusColors[sm.status] }} />
+                      <span className={styles.titleMain}>
+                        {sm.key === 'roof' ? 'Azotea' : `${sm.short} · ${sm.name}`}
+                      </span>
+                      {canvasWidth >= 860 && (
+                        <span className={styles.titleSub}>
+                          {sm.key === 'roof'
+                            ? `${VRF_UNITS.length} VRF · ${sm.kw.toFixed(1)} kW${pvVisible && sm.pv !== undefined ? ` · FV ${sm.pv.toFixed(1)} kW` : ''}`
+                            : `${sm.zones} zonas · ${sm.temp === undefined ? '—' : `${sm.temp.toFixed(1)} °C`} · ${sm.kw.toFixed(1)} kW`}
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <EmergencyBanner
+              snapshot={snapshot}
+              events={events}
+              now={now}
+              canStop={permission.canControl}
+              onShow={() => {
+                setSelectedId(undefined);
+                setSideTab(snapshot.alarms.length ? 'alarms' : 'simulate');
+                setOverlayOpen(true);
+              }}
+              onStop={() => runCommands({ kind: 'event_stop', id: '*' })}
             />
-          )}
+            {help && <HelpOverlay onClose={() => setHelp(false)} />}
+            {!shortScene && (
+              <Legend
+                spec={legend}
+                counts={counts}
+                statusFilter={statusFilter}
+                onStatusFilter={setStatusFilter}
+                compact={canvasWidth < 760}
+              />
+            )}
+
+            <div className={styles.topRight}>
+              {shortScene && (
+                <Legend
+                  spec={legend}
+                  counts={counts}
+                  statusFilter={statusFilter}
+                  onStatusFilter={setStatusFilter}
+                  compact
+                  inline
+                />
+              )}
+              {!docked && !selected && (
+                <Button
+                  size="sm"
+                  variant={snapshot.alarms.some((a) => a.level !== 'info') ? 'destructive' : 'secondary'}
+                  icon="bell"
+                  onClick={() => setOverlayOpen((o) => !o)}
+                >
+                  Alarmas {snapshot.alarms.length}
+                </Button>
+              )}
+              {canvasWidth >= 720 && !shortScene && (
+                <SceneCompass
+                  azimuth={azimuth}
+                  time={now}
+                  irradiance={snapshot.meter?.irr}
+                  tExt={snapshot.meter?.tExt}
+                />
+              )}
+            </div>
+            {!docked && (selected || overlayOpen) && (
+              <aside className={styles.overlay}>
+                {!selected && (
+                  <div className={styles.overlayClose}>
+                    <IconButton name="times" tooltip="Cerrar" onClick={() => setOverlayOpen(false)} />
+                  </div>
+                )}
+                {sidebar}
+              </aside>
+            )}
+            {unitHover && (
+              <VrfTooltip
+                unit={VRF_UNITS.find((u) => u.id === unitHover.id)!}
+                snapshot={snapshot}
+                x={unitHover.x}
+                y={unitHover.y}
+                containerWidth={unitHover.w}
+                containerHeight={unitHover.h}
+              />
+            )}
+            {hovered && hover && (
+              <ZoneTooltip
+                zone={hovered}
+                state={snapshot.zones[hovered.id]}
+                status={statuses[hovered.id]}
+                x={hover.x}
+                y={hover.y}
+                containerWidth={hover.w}
+                containerHeight={hover.h}
+              />
+            )}
+          </div>
         </div>
-        {docked && <aside className={styles.sidebar}>{sidebar}</aside>}
+        {docked && (
+          <aside className={styles.sidebar} style={{ width: sidebarWidth }}>
+            {sidebar}
+          </aside>
+        )}
       </div>
     </div>
   );
@@ -803,7 +907,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: ${theme.spacing(1)};
   `,
   scene: css`
-    position: relative;
+    display: flex;
     flex: 1;
     min-width: 0;
     border: 1px solid ${theme.colors.border.weak};
@@ -811,24 +915,75 @@ const getStyles = (theme: GrafanaTheme2) => ({
     overflow: hidden;
     background: ${theme.colors.background.secondary};
   `,
+  canvas: css`
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+  `,
   topLeft: css`
     position: absolute;
     top: ${theme.spacing(1)};
     left: ${theme.spacing(1)};
     display: flex;
     align-items: center;
+    gap: ${theme.spacing(1.5)};
+    pointer-events: none;
+    z-index: 2;
+    & > * {
+      pointer-events: auto;
+    }
+  `,
+  toolbar: css`
+    display: flex;
+    align-items: center;
     gap: ${theme.spacing(0.5)};
-    padding: ${theme.spacing(0.5)};
+    height: 40px;
+    padding: ${theme.spacing(0, 0.75)};
     border-radius: ${theme.shape.radius.default};
     background: ${theme.colors.background.primary};
     border: 1px solid ${theme.colors.border.weak};
-    box-shadow: ${theme.shadows.z2};
-    z-index: 2;
+    box-shadow: ${theme.shadows.z1};
+    flex-shrink: 0;
+  `,
+  sceneTitle: css`
+    display: flex;
+    align-items: baseline;
+    gap: ${theme.spacing(1)};
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none !important;
+  `,
+  titleDot: css`
+    align-self: center;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  `,
+  titleMain: css`
+    font-size: ${theme.typography.h3.fontSize};
+    font-weight: ${theme.typography.fontWeightBold};
+    color: ${theme.colors.text.primary};
+    line-height: 1.1;
+  `,
+  titleSub: css`
+    font-size: ${theme.typography.body.fontSize};
+    color: ${theme.colors.text.secondary};
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
   `,
   topRight: css`
     position: absolute;
     top: ${theme.spacing(1)};
     right: ${theme.spacing(1)};
+    display: flex;
+    align-items: center;
+    gap: ${theme.spacing(1)};
+    z-index: 2;
   `,
   sidebar: css`
     width: 380px;

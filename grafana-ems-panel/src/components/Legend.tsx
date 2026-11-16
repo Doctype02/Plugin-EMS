@@ -11,17 +11,28 @@ interface Props {
   counts: Record<Status, number>;
   statusFilter?: Status;
   onStatusFilter: (s?: Status) => void;
+  /** Escena estrecha: sin título y con los textos más cortos (una sola fila). */
+  compact?: boolean;
+  /** Dentro de la barra superior (sin posición absoluta). */
+  inline?: boolean;
 }
 
 const ORDER: Status[] = ['ok', 'warning', 'critical', 'offline'];
 
-export const Legend: React.FC<Props> = ({ spec, counts, statusFilter, onStatusFilter }) => {
+export const Legend: React.FC<Props> = ({
+  spec,
+  counts,
+  statusFilter,
+  onStatusFilter,
+  compact = false,
+  inline = false,
+}) => {
   const styles = useStyles2(getStyles);
   const colors = useStatusColors();
 
   return (
-    <div className={styles.legend} data-testid="ems-legend">
-      <div className={styles.title}>{spec.title}</div>
+    <div className={cx(styles.legend, inline && styles.inline)} data-testid="ems-legend">
+      {!compact && <div className={styles.title}>{spec.title}</div>}
       {spec.kind === 'status' && (
         <div className={styles.row}>
           {ORDER.map((s) => (
@@ -31,9 +42,11 @@ export const Legend: React.FC<Props> = ({ spec, counts, statusFilter, onStatusFi
               className={cx(styles.item, styles.button, statusFilter === s && styles.active)}
               onClick={() => onStatusFilter(statusFilter === s ? undefined : s)}
               data-testid={`ems-count-${s}`}
+              title={STATUS_LABELS[s]}
             >
               <span className={styles.swatch} style={{ background: colors[s] }} />
-              {STATUS_LABELS[s]} <strong>{counts[s]}</strong>
+              {compact ? '' : `${STATUS_LABELS[s]} `}
+              <strong>{counts[s]}</strong>
             </button>
           ))}
         </div>
@@ -68,21 +81,30 @@ const getStyles = (theme: GrafanaTheme2) => ({
     left: ${theme.spacing(1)};
     bottom: ${theme.spacing(1)};
     max-width: calc(100% - ${theme.spacing(2)});
-    padding: ${theme.spacing(0.75, 1)};
+    display: flex;
+    align-items: center;
+    gap: ${theme.spacing(1.5)};
+    min-height: 32px;
+    padding: ${theme.spacing(0.25, 1)};
+    z-index: 1;
     border-radius: ${theme.shape.radius.default};
     background: ${theme.colors.background.primary};
     border: 1px solid ${theme.colors.border.weak};
     box-shadow: ${theme.shadows.z1};
     font-size: ${theme.typography.bodySmall.fontSize};
   `,
+  inline: css`
+    position: static;
+    max-width: none;
+  `,
   title: css`
     color: ${theme.colors.text.secondary};
-    margin-bottom: ${theme.spacing(0.5)};
+    white-space: nowrap;
   `,
   row: css`
     display: flex;
     flex-wrap: wrap;
-    gap: ${theme.spacing(0.5, 1.5)};
+    gap: ${theme.spacing(0.25, 1)};
   `,
   item: css`
     display: inline-flex;
@@ -107,12 +129,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     border-radius: 2px;
   `,
   gradient: css`
-    width: 220px;
+    width: 180px;
     max-width: 100%;
     height: 8px;
     border-radius: 4px;
   `,
   scale: css`
+    font-size: 11px;
+    line-height: 1.2;
     display: flex;
     justify-content: space-between;
     gap: ${theme.spacing(1)};

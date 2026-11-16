@@ -26,7 +26,7 @@ export const SceneCompass: React.FC<Props> = ({ azimuth, time, irradiance, tExt 
   const styles = useStyles2(getStyles);
   const theme = useTheme2();
   const sun = sunPosition(time);
-  const R = 30;
+  const R = 17;
   const dirs: Array<[string, number, number]> = [
     ['N', 0, 1],
     ['E', 1, 0],
@@ -39,7 +39,7 @@ export const SceneCompass: React.FC<Props> = ({ azimuth, time, irradiance, tExt 
   const f = formatClock(time);
   return (
     <div className={styles.box} data-testid="ems-compass">
-      <svg width={80} height={80} viewBox="-40 -40 80 80" aria-label="Brújula y posición del sol">
+      <svg width={50} height={50} viewBox="-25 -25 50 50" aria-label="Brújula y posición del sol">
         <circle r={R} className={styles.ring} />
         <circle r={R * 0.55} className={styles.inner} />
         {dirs.map(([l, e, n]) => {
@@ -48,10 +48,10 @@ export const SceneCompass: React.FC<Props> = ({ azimuth, time, irradiance, tExt 
           const y = Math.sin(a) * (R + 0.5);
           return (
             <g key={l}>
-              <line x1={Math.cos(a) * (R - 5)} y1={Math.sin(a) * (R - 5)} x2={x} y2={y} className={styles.tick} />
+              <line x1={Math.cos(a) * (R - 3)} y1={Math.sin(a) * (R - 3)} x2={x} y2={y} className={styles.tick} />
               <text
-                x={Math.cos(a) * (R + 7)}
-                y={Math.sin(a) * (R + 7) + 3}
+                x={Math.cos(a) * (R + 5.5)}
+                y={Math.sin(a) * (R + 5.5) + 3}
                 textAnchor="middle"
                 className={l === 'N' ? styles.north : styles.dir}
               >
@@ -64,7 +64,7 @@ export const SceneCompass: React.FC<Props> = ({ azimuth, time, irradiance, tExt 
           const a = screenAngle(0, 1, azimuth);
           return (
             <path
-              d={`M${Math.cos(a) * (R - 6)},${Math.sin(a) * (R - 6)} L${Math.cos(a + 2.6) * 6},${Math.sin(a + 2.6) * 6} L${Math.cos(a - 2.6) * 6},${Math.sin(a - 2.6) * 6}Z`}
+              d={`M${Math.cos(a) * (R - 3)},${Math.sin(a) * (R - 3)} L${Math.cos(a + 2.6) * 4},${Math.sin(a + 2.6) * 4} L${Math.cos(a - 2.6) * 4},${Math.sin(a - 2.6) * 4}Z`}
               fill={theme.colors.error.main}
               opacity={0.85}
             />
@@ -84,7 +84,7 @@ export const SceneCompass: React.FC<Props> = ({ azimuth, time, irradiance, tExt 
             <circle
               cx={Math.cos(sa) * sr}
               cy={Math.sin(sa) * sr}
-              r={5}
+              r={3.5}
               fill="#f5b400"
               stroke={theme.colors.background.primary}
               strokeWidth={1.5}
@@ -94,12 +94,12 @@ export const SceneCompass: React.FC<Props> = ({ azimuth, time, irradiance, tExt 
       </svg>
       <div className={styles.text}>
         <div className={styles.time}>{f.time}</div>
-        <div className={styles.muted}>
-          {up ? `Sol ${sun.elevation.toFixed(0)}° · az ${sun.azimuth.toFixed(0)}°` : 'Sol bajo el horizonte'}
-        </div>
-        <div className={styles.muted}>
-          {irradiance !== undefined ? `${irradiance.toFixed(0)} W/m²` : ''}
-          {tExt !== undefined ? ` · ${tExt.toFixed(1)} °C` : ''}
+        <div
+          className={styles.muted}
+          title={up ? `Sol ${sun.elevation.toFixed(0)}° · az ${sun.azimuth.toFixed(0)}°` : 'Sol bajo el horizonte'}
+        >
+          {tExt !== undefined ? `${tExt.toFixed(1)} °C` : ''}
+          {irradiance !== undefined ? ` · ${irradiance.toFixed(0)} W/m²` : ''}
         </div>
       </div>
     </div>
@@ -108,13 +108,11 @@ export const SceneCompass: React.FC<Props> = ({ azimuth, time, irradiance, tExt 
 
 const getStyles = (theme: GrafanaTheme2) => ({
   box: css`
-    position: absolute;
-    right: ${theme.spacing(1)};
-    bottom: ${theme.spacing(1)};
     display: flex;
     align-items: center;
-    gap: ${theme.spacing(0.75)};
-    padding: ${theme.spacing(0.5, 1, 0.5, 0.5)};
+    gap: ${theme.spacing(0.5)};
+    height: 40px;
+    padding: ${theme.spacing(0, 1, 0, 0.25)};
     border: 1px solid ${theme.colors.border.weak};
     border-radius: ${theme.shape.radius.default};
     background: ${theme.colors.background.primary};
@@ -135,11 +133,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     stroke: ${theme.colors.text.secondary};
   `,
   dir: css`
-    font-size: 8px;
+    font-size: 7px;
     fill: ${theme.colors.text.secondary};
   `,
   north: css`
-    font-size: 9px;
+    font-size: 8px;
     font-weight: 700;
     fill: ${theme.colors.error.text};
   `,
@@ -149,7 +147,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: 1px;
   `,
   time: css`
-    font-size: ${theme.typography.h5.fontSize};
+    font-size: ${theme.typography.body.fontSize};
+    line-height: 1.1;
     font-weight: ${theme.typography.fontWeightMedium};
     font-variant-numeric: tabular-nums;
   `,

@@ -105,11 +105,10 @@ const pulse = keyframes`
 const getStyles = (theme: GrafanaTheme2) => ({
   banner: css`
     position: absolute;
-    /* entre la leyenda (izquierda) y la brújula (derecha) */
-    left: 300px;
-    right: 215px;
-    bottom: ${theme.spacing(1)};
-    min-width: 260px;
+    /* abajo, sobre la leyenda; la escena reserva su alto para no tapar la planta */
+    left: ${theme.spacing(1)};
+    bottom: 48px;
+    width: min(680px, calc(100% - ${theme.spacing(2)}));
     display: flex;
     align-items: center;
     gap: ${theme.spacing(1)};

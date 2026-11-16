@@ -13,6 +13,11 @@ export interface EmsOptions {
   defaultView: ViewMode;
   azimuth: Azimuth;
   exploded: boolean;
+  /**
+   * Planta que se muestra al abrir el panel: 'auto' = la de la alarma más grave (sin alarmas, PB);
+   * 'all' = vista de conjunto del edificio; 'roof' = azotea; '0'…'4' = esa planta.
+   */
+  defaultFloor?: string;
   showSummary: boolean;
   showSidebar: boolean;
   /** Permite enviar comandos (overrides y parámetros) desde el panel. */

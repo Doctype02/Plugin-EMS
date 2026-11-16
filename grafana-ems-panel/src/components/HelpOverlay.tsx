@@ -13,7 +13,7 @@ const STEPS: Array<[GlyphName, string, string]> = [
   [
     'cursor',
     'Explora el edificio',
-    'Pasa el mouse sobre una zona o una unidad VRF de la azotea; haz clic en una zona para ver su detalle.',
+    'Elige la planta en la columna de la izquierda (o «Edificio» para la vista de conjunto); pasa el mouse sobre una zona o una unidad VRF y haz clic en una zona para ver su detalle.',
   ],
   [
     'sliders',
@@ -28,7 +28,7 @@ const STEPS: Array<[GlyphName, string, string]> = [
   [
     'building',
     'Cambia la vista',
-    'Arriba: estado, temperatura, ocupación, potencia, iluminación o HVAC. Gira el edificio o sepáralo por pisos.',
+    'Arriba: estado, temperatura, ocupación, potencia, iluminación o HVAC. Gira el edificio o alterna entre interior y exterior.',
   ],
 ];
 

@@ -19,6 +19,8 @@ export interface IsoConfig {
    */
   layout: 'stacked' | 'exploded';
   scale: number;
+  /** Separación extra entre plantas en la vista apilada (m): deja ver cada planta como una franja. */
+  stackGap?: number;
 }
 
 /** Separación horizontal entre niveles en la vista explotada (m). */
@@ -65,7 +67,7 @@ export function placement(level: number, cfg: IsoConfig): { z: number; dy: numbe
   if (cfg.layout === 'exploded') {
     return { z: level * BUILDING.floorHeight * 0.9, dy: level * (depthSpan(cfg.azimuth) + EXPLODE_GAP) };
   }
-  return { z: level * BUILDING.floorHeight, dy: 0 };
+  return { z: level * (BUILDING.floorHeight + (cfg.stackGap ?? 0)), dy: 0 };
 }
 
 export interface Prism {
