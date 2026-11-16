@@ -362,24 +362,36 @@ cambiar el archivo). Todos usan el datasource `ems-influx`, zona horaria America
 la cabecera los mismos 5 enlaces (Edificio 3D · Tiempo real · Zonas · Alarmas · Resultados). Los vivos refrescan
 cada 30 s; Resultados mantiene su rango fijo.
 
-Sistema visual común: filas con título (Resumen primero, con KPI de 4 × 4 y, si hace falta, estados de 4 × 3),
-tooltip compartido, leyendas en tabla (último / máx. / media) y textos «sin datos» explícitos. Paleta fija:
-consumo azul, importación de red y demanda morado, FV dorado, límite de **170 kW** rojo discontinuo, límite
+Pensados para que cualquier persona (operador o directivo) entienda cada gráfica de un vistazo: **una idea por
+gráfica**, con el título como pregunta o frase llana y una descripción de una frase; **como mucho 3–4 series**
+(se agrega por planta o «Top 5»; las variables `planta`/`zona` dan el detalle); **sin ejes dobles**; leyendas en
+lista abajo con sólo el valor actual, u ocultas si el título y el color bastan. Arriba van estados grandes con
+color (Normal / Sin alarmas en verde, alerta en naranja/rojo) y barras horizontales en lugar de tablas largas. Todo
+el detalle técnico sigue disponible en filas **colapsadas** («Detalle técnico …»). Los vivos abren con las
+últimas 24 h. Paleta fija: consumo azul, red morado, FV dorado, límite de **170 kW** rojo discontinuo, límite
 dinámico del EMS naranja discontinuo, alarma rojo, aviso naranja, normal verde, info azul. Umbrales de potencia:
 amarillo 136 kW (80 %), naranja 153 kW (90 %), rojo 170 kW; confort: azul < 21 °C, verde 21–26, naranja 26–27,
 rojo ≥ 27.
 
+**Picos de reinicio.** Cada vez que el simulador arranca, la primera muestra de 5 min trae la climatización a
+plena carga (~101 kW de HVAC, ~120 kW de total) aunque sea de noche; la siguiente vuelve a ~3 kW. Como el pico
+físico real del edificio (escenario sin EMS, 28 días) es 139,9 kW, un tope por valor no distingue esos picos.
+Por eso las potencias se muestran con la **mediana de 15 min** (3 muestras): elimina una muestra aislada y
+conserva cualquier carga sostenida ≥ 10 min (en el escenario sin EMS el máximo pasa de 138,0 kW de demanda
+15 min a 137,9 kW). Los valores «ahora» usan la mediana de las 3 últimas muestras, y la energía y el costo de hoy
+integran esa serie ya filtrada.
+
 | Archivo | uid | Contenido |
 |---|---|---|
-| `ems-edificio-3d.json` | `ems-edificio-3d-vivo` | Resumen (potencia, demanda, FV, red con sparkline; red eléctrica, alarmas) y el gemelo digital `doctype02-ems-panel` |
-| `ems-tiempo-real.json` | `ems-tiempo-real` | Resumen (potencia, demanda, FV, red, energía y costo del día; red, DR, estrategia, límite, alarmas, latencia) · Energía (potencia, demanda vs límite, uso, balance del día, FV, tarifa/FP, clima) · **Controladores VRF/PTAC** (measurement `unidad`: en marcha, potencia, frío, COP, manual, falla; tabla de las 11 unidades, estado en el tiempo, potencia por unidad) · Alarmas recientes |
-| `ems-zonas.json` | `ems-zonas` | Variables `planta` y `zona`. Resumen (temperatura media, fuera de confort, ocupantes, potencia, Z06, sensores forzados) · Zonas (tabla con unidad y sensor, mapa de confort) · Climatización · **Sensores** (forzados: lectura frente a real; error de lectura en el rango) · Zona crítica y entorno |
-| `ems-alarmas.json` | `ems-alarmas` | Resumen (activas, rango, por nivel, latencia) · Registro (tabla, por código) · Tendencia (por hora, por nivel) · Estado del EMS (estrategia/DR/red, límite vs demanda, latencia, alarmas y UPS) |
-| `ems-resultados.json` | `ems-resultados` | Escenarios offline (medida `kpi`, variable `escenario`, con y sin FV): resumen de ahorro, pico y confort; energía, costo, CO₂, consumo por uso; tabla de KPI; semana elegida (enlaces *Semana 9 feb / 11 may / 10 ago / 2 nov*) y validación del pronóstico |
+| `ems-edificio-3d.json` | `ems-edificio-3d-vivo` | 4 estados (potencia frente a 170 kW, solar, red, alarmas) y el gemelo digital `doctype02-ems-panel` |
+| `ems-tiempo-real.json` | `ems-tiempo-real` | 12 paneles: potencia (indicador hasta 170 kW), solar, energía y costo de hoy, red, alarmas · consumo frente al límite · en qué se usa la energía · de dónde viene (red/solar) · temperatura por planta · carga de cada equipo de clima · últimas alarmas. Colapsadas: *energía y estado del EMS* (estrategia, DR, límite, latencia, potencia por uso, demanda vs límite del EMS, balance, FV, irradiancia, precio, FP, clima) y *equipos VRF/PTAC* (measurement `unidad`) |
+| `ems-zonas.json` | `ems-zonas` | Variables `planta` y `zona`. Temperatura media, zonas fuera de confort, personas, servidores · ¿están cómodas? (media y más caliente sobre la banda 21–26 °C) · por planta · top 5 más calientes · Z06 frente a consigna · personas. Colapsadas: *detalle por zona* y *sensores, consumo y entorno* |
+| `ems-alarmas.json` | `ems-alarmas` | Activas, críticas, avisos, informativas · registro · tipos más frecuentes · alarmas por hora y gravedad. Colapsada: *estado del EMS* |
+| `ems-resultados.json` | `ems-resultados` | Conclusión en texto con los KPI reales (medida `kpi`) · barras de energía, costo, pico frente a 170 kW, confort, aporte de los paneles y ahorro anual por estrategia. Colapsadas: comparativa completa y *semana elegida* (enlaces *Semana 9 feb / 11 may / 10 ago / 2 nov*; variable `escenario`, por defecto las 4 estrategias sin FV) |
 
-Los paneles en vivo filtran `escenario == "live"`. La HR por zona es informativa; el panel de clima muestra la
-exterior del medidor. Las series de UPS sólo aparecen durante un corte (`corte_energia`). La anotación «Alarmas
-críticas» marca en las series las alarmas de nivel crítico (se puede apagar en la cabecera).
+Los paneles en vivo filtran `escenario == "live"`. Las series de UPS sólo aparecen durante un corte
+(`corte_energia`). La anotación «Alarmas críticas» está **apagada por defecto**; el interruptor de la cabecera la
+enciende para marcar en las series las alarmas de nivel crítico.
 
 ## 12. Prueba de aceptación (demo)
 

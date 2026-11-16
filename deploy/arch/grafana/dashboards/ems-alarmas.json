@@ -1,12 +1,12 @@
 {
   "uid": "ems-alarmas",
   "title": "EMS · Alarmas y eventos",
-  "description": "Registro y análisis de alarmas y eventos del EMS y del gemelo, y estado del control (modo, DR, red, límite, latencia).",
+  "description": "Alarmas en lenguaje llano: cuántas hay, qué pasó, cuáles se repiten y cuándo.",
   "tags": [
     "ems"
   ],
   "editable": true,
-  "graphTooltip": 2,
+  "graphTooltip": 1,
   "schemaVersion": 39,
   "version": 1,
   "refresh": "30s",
@@ -110,7 +110,7 @@
           "type": "influxdb",
           "uid": "ems-influx"
         },
-        "enable": true,
+        "enable": false,
         "hide": false,
         "iconColor": "#F2495C",
         "name": "Alarmas críticas",
@@ -124,21 +124,21 @@
   "panels": [
     {
       "type": "row",
-      "title": "Resumen",
+      "title": "Ahora mismo",
       "collapsed": false,
-      "panels": [],
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 0
+        "y": 0,
+        "w": 24,
+        "h": 1
       },
+      "panels": [],
       "id": 1
     },
     {
       "type": "stat",
-      "title": "Activas ahora",
-      "description": "Alarmas activas según el último estado del EMS.",
+      "title": "Alarmas activas ahora",
+      "description": "Alarmas sin resolver en este momento.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -153,30 +153,36 @@
           "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"n_alarmas\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
         }
       ],
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 5
+      },
       "fieldConfig": {
         "defaults": {
           "noValue": "Sin datos",
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#73BF69",
                 "value": null
               },
               {
-                "color": "orange",
+                "color": "#FF9830",
                 "value": 1
               },
               {
-                "color": "red",
-                "value": 5
+                "color": "#F2495C",
+                "value": 3
               }
             ]
           },
+          "decimals": 0,
           "mappings": [
             {
               "type": "value",
@@ -200,109 +206,25 @@
           "fields": "",
           "values": false
         },
-        "colorMode": "value",
+        "colorMode": "background_solid",
         "graphMode": "none",
         "justifyMode": "center",
         "orientation": "auto",
-        "textMode": "auto",
+        "textMode": "value",
         "wideLayout": true,
         "showPercentChange": false,
         "percentChangeColorMode": "standard",
         "text": {
-          "titleSize": 13,
+          "titleSize": 14,
           "valueSize": 30
         }
       },
-      "id": 2,
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 0,
-        "y": 1
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Alarmas en el rango",
-      "description": "Total de alarmas registradas en el rango de tiempo.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "Sin alarmas",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#5794F2"
-          },
-          "decimals": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#5794F2",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Sin alarmas",
-                  "index": 0
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "textMode": "auto",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard",
-        "text": {
-          "titleSize": 13,
-          "valueSize": 30
-        }
-      },
-      "id": 3,
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 1
-      }
+      "id": 2
     },
     {
       "type": "stat",
       "title": "Críticas",
-      "description": "Alarmas de nivel crítico en el rango.",
+      "description": "Alarmas graves en el rango de tiempo (por defecto, últimas 24 h): requieren actuar ya.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -314,268 +236,35 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> filter(fn: (r) => r.nivel == \"crit\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\" and r.nivel == \"crit\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "Sin alarmas",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#F2495C"
-          },
-          "decimals": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#F2495C",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Sin alarmas",
-                  "index": 0
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "textMode": "auto",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard",
-        "text": {
-          "titleSize": 13,
-          "valueSize": 30
-        }
-      },
-      "id": 4,
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 8,
-        "y": 1
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Avisos",
-      "description": "Alarmas de nivel aviso en el rango.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
+        "x": 6,
+        "y": 1,
+        "w": 6,
+        "h": 5
       },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> filter(fn: (r) => r.nivel == \"warn\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "Sin alarmas",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#FF9830"
-          },
-          "decimals": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#FF9830",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Sin alarmas",
-                  "index": 0
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "textMode": "auto",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard",
-        "text": {
-          "titleSize": 13,
-          "valueSize": 30
-        }
-      },
-      "id": 5,
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 12,
-        "y": 1
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Informativas",
-      "description": "Alarmas informativas en el rango.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> filter(fn: (r) => r.nivel == \"info\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "Sin alarmas",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#4C8DE6"
-          },
-          "decimals": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#4C8DE6",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Sin alarmas",
-                  "index": 0
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "textMode": "auto",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard",
-        "text": {
-          "titleSize": 13,
-          "valueSize": 30
-        }
-      },
-      "id": 6,
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 16,
-        "y": 1
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Latencia de control",
-      "description": "Tiempo entre la orden del EMS y la confirmación del gemelo; sparkline de 6 h. Naranja ≥ 500 ms, rojo ≥ 2 s.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"latencia_ms\")\n  |> aggregateWindow(every: 5m, fn: last, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\"])"
-        }
-      ],
       "fieldConfig": {
         "defaults": {
           "noValue": "Sin datos",
           "color": {
             "mode": "thresholds"
           },
-          "unit": "ms",
-          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#73BF69",
                 "value": null
               },
               {
-                "color": "orange",
-                "value": 500
-              },
-              {
-                "color": "red",
-                "value": 2000
+                "color": "#F2495C",
+                "value": 1
               }
             ]
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
@@ -588,53 +277,27 @@
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "center",
         "orientation": "auto",
-        "textMode": "auto",
+        "textMode": "value",
         "wideLayout": true,
         "showPercentChange": false,
         "percentChangeColorMode": "standard",
         "text": {
-          "titleSize": 13,
-          "valueSize": 30
+          "titleSize": 14,
+          "valueSize": 34
         }
       },
-      "id": 7,
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 20,
-        "y": 1
-      }
+      "id": 3
     },
     {
-      "type": "row",
-      "title": "Registro de alarmas",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 5
-      },
-      "id": 8
-    },
-    {
-      "id": 9,
-      "type": "table",
-      "title": "Alarmas y eventos",
-      "description": "Alarmas del EMS (Node-RED o supervisor del gemelo) en el rango, de la más reciente a la más antigua. Los eventos simulados (incendio, corte, falla VRF…) aparecen por las alarmas que provocan. Filtra por columna.",
+      "type": "stat",
+      "title": "Avisos",
+      "description": "Avisos en el rango de tiempo: algo se sale de lo normal (calor, pico de demanda).",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 14,
-        "w": 16,
-        "x": 0,
-        "y": 6
       },
       "targets": [
         {
@@ -643,9 +306,165 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\")\n  |> pivot(rowKey: [\"_time\", \"nivel\", \"codigo\", \"zona\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 500)\n  |> keep(columns: [\"_time\", \"nivel\", \"codigo\", \"zona\", \"mensaje\", \"valor\"])"
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\" and r.nivel == \"warn\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
         }
       ],
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 6,
+        "h": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null
+              },
+              {
+                "color": "#FF9830",
+                "value": 1
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 14,
+          "valueSize": 34
+        }
+      },
+      "id": 4
+    },
+    {
+      "type": "stat",
+      "title": "Informativas",
+      "description": "Mensajes informativos en el rango (p. ej. respuesta a la demanda activada).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ems-influx"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\" and r.nivel == \"info\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
+        }
+      ],
+      "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 6,
+        "h": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#4C8DE6"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 14,
+          "valueSize": 34
+        }
+      },
+      "id": 5
+    },
+    {
+      "type": "row",
+      "title": "¿Qué ha pasado?",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 6
+    },
+    {
+      "type": "table",
+      "title": "Registro de alarmas",
+      "description": "Todas las alarmas del rango, la más reciente arriba.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ems-influx"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"mensaje\")\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 500)\n  |> keep(columns: [\"_time\", \"nivel\", \"zona\", \"_value\"])"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 16,
+        "h": 11
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -654,7 +473,7 @@
               "type": "auto"
             },
             "inspect": false,
-            "filterable": true
+            "filterable": false
           },
           "noValue": "Sin alarmas en el rango"
         },
@@ -671,11 +490,11 @@
               },
               {
                 "id": "unit",
-                "value": "time:DD/MM HH:mm:ss"
+                "value": "time:DD/MM HH:mm"
               },
               {
                 "id": "custom.width",
-                "value": 140
+                "value": 120
               }
             ]
           },
@@ -687,11 +506,11 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Nivel"
+                "value": "Gravedad"
               },
               {
                 "id": "custom.width",
-                "value": 100
+                "value": 110
               },
               {
                 "id": "custom.cellOptions",
@@ -729,32 +548,16 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "codigo"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Código"
-              },
-              {
-                "id": "custom.width",
-                "value": 190
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "zona"
             },
             "properties": [
               {
                 "id": "displayName",
-                "value": "Zona / equipo"
+                "value": "Dónde"
               },
               {
                 "id": "custom.width",
-                "value": 120
+                "value": 100
               }
             ]
           },
@@ -766,7 +569,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Mensaje"
+                "value": "Qué pasó"
               }
             ]
           },
@@ -778,27 +581,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Mensaje"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "valor"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Valor"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              },
-              {
-                "id": "custom.width",
-                "value": 80
+                "value": "Qué pasó"
               }
             ]
           }
@@ -825,33 +608,29 @@
         {
           "id": "organize",
           "options": {
+            "excludeByName": {
+              "codigo": true,
+              "valor": true
+            },
             "indexByName": {
               "_time": 0,
               "nivel": 1,
-              "codigo": 2,
-              "zona": 3,
-              "_value": 4,
-              "mensaje": 4,
-              "valor": 5
+              "_value": 2,
+              "mensaje": 2,
+              "zona": 3
             }
           }
         }
-      ]
+      ],
+      "id": 7
     },
     {
-      "id": 10,
-      "type": "barchart",
-      "title": "Alarmas por código",
-      "description": "Número de alarmas de cada tipo en el rango.",
+      "type": "bargauge",
+      "title": "¿Qué alarmas se repiten más?",
+      "description": "Los 5 tipos de alarma más frecuentes en el rango de tiempo.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 14,
-        "w": 8,
-        "x": 16,
-        "y": 6
       },
       "targets": [
         {
@@ -860,99 +639,67 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"codigo\"])\n  |> count()\n  |> group()\n  |> keep(columns: [\"codigo\", \"_value\"])\n  |> sort(columns: [\"_value\"], desc: true)"
+          "query": "nombre = (c) => if c == \"PICO_DEMANDA\" then \"Pico de demanda\" else if c == \"FALLA_VRF\" then \"Falla de un equipo de clima\"\n    else if c == \"TEMP_ALTA\" then \"Zona demasiado caliente\" else if c == \"TEMP_BAJA\" then \"Zona demasiado fría\"\n    else if c == \"HVAC_ON_SIN_OCUPACION\" then \"Clima encendido sin gente\" else if c == \"DR_ACTIVO\" then \"Respuesta a la demanda\"\n    else c\n\nfrom(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"codigo\"])\n  |> count()\n  |> group()\n  |> map(fn: (r) => ({tipo: nombre(c: r.codigo), _value: r._value}))\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 5)"
         }
       ],
+      "gridPos": {
+        "x": 16,
+        "y": 7,
+        "w": 8,
+        "h": 11
+      },
       "fieldConfig": {
         "defaults": {
+          "unit": "none",
           "decimals": 0,
           "min": 0,
+          "noValue": "Sin datos",
           "color": {
             "mode": "fixed",
             "fixedColor": "#FF9830"
           },
-          "noValue": "Sin alarmas",
-          "custom": {
-            "fillOpacity": 70,
-            "lineWidth": 0,
-            "gradientMode": "none",
-            "axisPlacement": "auto",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "_value"
-            },
-            "properties": [
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
               {
-                "id": "displayName",
-                "value": "Alarmas"
-              },
-              {
-                "id": "displayName",
-                "value": "Alarmas"
+                "color": "text",
+                "value": null
               }
             ]
           }
-        ]
+        },
+        "overrides": []
       },
       "options": {
-        "orientation": "horizontal",
-        "xField": "codigo",
-        "showValue": "always",
-        "stacking": "none",
-        "groupWidth": 0.7,
-        "barWidth": 0.6,
-        "barRadius": 0.1,
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0,
-        "colorByField": "",
-        "fullHighlight": false,
-        "legend": {
-          "showLegend": false,
-          "displayMode": "list",
-          "placement": "bottom"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
         },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "color",
+        "namePlacement": "top",
+        "showUnfilled": true,
+        "sizing": "manual",
+        "minVizHeight": 16,
+        "maxVizHeight": 48,
+        "minVizWidth": 8,
+        "legend": {
+          "showLegend": false
         }
-      }
-    },
-    {
-      "type": "row",
-      "title": "Tendencia",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 20
       },
-      "id": 11
+      "id": 8
     },
     {
-      "id": 12,
       "type": "timeseries",
-      "title": "Alarmas en el tiempo",
-      "description": "Alarmas por hora y código (barras apiladas).",
+      "title": "Alarmas por hora",
+      "description": "Cuántas alarmas hubo en cada hora, por gravedad.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 16,
-        "x": 0,
-        "y": 21
       },
       "targets": [
         {
@@ -961,24 +708,28 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"codigo\"])\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 1h) then v.windowPeriod else 1h, fn: count, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"codigo\"])"
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group()\n  |> map(fn: (r) => ({_time: r._time, _value: 1, _field: if r.nivel == \"crit\" then \"Críticas\" else if r.nivel == \"warn\" then \"Avisos\" else \"Informativas\"}))\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 1h) then v.windowPeriod else 1h, fn: count, createEmpty: false)"
         }
       ],
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 7
+      },
       "fieldConfig": {
         "defaults": {
+          "unit": "none",
           "decimals": 0,
-          "min": 0,
-          "displayName": "${__field.labels.codigo}",
-          "noValue": "Sin alarmas en el rango",
           "custom": {
             "drawStyle": "bars",
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
             "fillOpacity": 80,
-            "gradientMode": "opacity",
+            "gradientMode": "none",
             "showPoints": "never",
             "pointSize": 4,
-            "spanNulls": 600000,
+            "spanNulls": 1800000,
             "axisPlacement": "auto",
             "axisLabel": "",
             "axisBorderShow": false,
@@ -1004,84 +755,29 @@
             "lineStyle": {
               "fill": "solid"
             }
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/.*/"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "${__field.labels.codigo}"
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true,
-          "calcs": [
-            "sum",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 13,
-      "type": "piechart",
-      "title": "Reparto por nivel",
-      "description": "Reparto de las alarmas del rango por nivel.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 21
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"nivel\"])\n  |> count()\n  |> keep(columns: [\"nivel\", \"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "displayName": "${__field.labels.nivel}",
-          "noValue": "Sin alarmas",
+          "noValue": "Sin datos en el rango",
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
         },
         "overrides": [
           {
             "matcher": {
               "id": "byName",
-              "options": "crit"
+              "options": "Críticas"
             },
             "properties": [
-              {
-                "id": "displayName",
-                "value": "Crítica"
-              },
               {
                 "id": "color",
                 "value": {
@@ -1094,13 +790,9 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "warn"
+              "options": "Avisos"
             },
             "properties": [
-              {
-                "id": "displayName",
-                "value": "Aviso"
-              },
               {
                 "id": "color",
                 "value": {
@@ -1113,13 +805,9 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "info"
+              "options": "Informativas"
             },
             "properties": [
-              {
-                "id": "displayName",
-                "value": "Info"
-              },
               {
                 "id": "color",
                 "value": {
@@ -1132,687 +820,1197 @@
         ]
       },
       "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "pieType": "donut",
-        "displayLabels": [],
         "legend": {
           "showLegend": true,
-          "displayMode": "table",
-          "placement": "right",
-          "values": [
-            "value",
-            "percent"
-          ]
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
-      }
+      },
+      "id": 9
     },
     {
       "type": "row",
-      "title": "Estado del EMS",
-      "collapsed": false,
-      "panels": [],
+      "title": "Detalle técnico · estado del EMS",
+      "collapsed": true,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 29
-      },
-      "id": 14
-    },
-    {
-      "id": 15,
-      "type": "state-timeline",
-      "title": "Estrategia, respuesta a la demanda y red",
-      "description": "Línea de tiempo de la estrategia de control del EMS, de la respuesta a la demanda y del estado de la red eléctrica (un corte deja las cargas críticas en el UPS).",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 6,
+        "y": 25,
         "w": 24,
-        "x": 0,
-        "y": 30
+        "h": 1
       },
-      "targets": [
+      "panels": [
         {
-          "refId": "A",
+          "type": "stat",
+          "title": "Alarmas en el rango",
+          "description": "Total de alarmas registradas en el rango de tiempo.",
           "datasource": {
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"limite_kw\")\n  |> map(fn: (r) => ({_time: r._time, _value: r.modo}))"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"dr_activo\")\n  |> map(fn: (r) => ({_time: r._time, _value: 10.0 + float(v: r._value)}))"
-        },
-        {
-          "refId": "C",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"red_ok\")\n  |> map(fn: (r) => ({_time: r._time, _value: 20.0 + float(v: r._value)}))"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#5794F2"
-          },
-          "custom": {
-            "fillOpacity": 75,
-            "lineWidth": 0
-          },
-          "mappings": [
+          "targets": [
             {
-              "type": "value",
-              "options": {
-                "10": {
-                  "text": "DR en espera",
-                  "color": "#73BF69",
-                  "index": 0
-                },
-                "11": {
-                  "text": "DR activa",
-                  "color": "#FF9830",
-                  "index": 1
-                },
-                "20": {
-                  "text": "Corte · UPS",
-                  "color": "#F2495C",
-                  "index": 2
-                },
-                "21": {
-                  "text": "Red normal",
-                  "color": "#73BF69",
-                  "index": 3
-                }
-              }
-            },
-            {
-              "type": "value",
-              "options": {
-                "reglas": {
-                  "text": "Reglas",
-                  "index": 0
-                },
-                "reglas_dr": {
-                  "text": "Reglas + DR",
-                  "index": 1
-                },
-                "mpc": {
-                  "text": "MPC predictivo",
-                  "index": 2
-                },
-                "baseline": {
-                  "text": "Sin EMS",
-                  "index": 3
-                },
-                "manual": {
-                  "text": "Manual",
-                  "index": 4
-                },
-                "seguro": {
-                  "text": "Modo seguro",
-                  "color": "#FF9830",
-                  "index": 5
-                },
-                "externo": {
-                  "text": "Node-RED",
-                  "index": 6
-                }
-              }
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
             }
           ],
-          "noValue": "Sin datos en el rango"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "A"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Modo EMS"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "B"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Respuesta a la demanda"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "C"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Red eléctrica"
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showValue": "auto",
-        "mergeValues": true,
-        "alignValue": "center",
-        "rowHeight": 0.8,
-        "legend": {
-          "showLegend": false,
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 16,
-      "type": "timeseries",
-      "title": "Límite del EMS frente a la demanda",
-      "description": "Límite dinámico del EMS (escalonado) frente a la demanda de 15 min. Línea roja: potencia máxima de 170 kW.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 36
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"demanda_15min_kw\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"limite_kw\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "kwatt",
-          "decimals": 1,
-          "min": 0,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "gradientMode": "opacity",
-            "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": 600000,
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "barAlignment": 0,
-            "insertNulls": false,
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            },
-            "thresholdsStyle": {
-              "mode": "dashed"
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineStyle": {
-              "fill": "solid"
-            },
-            "axisSoftMax": 180
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "transparent",
-                "value": null
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "Sin alarmas",
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "#5794F2"
               },
-              {
-                "color": "red",
-                "value": 170
-              }
-            ]
-          },
-          "noValue": "Sin datos en el rango"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "demanda_15min_kw"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Demanda 15 min"
+              "decimals": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#5794F2",
+                    "value": null
+                  }
+                ]
               },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#A352CC"
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "Sin alarmas",
+                      "index": 0
+                    }
+                  }
                 }
-              }
-            ]
+              ]
+            },
+            "overrides": []
           },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "limite_kw"
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
             },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Límite EMS"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#FF9830"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dash",
-                  "dash": [
-                    10,
-                    6
-                  ]
-                }
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 0
-              },
-              {
-                "id": "custom.lineInterpolation",
-                "value": "stepAfter"
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 1
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 17,
-      "type": "timeseries",
-      "title": "Latencia de control",
-      "description": "Latencia orden → confirmación (ms) informada por el EMS. Naranja ≥ 500 ms, rojo ≥ 2 s.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 12,
-        "y": 36
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"latencia_ms\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms",
-          "decimals": 0,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "transparent",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 500
-              },
-              {
-                "color": "red",
-                "value": 2000
-              }
-            ]
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "gradientMode": "opacity",
-            "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": 600000,
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "barAlignment": 0,
-            "insertNulls": false,
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            },
-            "thresholdsStyle": {
-              "mode": "dashed"
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineStyle": {
-              "fill": "solid"
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "textMode": "auto",
+            "wideLayout": true,
+            "showPercentChange": false,
+            "percentChangeColorMode": "standard",
+            "text": {
+              "titleSize": 13,
+              "valueSize": 30
             }
           },
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#5794F2"
-          },
-          "displayName": "Latencia",
-          "noValue": "Sin datos en el rango"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "latencia_ms"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Latencia"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#5794F2"
-                }
-              }
-            ]
+          "id": 11,
+          "gridPos": {
+            "x": 0,
+            "y": 26,
+            "w": 6,
+            "h": 4
           }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ]
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 18,
-      "type": "timeseries",
-      "title": "Alarmas activas y UPS",
-      "description": "Alarmas activas y, durante un corte de red, potencia que entrega el UPS y su autonomía restante. Sin cortes en el rango no hay serie de UPS.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 18,
-        "y": 36
-      },
-      "targets": [
         {
-          "refId": "A",
+          "type": "stat",
+          "title": "Latencia de control",
+          "description": "Tiempo entre la orden del EMS y la confirmación del gemelo; sparkline de 6 h. Naranja ≥ 500 ms, rojo ≥ 2 s.",
           "datasource": {
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"n_alarmas\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"latencia_ms\")\n  |> aggregateWindow(every: 5m, fn: last, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\"])"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "Sin datos",
+              "color": {
+                "mode": "thresholds"
+              },
+              "unit": "ms",
+              "decimals": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 500
+                  },
+                  {
+                    "color": "red",
+                    "value": 2000
+                  }
+                ]
+              }
+            },
+            "overrides": []
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"ups_kw\" or r._field == \"ups_min\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "min": 0,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "stepAfter",
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "gradientMode": "opacity",
-            "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": 600000,
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "barAlignment": 0,
-            "insertNulls": false,
-            "stacking": {
-              "mode": "none",
-              "group": "A"
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
             },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineStyle": {
-              "fill": "solid"
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "textMode": "auto",
+            "wideLayout": true,
+            "showPercentChange": false,
+            "percentChangeColorMode": "standard",
+            "text": {
+              "titleSize": 13,
+              "valueSize": 30
             }
           },
-          "noValue": "Sin datos en el rango"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "n_alarmas"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Alarmas activas"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#F2495C"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "ups_kw"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Potencia del UPS"
-              },
-              {
-                "id": "unit",
-                "value": "kwatt"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#E87FA9"
-                }
-              },
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "ups_min"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Autonomía del UPS"
-              },
-              {
-                "id": "unit",
-                "value": "m"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#8E949E"
-                }
-              },
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dash",
-                  "dash": [
-                    10,
-                    6
-                  ]
-                }
-              }
-            ]
+          "id": 12,
+          "gridPos": {
+            "x": 6,
+            "y": 26,
+            "w": 6,
+            "h": 4
           }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
+        {
+          "id": 13,
+          "type": "piechart",
+          "title": "Reparto por nivel",
+          "description": "Reparto de las alarmas del rango por nivel.",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 26,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"nivel\"])\n  |> count()\n  |> keep(columns: [\"nivel\", \"_value\"])"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "decimals": 0,
+              "displayName": "${__field.labels.nivel}",
+              "noValue": "Sin alarmas",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "crit"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Crítica"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#F2495C"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "warn"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Aviso"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#FF9830"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "info"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Info"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#4C8DE6"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "pieType": "donut",
+            "displayLabels": [],
+            "legend": {
+              "showLegend": true,
+              "displayMode": "table",
+              "placement": "right",
+              "values": [
+                "value",
+                "percent"
+              ]
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "id": 14,
+          "type": "state-timeline",
+          "title": "Estrategia, respuesta a la demanda y red",
+          "description": "Línea de tiempo de la estrategia de control del EMS, de la respuesta a la demanda y del estado de la red eléctrica (un corte deja las cargas críticas en el UPS).",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 34,
+            "w": 24,
+            "h": 6
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"limite_kw\")\n  |> map(fn: (r) => ({_time: r._time, _value: r.modo}))"
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"dr_activo\")\n  |> map(fn: (r) => ({_time: r._time, _value: 10.0 + float(v: r._value)}))"
+            },
+            {
+              "refId": "C",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"red_ok\")\n  |> map(fn: (r) => ({_time: r._time, _value: 20.0 + float(v: r._value)}))"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "#5794F2"
+              },
+              "custom": {
+                "fillOpacity": 75,
+                "lineWidth": 0
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "10": {
+                      "text": "DR en espera",
+                      "color": "#73BF69",
+                      "index": 0
+                    },
+                    "11": {
+                      "text": "DR activa",
+                      "color": "#FF9830",
+                      "index": 1
+                    },
+                    "20": {
+                      "text": "Corte · UPS",
+                      "color": "#F2495C",
+                      "index": 2
+                    },
+                    "21": {
+                      "text": "Red normal",
+                      "color": "#73BF69",
+                      "index": 3
+                    }
+                  }
+                },
+                {
+                  "type": "value",
+                  "options": {
+                    "reglas": {
+                      "text": "Reglas",
+                      "index": 0
+                    },
+                    "reglas_dr": {
+                      "text": "Reglas + DR",
+                      "index": 1
+                    },
+                    "mpc": {
+                      "text": "MPC predictivo",
+                      "index": 2
+                    },
+                    "baseline": {
+                      "text": "Sin EMS",
+                      "index": 3
+                    },
+                    "manual": {
+                      "text": "Manual",
+                      "index": 4
+                    },
+                    "seguro": {
+                      "text": "Modo seguro",
+                      "color": "#FF9830",
+                      "index": 5
+                    },
+                    "externo": {
+                      "text": "Node-RED",
+                      "index": 6
+                    }
+                  }
+                }
+              ],
+              "noValue": "Sin datos en el rango"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "A"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Modo EMS"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "B"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Respuesta a la demanda"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "C"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Red eléctrica"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showValue": "auto",
+            "mergeValues": true,
+            "alignValue": "center",
+            "rowHeight": 0.8,
+            "legend": {
+              "showLegend": false,
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "id": 15,
+          "type": "timeseries",
+          "title": "Límite del EMS frente a la demanda",
+          "description": "Demanda (mediana de 15 min, sin picos de reinicio) frente al límite dinámico del EMS y al de 170 kW.",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 40,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_total_kw\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> set(key: \"_field\", value: \"demanda_15min_kw\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"limite_kw\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "kwatt",
+              "decimals": 1,
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": 600000,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "barAlignment": 0,
+                "insertNulls": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "dashed"
+                },
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "axisSoftMax": 180
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "transparent",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 170
+                  }
+                ]
+              },
+              "noValue": "Sin datos en el rango"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "demanda_15min_kw"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Demanda 15 min"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#A352CC"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "limite_kw"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Límite EMS"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#FF9830"
+                    }
+                  },
+                  {
+                    "id": "custom.lineStyle",
+                    "value": {
+                      "fill": "dash",
+                      "dash": [
+                        10,
+                        6
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.fillOpacity",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.lineInterpolation",
+                    "value": "stepAfter"
+                  },
+                  {
+                    "id": "custom.lineWidth",
+                    "value": 1
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "last"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 16,
+          "type": "timeseries",
+          "title": "Latencia de control",
+          "description": "Latencia orden → confirmación (ms) informada por el EMS. Naranja ≥ 500 ms, rojo ≥ 2 s.",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 40,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"latencia_ms\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "decimals": 0,
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "transparent",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 500
+                  },
+                  {
+                    "color": "red",
+                    "value": 2000
+                  }
+                ]
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": 600000,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "barAlignment": 0,
+                "insertNulls": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "dashed"
+                },
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineStyle": {
+                  "fill": "solid"
+                }
+              },
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "#5794F2"
+              },
+              "displayName": "Latencia",
+              "noValue": "Sin datos en el rango"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "latencia_ms"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Latencia"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#5794F2"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "last"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 17,
+          "type": "timeseries",
+          "title": "Alarmas activas",
+          "description": "Alarmas activas y, durante un corte de red, potencia que entrega el UPS y su autonomía restante. Sin cortes en el rango no hay serie de UPS.",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 48,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"n_alarmas\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "decimals": 0,
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "stepAfter",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": 600000,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "barAlignment": 0,
+                "insertNulls": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                },
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineStyle": {
+                  "fill": "solid"
+                }
+              },
+              "noValue": "Sin datos en el rango"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "n_alarmas"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Alarmas activas"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#F2495C"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "ups_kw"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Potencia del UPS"
+                  },
+                  {
+                    "id": "unit",
+                    "value": "kwatt"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 1
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#E87FA9"
+                    }
+                  },
+                  {
+                    "id": "custom.axisPlacement",
+                    "value": "right"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "ups_min"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Autonomía del UPS"
+                  },
+                  {
+                    "id": "unit",
+                    "value": "m"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#8E949E"
+                    }
+                  },
+                  {
+                    "id": "custom.axisPlacement",
+                    "value": "right"
+                  },
+                  {
+                    "id": "custom.lineStyle",
+                    "value": {
+                      "fill": "dash",
+                      "dash": [
+                        10,
+                        6
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "last"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 18,
+          "type": "timeseries",
+          "title": "UPS durante cortes",
+          "description": "Potencia y autonomía del UPS; sólo hay datos durante un corte de red.",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 48,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"ups_kw\" or r._field == \"ups_min\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "decimals": 0,
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "stepAfter",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": 600000,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "barAlignment": 0,
+                "insertNulls": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                },
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineStyle": {
+                  "fill": "solid"
+                }
+              },
+              "noValue": "Sin datos en el rango"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "n_alarmas"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Alarmas activas"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#F2495C"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "ups_kw"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Potencia del UPS"
+                  },
+                  {
+                    "id": "unit",
+                    "value": "kwatt"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 1
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#E87FA9"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "ups_min"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Autonomía del UPS"
+                  },
+                  {
+                    "id": "unit",
+                    "value": "m"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#8E949E"
+                    }
+                  },
+                  {
+                    "id": "custom.lineStyle",
+                    "value": {
+                      "fill": "dash",
+                      "dash": [
+                        10,
+                        6
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "last"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 19,
+          "type": "timeseries",
+          "title": "Alarmas en el tiempo",
+          "description": "Alarmas por hora y código (barras apiladas).",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 56,
+            "w": 24,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"codigo\"])\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 1h) then v.windowPeriod else 1h, fn: count, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"codigo\"])"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "decimals": 0,
+              "min": 0,
+              "displayName": "${__field.labels.codigo}",
+              "noValue": "Sin alarmas en el rango",
+              "custom": {
+                "drawStyle": "bars",
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "fillOpacity": 80,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": 600000,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "barAlignment": 0,
+                "insertNulls": false,
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                },
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineStyle": {
+                  "fill": "solid"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/.*/"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "${__field.labels.codigo}"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "last"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
         }
-      }
+      ],
+      "id": 10
     }
   ]
 }
