@@ -4,6 +4,7 @@ import { css } from '@emotion/css';
 import { useStyles2, useTheme2 } from '@grafana/ui';
 import { EmsState, History, MeterState } from 'building/telemetry';
 import { Sparkline } from './Sparkline';
+import { LimitBar } from './DemandGauge';
 
 interface Props {
   meter?: MeterState;
@@ -20,7 +21,6 @@ export const MeterCard: React.FC<Props> = ({ meter, ems, limitKw, history }) => 
     return <div className={styles.muted}>Sin datos del medidor.</div>;
   }
   const limit = ems?.limitKw || limitKw;
-  const ratio = Math.min(meter.demand15 / limit, 1.2);
   const over = meter.demand15 > limit;
   const parts = [
     { label: 'HVAC', v: meter.pHvac, c: theme.visualization.getColorByName('blue') },
@@ -57,18 +57,15 @@ export const MeterCard: React.FC<Props> = ({ meter, ems, limitKw, history }) => 
       <div className={styles.label}>
         Demanda 15 min vs límite ({limit} kW){meter.pPv !== undefined ? ' · importación neta' : ''}
       </div>
-      <div className={styles.bar} role="meter" aria-valuenow={meter.demand15} aria-valuemax={limit}>
-        <div
-          className={styles.fill}
-          style={{
-            width: `${(ratio / 1.2) * 100}%`,
-            background: over ? theme.visualization.getColorByName('red') : theme.visualization.getColorByName('blue'),
-          }}
-        />
-        <div className={styles.limit} style={{ left: `${(1 / 1.2) * 100}%` }} />
-      </div>
+      <LimitBar value={meter.demand15} limit={limit} height={10} />
       <div className={styles.value}>
-        {meter.demand15.toFixed(1)} kW {ems?.drActive ? '· limitador activo' : ''}
+        {meter.demand15.toFixed(1)} kW{' '}
+        <span className={over ? styles.over : styles.muted}>
+          {over
+            ? `· excede ${(meter.demand15 - limit).toFixed(1)} kW`
+            : `· ${((meter.demand15 / limit) * 100).toFixed(0)} % del límite`}
+          {ems?.drActive ? ' · limitador activo' : ''}
+        </span>
       </div>
       {trend.length > 1 && (
         <Sparkline values={trend} color={theme.visualization.getColorByName('blue')} width={260} height={40} />
@@ -124,24 +121,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     font-size: ${theme.typography.h5.fontSize};
     font-variant-numeric: tabular-nums;
   `,
-  bar: css`
-    position: relative;
-    height: 10px;
-    border-radius: 5px;
-    background: ${theme.colors.background.secondary};
-    border: 1px solid ${theme.colors.border.weak};
-  `,
-  fill: css`
-    height: 100%;
-    border-radius: 5px;
-  `,
-  limit: css`
-    position: absolute;
-    top: -3px;
-    bottom: -3px;
-    width: 2px;
-    background: ${theme.colors.text.primary};
-  `,
   stack: css`
     display: flex;
     gap: 2px;
@@ -165,6 +144,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
   row: css`
     display: flex;
     justify-content: space-between;
+    font-size: ${theme.typography.bodySmall.fontSize};
+  `,
+  over: css`
+    color: ${theme.colors.error.text};
     font-size: ${theme.typography.bodySmall.fontSize};
   `,
   num: css`

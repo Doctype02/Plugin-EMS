@@ -106,6 +106,9 @@ test('controla una zona en modo demostración', async ({ gotoPanelEditPage, read
   await expect(control).toBeVisible();
   await control.getByRole('radio', { name: 'Apagar' }).check({ force: true });
   await panel.getByTestId('ems-control-apply').click();
+  // apagar el HVAC pide confirmación
+  await panel.getByTestId('ems-control-confirm-ok').click();
+  await expect(panel.getByTestId('ems-send-status')).toHaveAttribute('data-phase', 'ok');
   await expect(panel.getByTestId('ems-manual-Z02')).toBeVisible();
   await panel.getByTestId('ems-control-release').click();
   await expect(panel.getByTestId('ems-manual-Z02')).toHaveCount(0);
@@ -119,4 +122,20 @@ test('las zonas críticas no se pueden controlar', async ({ gotoPanelEditPage, r
   await panel.getByTestId('ems-floorsel-PB').click();
   await panel.getByTestId('ems-zone-Z06').click();
   await expect(panel.getByTestId('ems-control-locked')).toBeVisible();
+});
+
+test('los parámetros del EMS se validan y se confirman', async ({ gotoPanelEditPage, readProvisionedDashboard }) => {
+  const dashboard = await readProvisionedDashboard({ fileName: 'dashboard.json' });
+  const panelEditPage = await gotoPanelEditPage({ dashboard, id: '1' });
+  const panel = panelEditPage.panel.locator;
+
+  await panel.getByRole('tab', { name: /Control/ }).click();
+  const limit = panel.getByTestId('ems-param-limit-input');
+  await expect(limit).toHaveValue('170');
+  await limit.fill('900');
+  await expect(panel.getByTestId('ems-params-apply')).toBeDisabled();
+  await limit.fill('150');
+  await panel.getByTestId('ems-params-apply').click();
+  await panel.getByTestId('ems-params-confirm-ok').click();
+  await expect(panel.getByTestId('ems-send-status')).toHaveAttribute('data-phase', 'ok');
 });

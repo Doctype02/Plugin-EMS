@@ -4,7 +4,16 @@ import { GrafanaTheme2, colorManipulator } from '@grafana/data';
 import { css, cx } from '@emotion/css';
 import { Button, Icon, RadioButtonGroup, useStyles2 } from '@grafana/ui';
 import { LIMIT_KW, LIMIT_RANGE, ZONES, ZONE_BY_ID, thermal } from 'building/model';
-import { Command, LogEntry, durationLabel } from 'building/control';
+import {
+  Command,
+  CommandResult,
+  LogEntry,
+  SP_RANGE,
+  SendFeedback,
+  durationLabel,
+  validateParams,
+} from 'building/control';
+import { ConfirmInline, NumberParam, SendStatus } from './controls';
 import { EmsParams, OccupancyOverrides, Overrides, Snapshot } from 'building/telemetry';
 import { ZoneMiniMap } from './ZoneMiniMap';
 
@@ -19,8 +28,11 @@ interface Props {
   canControl: boolean;
   reason?: string;
   busy: boolean;
+  /** Resultado del último envío (enviando / aplicado / error). */
+  feedback?: SendFeedback;
+  onDismissFeedback?: () => void;
   live: boolean;
-  onCommand: (c: Command | Command[]) => void;
+  onCommand: (c: Command | Command[]) => Promise<CommandResult> | void;
   onSelectZone: (id: string) => void;
 }
 
@@ -34,6 +46,7 @@ const fmtTime = (t: number) =>
 
 const OFFICES = ZONES.filter((z) => !z.critical);
 const DEFAULTS: EmsParams = { limitKw: LIMIT_KW, spOccupied: 24 };
+
 /** kW eléctricos por °C de setpoint en las zonas con ocupación (G/COP del modelo RC). */
 const KW_PER_DEG = OFFICES.reduce((a, z) => {
   const th = thermal(z);
@@ -90,6 +103,8 @@ export const BuildingControl: React.FC<Props> = ({
   canControl,
   reason,
   busy,
+  feedback,
+  onDismissFeedback,
   live,
   onCommand,
   onSelectZone,
@@ -101,6 +116,8 @@ export const BuildingControl: React.FC<Props> = ({
   const building = occupancy['*'];
   const [pct, setPct] = useState(building?.pct ?? 100);
   const [occDuration, setOccDuration] = useState(60);
+  /** Acción de impacto pendiente de confirmar. */
+  const [pending, setPending] = useState<'params' | 'occupancy' | 'release' | QuickKind>();
   const zoneOcc = Object.entries(occupancy).filter(([k]) => k !== '*');
   const people = ZONES.reduce((a, z) => a + (snapshot.zones[z.id]?.occupants ?? 0), 0);
   const capacity = ZONES.reduce((a, z) => a + z.occupants, 0);
@@ -108,6 +125,11 @@ export const BuildingControl: React.FC<Props> = ({
   const active = Object.entries(overrides);
   const nManual = new Set([...active.map(([k]) => k), ...Object.keys(occupancy).filter((k) => k !== '*')]).size;
   const changed = limit !== params.limitKw || sp !== params.spOccupied;
+  const paramsError = changed ? validateParams({ limitKw: limit, spOccupied: sp }) : undefined;
+  const confirm = (c: Command | Command[]) => {
+    setPending(undefined);
+    onCommand(c);
+  };
   const m = snapshot.meter;
   const dr = snapshot.ems?.drActive;
   const manual = new Set([...Object.keys(overrides), ...Object.keys(occupancy).filter((k) => k !== '*')]);
@@ -124,7 +146,7 @@ export const BuildingControl: React.FC<Props> = ({
               ? { zone: z.id, lights: 0.6, plugs: 0.85, setpoint: 25, durationMin: duration }
               : { zone: z.id, hvac: 'off', lights: 0, plugs: 0.1, durationMin: duration },
     }));
-    onCommand(cmds);
+    confirm(cmds);
   };
 
   const spDelta = sp - params.spOccupied;
@@ -141,6 +163,7 @@ export const BuildingControl: React.FC<Props> = ({
           <span className={styles.pill}>{live ? 'Node-RED' : 'Simulador'}</span>
         </div>
       </div>
+      <SendStatus busy={busy} feedback={feedback} onDismiss={onDismissFeedback} />
       {!canControl && <div className={styles.warn}>{reason ?? 'Sin permiso para controlar el edificio'}</div>}
 
       <section className={styles.card}>
@@ -168,44 +191,84 @@ export const BuildingControl: React.FC<Props> = ({
             </Button>
           )}
         </div>
-        <Param
+        <NumberParam
           label="Límite de demanda"
           value={limit}
+          current={params.limitKw}
           unit="kW"
           min={LIMIT_RANGE[0]}
           max={LIMIT_RANGE[1]}
           step={1}
+          disabled={disabled}
           onChange={setLimit}
+          testId="ems-param-limit"
           note={
             m
-              ? `Demanda actual ${m.demand15.toFixed(1)} kW · el limitador rota compresores desde ${(limit - 3).toFixed(0)} kW`
-              : `El limitador rota compresores desde ${(limit - 3).toFixed(0)} kW`
+              ? `Potencia máxima del edificio: ${LIMIT_KW} kW · demanda actual ${m.demand15.toFixed(1)} kW · el limitador rota compresores desde ${(limit - 3).toFixed(0)} kW`
+              : `Potencia máxima del edificio: ${LIMIT_KW} kW · el limitador rota compresores desde ${(limit - 3).toFixed(0)} kW`
           }
         />
-        <Param
+        <NumberParam
           label="Setpoint con ocupación"
           value={sp}
+          current={params.spOccupied}
           unit="°C"
-          min={22}
-          max={26}
+          min={SP_RANGE[0]}
+          max={SP_RANGE[1]}
           step={0.5}
+          disabled={disabled}
           onChange={setSp}
+          testId="ems-param-sp"
           note={
-            spDelta === 0
+            spDelta === 0 || !Number.isFinite(spDelta)
               ? `Cada °C más ≈ −${KW_PER_DEG.toFixed(1)} kW de HVAC con el edificio ocupado`
-              : `${spDelta > 0 ? 'Ahorro' : 'Aumento'} ≈ ${Math.abs(spDelta * KW_PER_DEG).toFixed(1)} kW de HVAC · ${sp > 25 ? 'confort en el límite' : sp < 23 ? 'sobreenfriamiento' : 'confort ISO 7730 cat. B'}`
+              : `${spDelta > 0 ? 'Ahorro' : 'Aumento'} ≈ ${Math.abs(spDelta * KW_PER_DEG).toFixed(1)} kW de HVAC · ${sp > 26 ? 'fuera de confort' : sp > 25 ? 'confort en el límite' : sp < 23 ? 'sobreenfriamiento' : 'confort ISO 7730 cat. B'}`
           }
         />
-        <Button
-          size="sm"
-          icon="check"
-          fullWidth
-          disabled={disabled || !changed}
-          onClick={() => onCommand({ kind: 'params', params: { limitKw: limit, spOccupied: sp } })}
-          data-testid="ems-params-apply"
-        >
-          {changed ? 'Aplicar parámetros' : 'Sin cambios'}
-        </Button>
+        {pending === 'params' ? (
+          <ConfirmInline
+            title="¿Aplicar los nuevos parámetros del EMS?"
+            detail={[
+              limit !== params.limitKw ? `Límite ${params.limitKw} → ${limit} kW` : undefined,
+              sp !== params.spOccupied ? `Setpoint ${params.spOccupied} → ${sp} °C` : undefined,
+              live ? 'Se envía a Node-RED y afecta a todo el edificio.' : 'Se aplica al simulador.',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            confirmLabel="Aplicar"
+            busy={busy}
+            onCancel={() => setPending(undefined)}
+            onConfirm={() => confirm({ kind: 'params', params: { limitKw: limit, spOccupied: sp } })}
+            testId="ems-params-confirm"
+          />
+        ) : (
+          <div className={styles.actionsRow}>
+            <Button
+              size="sm"
+              icon={busy ? undefined : 'check'}
+              disabled={disabled || !changed || !!paramsError}
+              tooltip={paramsError}
+              onClick={() => setPending('params')}
+              data-testid="ems-params-apply"
+            >
+              {busy ? 'Enviando…' : changed ? 'Aplicar parámetros' : 'Sin cambios'}
+            </Button>
+            {changed && (
+              <Button
+                size="sm"
+                variant="secondary"
+                fill="outline"
+                disabled={busy}
+                onClick={() => {
+                  setLimit(params.limitKw);
+                  setSp(params.spOccupied);
+                }}
+              >
+                Descartar
+              </Button>
+            )}
+          </div>
+        )}
       </section>
 
       <section className={styles.card} data-testid="ems-building-occupancy">
@@ -229,8 +292,9 @@ export const BuildingControl: React.FC<Props> = ({
             </button>
           ))}
         </div>
-        <Param
-          label="Ocupación respecto al horario normal"
+        <NumberParam
+          label="Ocupación respecto al horario"
+          disabled={disabled}
           value={pct}
           unit="%"
           min={0}
@@ -252,12 +316,23 @@ export const BuildingControl: React.FC<Props> = ({
             options={[30, 60, 240, 480].map((d) => ({ value: d, label: durationLabel(d) }))}
           />
         </div>
+        {pending === 'occupancy' && (
+          <ConfirmInline
+            title={`¿Fijar la ocupación del edificio al ${pct} %?`}
+            detail={`Durante ${durationLabel(occDuration)} · ≈ ${Math.round((capacity * pct) / 100)} personas en jornada`}
+            confirmLabel="Fijar ocupación"
+            busy={busy}
+            onCancel={() => setPending(undefined)}
+            onConfirm={() => confirm({ kind: 'occupancy', zone: '*', pct, durationMin: occDuration })}
+            testId="ems-occupancy-confirm"
+          />
+        )}
         <div className={styles.durationRow}>
           <Button
             size="sm"
             icon="check"
-            disabled={disabled}
-            onClick={() => onCommand({ kind: 'occupancy', zone: '*', pct, durationMin: occDuration })}
+            disabled={disabled || pending === 'occupancy'}
+            onClick={() => setPending('occupancy')}
             data-testid="ems-occupancy-apply"
           >
             Aplicar ocupación
@@ -301,9 +376,10 @@ export const BuildingControl: React.FC<Props> = ({
             <button
               key={q.kind}
               type="button"
-              className={styles.tile}
+              className={cx(styles.tile, pending === q.kind && styles.tileOn)}
               disabled={disabled}
-              onClick={() => quick(q.kind)}
+              aria-pressed={pending === q.kind}
+              onClick={() => setPending(pending === q.kind ? undefined : q.kind)}
               data-testid={`ems-quick-${q.kind}`}
             >
               <span className={styles.tileGlyph}>
@@ -315,6 +391,19 @@ export const BuildingControl: React.FC<Props> = ({
             </button>
           ))}
         </div>
+        {QUICK.filter((q) => q.kind === pending).map((q) => (
+          <ConfirmInline
+            key={q.kind}
+            title={`¿${q.title} en ${OFFICES.length} zonas durante ${durationLabel(duration)}?`}
+            detail={`${q.detail}. Las zonas pasan a control manual (prioridad sobre el EMS y el limitador).`}
+            confirmLabel={q.title}
+            destructive={q.kind === 'night'}
+            busy={busy}
+            onCancel={() => setPending(undefined)}
+            onConfirm={() => quick(q.kind)}
+            testId="ems-quick-confirm"
+          />
+        ))}
       </section>
 
       <section className={styles.card}>
@@ -326,18 +415,29 @@ export const BuildingControl: React.FC<Props> = ({
               variant="secondary"
               fill="text"
               disabled={disabled}
-              onClick={() =>
-                onCommand([
-                  { kind: 'release', zone: '*' },
-                  ...zoneOcc.map(([id]): Command => ({ kind: 'occupancy_release', zone: id })),
-                ])
-              }
+              onClick={() => setPending('release')}
               data-testid="ems-release-all"
             >
               Todo a automático
             </Button>
           )}
         </div>
+        {pending === 'release' && nManual > 0 && (
+          <ConfirmInline
+            title={`¿Devolver ${nManual} zona${nManual > 1 ? 's' : ''} al control automático?`}
+            detail="Se cancelan los overrides y las personas fijadas; el EMS vuelve a aplicar sus reglas."
+            confirmLabel="Todo a automático"
+            busy={busy}
+            onCancel={() => setPending(undefined)}
+            onConfirm={() =>
+              confirm([
+                { kind: 'release', zone: '*' },
+                ...zoneOcc.map(([id]): Command => ({ kind: 'occupancy_release', zone: id })),
+              ])
+            }
+            testId="ems-release-confirm"
+          />
+        )}
         {nManual === 0 && <div className={styles.muted}>Todas las zonas siguen las reglas del EMS.</div>}
         {zoneOcc.map(([id, o]) => (
           <div key={`occ-${id}`} className={styles.item}>
@@ -411,56 +511,6 @@ export const BuildingControl: React.FC<Props> = ({
   );
 };
 
-const Param: React.FC<{
-  label: string;
-  value: number;
-  unit: string;
-  min: number;
-  max: number;
-  step: number;
-  note: string;
-  onChange: (v: number) => void;
-}> = ({ label, value, unit, min, max, step, note, onChange }) => {
-  const styles = useStyles2(getStyles);
-  return (
-    <div className={styles.param}>
-      <div className={styles.paramHead}>
-        <span>{label}</span>
-        <span className={styles.paramValue}>
-          {value % 1 ? value.toFixed(1) : value} <small>{unit}</small>
-        </span>
-      </div>
-      <div className={styles.stepper}>
-        <Button
-          size="sm"
-          variant="secondary"
-          icon="minus"
-          aria-label={`Bajar ${label}`}
-          onClick={() => onChange(Math.max(min, +(value - step).toFixed(2)))}
-        />
-        <input
-          type="range"
-          className={styles.range}
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          aria-label={label}
-          onChange={(e) => onChange(Number(e.currentTarget.value))}
-        />
-        <Button
-          size="sm"
-          variant="secondary"
-          icon="plus"
-          aria-label={`Subir ${label}`}
-          onClick={() => onChange(Math.min(max, +(value + step).toFixed(2)))}
-        />
-      </div>
-      <div className={styles.note}>{note}</div>
-    </div>
-  );
-};
-
 const getStyles = (theme: GrafanaTheme2) => ({
   box: css`
     display: flex;
@@ -513,8 +563,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
   card: css`
     display: flex;
     flex-direction: column;
-    gap: ${theme.spacing(0.75)};
-    padding: ${theme.spacing(1)};
+    gap: ${theme.spacing(1)};
+    padding: ${theme.spacing(1.25)};
     border: 1px solid ${theme.colors.border.weak};
     border-radius: ${theme.shape.radius.default};
     background: ${theme.colors.background.secondary};
@@ -523,6 +573,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: flex;
     align-items: center;
     gap: ${theme.spacing(0.75)};
+    min-height: 24px;
+    font-size: ${theme.typography.h6.fontSize};
     font-weight: ${theme.typography.fontWeightMedium};
     & > :last-child:not(:first-child):not(svg) {
       margin-left: auto;
@@ -531,7 +583,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   hint: css`
     margin-left: auto;
     font-weight: ${theme.typography.fontWeightRegular};
-    font-size: 11px;
+    font-size: ${theme.typography.bodySmall.fontSize};
     color: ${theme.colors.text.secondary};
   `,
   presets: css`
@@ -567,18 +619,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     align-items: center;
     gap: ${theme.spacing(1)};
   `,
-  param: css`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  `,
-  paramHead: css`
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    font-size: ${theme.typography.bodySmall.fontSize};
-    color: ${theme.colors.text.secondary};
-  `,
   paramValue: css`
     font-size: ${theme.typography.h4.fontSize};
     color: ${theme.colors.text.primary};
@@ -588,19 +628,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
       font-size: ${theme.typography.bodySmall.fontSize};
       color: ${theme.colors.text.secondary};
     }
-  `,
-  stepper: css`
-    display: flex;
-    align-items: center;
-    gap: ${theme.spacing(0.5)};
-  `,
-  range: css`
-    flex: 1;
-    accent-color: ${theme.colors.primary.main};
-  `,
-  note: css`
-    font-size: 11px;
-    color: ${theme.colors.text.secondary};
   `,
   tiles: css`
     display: grid;
@@ -631,6 +658,19 @@ const getStyles = (theme: GrafanaTheme2) => ({
       cursor: not-allowed;
     }
   `,
+  tileOn: css`
+    border-color: ${theme.colors.primary.main};
+    box-shadow: inset 0 0 0 1px ${theme.colors.primary.main};
+  `,
+  actionsRow: css`
+    display: flex;
+    gap: ${theme.spacing(1)};
+    flex-wrap: wrap;
+    & > button:first-child {
+      flex: 1;
+      justify-content: center;
+    }
+  `,
   tileGlyph: css`
     font-size: 18px;
     line-height: 1;
@@ -639,7 +679,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     font-weight: ${theme.typography.fontWeightMedium};
   `,
   tileDetail: css`
-    font-size: 11px;
+    font-size: ${theme.typography.bodySmall.fontSize};
+    line-height: 1.3;
     color: ${theme.colors.text.secondary};
   `,
   tileEffect: css`

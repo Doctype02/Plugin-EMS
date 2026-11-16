@@ -19,15 +19,17 @@ import {
 } from 'building/telemetry';
 import {
   Command,
+  CommandResult,
   LogEntry,
+  SendFeedback,
   applyLocal,
   applyOccupancy,
   describe,
+  feedbackFor,
   prune,
   pruneOccupancy,
   sendToNodeRed,
-  validate,
-  validateOccupancy,
+  validateCommand,
 } from 'building/control';
 import { MAX_POWER_DENSITY, ViewMode, legendFor } from 'building/views';
 import { AlarmList, alarmKey } from './AlarmList';
@@ -48,6 +50,7 @@ import { OverviewPanel } from './OverviewPanel';
 import { SceneCompass } from './SceneCompass';
 import { FloorKey, FloorSelector } from './FloorSelector';
 import { autoFloor, floorSummary, roofSummary } from 'building/layout';
+import { demandLevel } from 'building/demand';
 import {
   ClockState,
   goLive,
@@ -172,13 +175,18 @@ export function buildKpis(
   const m = snapshot.meter;
   const zs = ZONES.map((z) => snapshot.zones[z.id]).filter((s) => s && Number.isFinite(s.temp));
   const limit = snapshot.ems?.limitKw || limitKw;
-  const demandStatus: Status = !m
-    ? 'offline'
-    : m.demand15 > limit
-      ? 'critical'
-      : m.demand15 > limit * 0.95
-        ? 'warning'
-        : 'ok';
+  // con FV el limitador actúa sobre la importación neta de la red
+  const controlled = m ? (m.pPv !== undefined ? Math.max(m.pGrid ?? m.pTotal - m.pPv, 0) : m.pTotal) : 0;
+  const demandStatus: Status = !m ? 'offline' : demandLevel(Math.max(controlled, m.demand15), limit);
+  const dr = snapshot.ems?.drActive;
+  const powerKpi: Kpi = {
+    label: m?.pPv !== undefined ? 'Red' : 'Potencia',
+    icon: 'bolt',
+    value: fmt(controlled, 1, 'kW'),
+    hint: m ? `de ${limit} kW` : undefined,
+    ratio: m ? controlled / limit : undefined,
+    status: demandStatus,
+  };
   const occupants = zs.reduce((a, s) => a + s.occupants, 0);
   const capacity = ZONES.reduce((a, z) => a + z.occupants, 0);
   const alarmCount = snapshot.alarms.filter((a) => a.level !== 'info').length;
@@ -229,7 +237,7 @@ export function buildKpis(
       ];
     case 'power':
       return [
-        { label: 'Potencia', icon: 'bolt', value: fmt(m?.pTotal, 1, 'kW'), status: demandStatus },
+        powerKpi,
         {
           label: 'Factor potencia',
           icon: 'percentage',
@@ -275,20 +283,34 @@ export function buildKpis(
         },
         { label: 'Bloqueados DR', icon: 'pause', value: String(forced), status: forced ? 'warning' : 'ok' },
         {
-          label: 'Demanda',
+          label: 'Demanda 15 min',
           icon: 'tachometer-fast',
-          value: m ? `${m.demand15.toFixed(0)}/${limit} kW` : '—',
+          value: fmt(m?.demand15, 0, 'kW'),
+          hint: m ? `de ${limit} kW` : undefined,
+          ratio: m ? m.demand15 / limit : undefined,
           status: demandStatus,
         },
       ];
     default:
       return [
-        { label: 'Potencia', icon: 'bolt', value: fmt(m?.pTotal, 1, 'kW'), status: demandStatus },
+        powerKpi,
+        ...(m?.pPv !== undefined
+          ? [
+              {
+                label: 'Fotovoltaica',
+                icon: 'circle' as const,
+                glyph: 'sun' as const,
+                value: fmt(m.pPv, 1, 'kW'),
+                status: 'ok' as Status,
+              },
+            ]
+          : []),
         {
-          label: 'Demanda',
+          label: 'Respuesta DR',
           icon: 'tachometer-fast',
-          value: m ? `${m.demand15.toFixed(0)}/${limit} kW` : '—',
-          status: demandStatus,
+          value: !snapshot.ems ? '—' : dr ? 'Activa' : 'En espera',
+          hint: dr && snapshot.ems?.drStage ? `etapa ${snapshot.ems.drStage}` : undefined,
+          status: !snapshot.ems ? 'offline' : dr ? 'warning' : 'ok',
         },
         {
           label: 'Personas',
@@ -311,6 +333,15 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const [params, setParams] = useState<EmsParams>({ limitKw: options.limitKw ?? LIMIT_KW, spOccupied: 24 });
   const [log, setLog] = useState<LogEntry[]>([]);
   const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<SendFeedback>();
+  // el aviso de éxito se oculta solo; los errores quedan hasta el siguiente envío o hasta cerrarlos
+  useEffect(() => {
+    if (feedback?.phase !== 'ok') {
+      return;
+    }
+    const t = setTimeout(() => setFeedback((f) => (f === feedback ? undefined : f)), 6000);
+    return () => clearTimeout(t);
+  }, [feedback]);
   const [animate, setAnimate] = useState(options.animations);
   const [events, setEvents] = useState<SimEvent[]>([]);
   const [demoIncidents, setDemoIncidents] = useState(true);
@@ -452,7 +483,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
   };
 
   /** Ejecuta uno o varios comandos del operador (simulador local o Node-RED). */
-  const runCommands = async (input: Command | Command[]) => {
+  const runCommands = async (input: Command | Command[]): Promise<CommandResult> => {
     const commands = Array.isArray(input) ? input : [input];
     const stamp = () => (options.demoMode ? simClock.stamp() : Date.now());
     const entries: LogEntry[] = [];
@@ -461,9 +492,9 @@ export const EmsPanel: React.FC<Props> = (props) => {
     let nextEvents = events;
     let nextOcc = activeOccupancy;
     setBusy(true);
+    setFeedback(undefined);
     for (const c of commands) {
-      const problem =
-        c.kind === 'override' ? validate(c.cmd) : c.kind === 'occupancy' ? validateOccupancy(c) : undefined;
+      const problem = validateCommand(c);
       if (problem) {
         entries.push({ at: stamp(), ok: false, text: problem });
         continue;
@@ -501,7 +532,15 @@ export const EmsPanel: React.FC<Props> = (props) => {
     setEvents(nextEvents);
     setOccupancy(nextOcc);
     setLog((l) => [...entries.reverse(), ...l].slice(0, 30));
+    const failed = entries.filter((e) => !e.ok);
+    const result: CommandResult = {
+      ok: entries.length - failed.length,
+      failed: failed.length,
+      errors: failed.map((e) => e.text),
+    };
+    setFeedback({ ...feedbackFor(result, !options.demoMode), at: Date.now() });
     setBusy(false);
+    return result;
   };
 
   // curva de potencia del día (15 min): simulada en demostración, tendencia del medidor en vivo
@@ -548,6 +587,8 @@ export const EmsPanel: React.FC<Props> = (props) => {
           canControl={permission.canControl}
           reason={permission.reason}
           busy={busy}
+          feedback={feedback}
+          onDismissFeedback={() => setFeedback(undefined)}
           onCommand={runCommands}
         />
       }
@@ -611,6 +652,8 @@ export const EmsPanel: React.FC<Props> = (props) => {
           canControl={permission.canControl}
           reason={permission.reason}
           busy={busy}
+          feedback={feedback}
+          onDismissFeedback={() => setFeedback(undefined)}
           live={!options.demoMode}
           onCommand={runCommands}
           onSelectZone={selectZone}
@@ -650,8 +693,9 @@ export const EmsPanel: React.FC<Props> = (props) => {
           subtitle={`${ZONES.length} zonas · ${FLOORS.length} plantas${pvVisible ? ' · FV' : ''}${options.demoMode && controller === 'baseline' ? ' · línea base E+' : ''}${options.showTimeBar === false ? ` · ${timeLabel}` : ''}${dr ? ' · DR activo' : ''}${manual.size ? ` · ${manual.size} en manual` : ''}`}
           demoMode={options.demoMode}
           kpis={kpis}
-          showKpis={panelWidth >= 560 && panelHeight >= 360}
+          showKpis={panelWidth >= 480 && panelHeight >= 340}
           compact={panelWidth < 1200}
+          dense={panelHeight < 640}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
         />
@@ -663,6 +707,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
           clock={simClock.clock}
           live={!options.demoMode}
           compact={panelWidth < 1100}
+          dense={panelHeight < 640 || panelWidth < 760}
           onTime={simClock.setTime}
           onSpeed={simClock.setSpeed}
           onTogglePlay={simClock.togglePlay}
@@ -713,7 +758,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
               onSelectFloor={(k) => setFloor(k)}
             />
 
-            <div className={styles.topLeft} style={{ right: shortScene ? 260 : 200 }}>
+            <div className={styles.topLeft} style={{ right: shortScene ? (docked ? 260 : 330) : 200 }}>
               <div className={styles.toolbar}>
                 <IconButton
                   name={fullscreen.active ? 'compress-arrows' : 'expand-arrows-alt'}

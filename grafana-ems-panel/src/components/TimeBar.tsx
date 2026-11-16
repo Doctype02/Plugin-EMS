@@ -9,6 +9,8 @@ interface Props {
   clock?: ClockState;
   live: boolean;
   compact: boolean;
+  /** Panel pequeño: sin velocidad ni días, todo en una línea. */
+  dense?: boolean;
   onTime: (t: number) => void;
   onSpeed: (speed: number) => void;
   onTogglePlay: () => void;
@@ -27,7 +29,17 @@ const BANDS = [
 ] as const;
 
 /** Barra de tiempo: reproducir/pausar, velocidad, día de la semana y hora del día. */
-export const TimeBar: React.FC<Props> = ({ now, clock, live, compact, onTime, onSpeed, onTogglePlay, onLive }) => {
+export const TimeBar: React.FC<Props> = ({
+  now,
+  clock,
+  live,
+  compact,
+  dense,
+  onTime,
+  onSpeed,
+  onTogglePlay,
+  onLive,
+}) => {
   const styles = useStyles2(getStyles);
   const parts = localParts(now);
   const f = formatClock(now);
@@ -50,7 +62,7 @@ export const TimeBar: React.FC<Props> = ({ now, clock, live, compact, onTime, on
   }
 
   return (
-    <div className={cx(styles.bar, compact && styles.wrap)} data-testid="ems-timebar">
+    <div className={cx(styles.bar, compact && !dense && styles.wrap, dense && styles.dense)} data-testid="ems-timebar">
       <div className={styles.group}>
         <IconButton
           name={clock?.playing ? 'pause' : 'play'}
@@ -67,28 +79,32 @@ export const TimeBar: React.FC<Props> = ({ now, clock, live, compact, onTime, on
         </span>
       </div>
 
-      <div className={styles.group}>
-        <RadioButtonGroup
-          size="sm"
-          value={clock?.speed}
-          onChange={onSpeed}
-          options={SPEEDS.map((s) => ({ value: s.value, label: s.label, description: s.hint }))}
-        />
-      </div>
+      {!dense && (
+        <div className={styles.group}>
+          <RadioButtonGroup
+            size="sm"
+            value={clock?.speed}
+            onChange={onSpeed}
+            options={SPEEDS.map((s) => ({ value: s.value, label: s.label, description: s.hint }))}
+          />
+        </div>
+      )}
 
-      <div className={styles.days} role="group" aria-label="Día de la semana">
-        {WEEKDAYS.map((d, i) => (
-          <button
-            key={d}
-            type="button"
-            className={cx(styles.chip, i === parts.dow && styles.chipOn, i >= 5 && styles.chipWeekend)}
-            onClick={() => onTime(atWeekday(now, i))}
-            aria-pressed={i === parts.dow}
-          >
-            {d}
-          </button>
-        ))}
-      </div>
+      {!dense && (
+        <div className={styles.days} role="group" aria-label="Día de la semana">
+          {WEEKDAYS.map((d, i) => (
+            <button
+              key={d}
+              type="button"
+              className={cx(styles.chip, i === parts.dow && styles.chipOn, i >= 5 && styles.chipWeekend)}
+              onClick={() => onTime(atWeekday(now, i))}
+              aria-pressed={i === parts.dow}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className={styles.sliderBox}>
         <div className={styles.track}>
@@ -144,6 +160,14 @@ const getStyles = (theme: GrafanaTheme2) => {
       border: 1px solid ${theme.colors.border.weak};
       border-radius: ${theme.shape.radius.default};
       background: ${theme.colors.background.primary};
+    `,
+    dense: css`
+      gap: ${theme.spacing(1)};
+      padding: ${theme.spacing(0.25, 0.75)};
+      margin-bottom: ${theme.spacing(0.75)};
+      & > div:first-child span {
+        min-width: 0;
+      }
     `,
     wrap: css`
       flex-wrap: wrap;

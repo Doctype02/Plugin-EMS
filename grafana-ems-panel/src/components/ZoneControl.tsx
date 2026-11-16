@@ -1,9 +1,21 @@
 import React, { useState } from 'react';
 import { GrafanaTheme2 } from '@grafana/data';
 import { css } from '@emotion/css';
-import { Alert, Button, RadioButtonGroup, Slider, useStyles2 } from '@grafana/ui';
+import { Alert, Button, RadioButtonGroup, useStyles2 } from '@grafana/ui';
 import { Zone } from 'building/model';
-import { Command, DURATIONS, ZoneCommand, durationLabel, maxPeople, validate } from 'building/control';
+import {
+  Command,
+  CommandResult,
+  DURATIONS,
+  SP_RANGE,
+  SendFeedback,
+  ZoneCommand,
+  durationLabel,
+  maxPeople,
+  validate,
+} from 'building/control';
+import { ConfirmInline, ControlGroup, NumberParam, SendStatus } from './controls';
+import { Glyph } from './Glyph';
 import { OccupancyOverride, ZoneOverride, ZoneState } from 'building/telemetry';
 
 interface Props {
@@ -15,7 +27,9 @@ interface Props {
   canControl: boolean;
   reason?: string;
   busy: boolean;
-  onCommand: (c: Command | Command[]) => void;
+  feedback?: SendFeedback;
+  onDismissFeedback?: () => void;
+  onCommand: (c: Command | Command[]) => Promise<CommandResult> | void;
 }
 
 type Mode = 'auto' | 'on' | 'off';
@@ -37,6 +51,8 @@ export const ZoneControl: React.FC<Props> = ({
   canControl,
   reason,
   busy,
+  feedback,
+  onDismissFeedback,
   onCommand,
 }) => {
   const styles = useStyles2(getStyles);
@@ -52,6 +68,7 @@ export const ZoneControl: React.FC<Props> = ({
   const hasPeople = zone.occupants > 0;
   const [peopleMode, setPeopleMode] = useState<'auto' | 'manual'>(occupancy?.people !== undefined ? 'manual' : 'auto');
   const [people, setPeople] = useState(occupancy?.people ?? state?.occupants ?? zone.occupants);
+  const [confirming, setConfirming] = useState(false);
 
   if (zone.critical) {
     return (
@@ -84,8 +101,11 @@ export const ZoneControl: React.FC<Props> = ({
     } else if (hasPeople && occupancy) {
       cmds.push({ kind: 'occupancy_release', zone: zone.id });
     }
+    setConfirming(false);
     onCommand(cmds);
   };
+  // apagar el HVAC de una zona ocupada es la acción de mayor impacto: se confirma antes
+  const needsConfirm = hvacChange && hvac === 'off';
   const release = () => {
     const cmds: Command[] = [];
     if (override) {
@@ -110,76 +130,106 @@ export const ZoneControl: React.FC<Props> = ({
           {occupancy.people} personas fijadas hasta {fmtTime(occupancy.until)}
         </div>
       )}
+      <SendStatus busy={busy} feedback={feedback} onDismiss={onDismissFeedback} />
       {!canControl && <div className={styles.muted}>{reason ?? 'Sin permiso para controlar el edificio'}</div>}
 
-      <div className={styles.row}>
-        <span className={styles.label}>HVAC</span>
-        <RadioButtonGroup
-          size="sm"
-          disabled={disabled}
-          value={hvac}
-          onChange={setHvac}
-          options={[
-            { value: 'auto', label: 'Auto' },
-            { value: 'on', label: 'Encender' },
-            { value: 'off', label: 'Apagar' },
-          ]}
-        />
-      </div>
-      <div className={styles.row}>
-        <span className={styles.label}>Setpoint</span>
-        <RadioButtonGroup
-          size="sm"
-          disabled={disabled || hvac === 'off'}
-          value={useSetpoint ? 'manual' : 'auto'}
-          onChange={(v) => setUseSetpoint(v === 'manual')}
-          options={[
-            { value: 'auto', label: 'EMS' },
-            { value: 'manual', label: 'Fijar' },
-          ]}
-        />
-      </div>
-      {useSetpoint && hvac !== 'off' && (
-        <div className={styles.slider} data-testid="ems-control-setpoint">
-          <Slider min={20} max={28} step={0.5} value={setpoint} onChange={setSetpoint} ariaLabelForHandle="Setpoint" />
+      <ControlGroup
+        title="Climatización"
+        icon={<Glyph name="snow" size={16} />}
+        aside={state ? `${state.temp.toFixed(1)} °C ahora` : undefined}
+      >
+        <div className={styles.row}>
+          <span className={styles.label}>Equipo</span>
+          <RadioButtonGroup
+            size="sm"
+            disabled={disabled}
+            value={hvac}
+            onChange={setHvac}
+            options={[
+              { value: 'auto', label: 'Auto' },
+              { value: 'on', label: 'Encender' },
+              { value: 'off', label: 'Apagar' },
+            ]}
+          />
         </div>
-      )}
-      <div className={styles.row}>
-        <span className={styles.label}>Iluminación</span>
-        <RadioButtonGroup
-          size="sm"
-          disabled={disabled}
-          value={lightsMode}
-          onChange={setLightsMode}
-          options={[
-            { value: 'auto', label: 'Auto' },
-            { value: 'manual', label: 'Fijar' },
-          ]}
-        />
-      </div>
-      {lightsMode === 'manual' && (
-        <div className={styles.slider}>
-          <Slider min={0} max={100} step={5} value={lights} onChange={setLights} ariaLabelForHandle="Nivel de luces" />
+        <div className={styles.row}>
+          <span className={styles.label}>Setpoint</span>
+          <RadioButtonGroup
+            size="sm"
+            disabled={disabled || hvac === 'off'}
+            value={useSetpoint ? 'manual' : 'auto'}
+            onChange={(v) => setUseSetpoint(v === 'manual')}
+            options={[
+              { value: 'auto', label: 'EMS' },
+              { value: 'manual', label: 'Fijar' },
+            ]}
+          />
         </div>
-      )}
-      <div className={styles.row}>
-        <span className={styles.label}>Enchufes</span>
-        <RadioButtonGroup
-          size="sm"
-          disabled={disabled}
-          value={plugs}
-          onChange={setPlugs}
-          options={[
-            { value: 'auto', label: 'Auto' },
-            { value: 'on', label: 'Energizar' },
-            { value: 'off', label: 'Cortar standby' },
-          ]}
-        />
-      </div>
+        {useSetpoint && hvac !== 'off' && (
+          <NumberParam
+            label="Setpoint de la zona"
+            value={setpoint}
+            current={state?.setpoint}
+            unit="°C"
+            min={SP_RANGE[0]}
+            max={SP_RANGE[1]}
+            step={0.5}
+            disabled={disabled}
+            onChange={setSetpoint}
+            testId="ems-control-setpoint"
+          />
+        )}
+      </ControlGroup>
+
+      <ControlGroup title="Iluminación y enchufes" icon={<Glyph name="bolt" size={16} />}>
+        <div className={styles.row}>
+          <span className={styles.label}>Iluminación</span>
+          <RadioButtonGroup
+            size="sm"
+            disabled={disabled}
+            value={lightsMode}
+            onChange={setLightsMode}
+            options={[
+              { value: 'auto', label: 'Auto' },
+              { value: 'manual', label: 'Fijar' },
+            ]}
+          />
+        </div>
+        {lightsMode === 'manual' && (
+          <NumberParam
+            label="Nivel de luces"
+            value={lights}
+            unit="%"
+            min={0}
+            max={100}
+            step={5}
+            disabled={disabled}
+            onChange={setLights}
+          />
+        )}
+        <div className={styles.row}>
+          <span className={styles.label}>Enchufes</span>
+          <RadioButtonGroup
+            size="sm"
+            disabled={disabled}
+            value={plugs}
+            onChange={setPlugs}
+            options={[
+              { value: 'auto', label: 'Auto' },
+              { value: 'on', label: 'Energizar' },
+              { value: 'off', label: 'Cortar standby' },
+            ]}
+          />
+        </div>
+      </ControlGroup>
       {hasPeople && (
-        <>
+        <ControlGroup
+          title="Personas"
+          icon={<Glyph name="users" size={16} />}
+          aside={state ? `${state.occupants} / ${zone.occupants} ahora` : undefined}
+        >
           <div className={styles.row}>
-            <span className={styles.label}>Personas</span>
+            <span className={styles.label}>Cantidad</span>
             <RadioButtonGroup
               size="sm"
               disabled={disabled}
@@ -235,7 +285,7 @@ export const ZoneControl: React.FC<Props> = ({
                   : `≈ ${((people * 75) / 1000).toFixed(1)} kW de calor sensible de las personas.`}
             </div>
           )}
-        </>
+        </ControlGroup>
       )}
       <div className={styles.row}>
         <span className={styles.label}>Duración</span>
@@ -247,28 +297,41 @@ export const ZoneControl: React.FC<Props> = ({
           options={DURATIONS.map((d) => ({ value: d, label: durationLabel(d) }))}
         />
       </div>
-      <div className={styles.actions}>
-        <Button
-          size="sm"
-          icon="check"
-          disabled={disabled || !!error}
-          tooltip={error}
-          onClick={apply}
-          data-testid="ems-control-apply"
-        >
-          Aplicar
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          icon="sync"
-          disabled={disabled || (!override && !occupancy)}
-          onClick={release}
-          data-testid="ems-control-release"
-        >
-          Volver a automático
-        </Button>
-      </div>
+      {confirming && needsConfirm ? (
+        <ConfirmInline
+          title={`¿Apagar la climatización de ${zone.id} durante ${durationLabel(duration)}?`}
+          detail={`${zone.name} se calentará${state && state.occupants > 0 ? ` con ${state.occupants} personas dentro` : ''}; el EMS no la enfriará hasta que venza o vuelva a automático.`}
+          confirmLabel="Apagar HVAC"
+          destructive
+          busy={busy}
+          onCancel={() => setConfirming(false)}
+          onConfirm={apply}
+          testId="ems-control-confirm"
+        />
+      ) : (
+        <div className={styles.actions}>
+          <Button
+            size="sm"
+            icon={busy ? undefined : 'check'}
+            disabled={disabled || !!error}
+            tooltip={error}
+            onClick={() => (needsConfirm ? setConfirming(true) : apply())}
+            data-testid="ems-control-apply"
+          >
+            {busy ? 'Enviando…' : 'Aplicar'}
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon="sync"
+            disabled={disabled || (!override && !occupancy)}
+            onClick={release}
+            data-testid="ems-control-release"
+          >
+            Volver a automático
+          </Button>
+        </div>
+      )}
       <div className={styles.muted}>
         El control manual tiene prioridad sobre las reglas del EMS y el limitador de demanda hasta que vence.
       </div>
@@ -317,13 +380,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: ${theme.colors.warning.text};
     font-size: ${theme.typography.bodySmall.fontSize};
   `,
-  slider: css`
-    padding: ${theme.spacing(0, 0.5)};
-  `,
   actions: css`
     display: flex;
     gap: ${theme.spacing(1)};
     flex-wrap: wrap;
+    & > button:first-child {
+      flex: 1;
+      justify-content: center;
+    }
   `,
   manual: css`
     padding: ${theme.spacing(0.5, 1)};

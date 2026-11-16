@@ -403,6 +403,20 @@ export const Building3D: React.FC<Props> = ({
           parts.map((part, k) => (
             <path key={`h${k}`} d={path(part.top)} fill={`url(#${idPrefix}-hatch)`} pointerEvents="none" />
           ))}
+        {(selectedId === zone.id || hoveredId === zone.id) &&
+          parts.map((part, k) => (
+            <path
+              key={`f${k}`}
+              d={path(part.top)}
+              fill={theme.colors.primary.main}
+              fillOpacity={selectedId === zone.id ? 0.25 : 0.14}
+              stroke={theme.colors.primary.main}
+              strokeWidth={selectedId === zone.id ? 0 : 1.5}
+              strokeDasharray={selectedId === zone.id ? undefined : '5 3'}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+          ))}
         {mode === 'floor' && (
           <g
             pointerEvents="none"
@@ -819,6 +833,7 @@ export const Building3D: React.FC<Props> = ({
                     labelOffset={labelOffsets[zone.id] ?? 0}
                     detail={fit.k >= 1.6 ? 0.8 : 0.5}
                     hovered={hoveredId === zone.id}
+                    accent={theme.colors.primary.main}
                   />
                 ) : (
                   exteriorZone(zone, p, parts)

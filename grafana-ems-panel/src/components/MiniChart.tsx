@@ -42,7 +42,7 @@ export const MiniChart: React.FC<Props> = ({
   const styles = useStyles2(getStyles);
   const W = 280;
   const H = height;
-  const pad = { l: 30, r: 6, t: 8, b: 18 };
+  const pad = { l: 30, r: 8, t: 14, b: 18 };
   const xs = series.flatMap((s) => s.points.map((p) => p[0]));
   const ys = [...series.flatMap((s) => s.points.map((p) => p[1])), ...rules.map((r) => r.y)];
   if (!xs.length) {
@@ -71,8 +71,14 @@ export const MiniChart: React.FC<Props> = ({
             </text>
           </g>
         ))}
-        {xt.map((x) => (
-          <text key={x} x={sx(x)} y={H - 5} textAnchor="middle" className={styles.axis}>
+        {xt.map((x, i) => (
+          <text
+            key={x}
+            x={sx(x)}
+            y={H - 5}
+            textAnchor={i === 0 ? 'start' : i === xt.length - 1 ? 'end' : 'middle'}
+            className={styles.axis}
+          >
             {xLabel(x)}
           </text>
         ))}
@@ -104,7 +110,12 @@ export const MiniChart: React.FC<Props> = ({
         {marker && (
           <g>
             <line x1={sx(marker.x)} x2={sx(marker.x)} y1={pad.t} y2={H - pad.b} className={styles.marker} />
-            <text x={sx(marker.x) + 3} y={H - pad.b - 4} className={styles.axis}>
+            <text
+              x={sx(marker.x) > W - 40 ? sx(marker.x) - 3 : sx(marker.x) + 3}
+              y={H - pad.b - 4}
+              textAnchor={sx(marker.x) > W - 40 ? 'end' : 'start'}
+              className={styles.axis}
+            >
               {marker.label}
             </text>
           </g>
@@ -120,7 +131,7 @@ export const MiniChart: React.FC<Props> = ({
             points={s.points.map(([x, y]) => `${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(' ')}
           />
         ))}
-        <text x={2} y={pad.t + 2} className={styles.axis}>
+        <text x={2} y={8} className={styles.axis}>
           {yUnit}
         </text>
       </svg>

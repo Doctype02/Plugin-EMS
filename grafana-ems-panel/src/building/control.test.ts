@@ -1,4 +1,16 @@
-import { applyLocal, describe as describeCmd, prune, resolveControlUrl, toPayload, validate } from './control';
+import {
+  SP_RANGE,
+  applyLocal,
+  describe as describeCmd,
+  feedbackFor,
+  prune,
+  resolveControlUrl,
+  toPayload,
+  validate,
+  validateCommand,
+  validateParams,
+} from './control';
+import { LIMIT_KW, LIMIT_RANGE } from './model';
 import { simulate } from './simulator';
 
 const at = (h: number, m = 0, day = 3) => Date.UTC(2026, 10, day, h + 5, m);
@@ -45,10 +57,50 @@ describe('comandos del operador', () => {
   });
 });
 
+describe('parámetros del EMS', () => {
+  it('el límite de diseño es 170 kW y el rango el de Node-RED', () => {
+    expect(LIMIT_KW).toBe(170);
+    expect(LIMIT_RANGE).toEqual([42, 561]);
+    expect(SP_RANGE).toEqual([20, 28]);
+  });
+
+  it('valida limite_kw y sp_ocupado', () => {
+    expect(validateParams({ limitKw: 170 })).toBeUndefined();
+    expect(validateParams({ limitKw: 42, spOccupied: 20 })).toBeUndefined();
+    expect(validateParams({ limitKw: 561, spOccupied: 28 })).toBeUndefined();
+    expect(validateParams({ limitKw: 41 })).toMatch(/42 y 561/);
+    expect(validateParams({ limitKw: 562 })).toMatch(/42 y 561/);
+    expect(validateParams({ limitKw: NaN })).toMatch(/límite/);
+    expect(validateParams({ spOccupied: 19.5 })).toMatch(/20 y 28/);
+    expect(validateParams({ spOccupied: 28.5 })).toMatch(/20 y 28/);
+    expect(validateParams({})).toMatch(/cambios/);
+  });
+
+  it('validateCommand cubre todos los tipos', () => {
+    expect(validateCommand({ kind: 'params', params: { limitKw: 600 } })).toMatch(/límite/);
+    expect(validateCommand({ kind: 'override', cmd: { zone: 'Z06', hvac: 'off', durationMin: 5 } })).toMatch(/crítica/);
+    expect(validateCommand({ kind: 'occupancy', zone: '*', pct: 250, durationMin: 60 })).toMatch(/porcentaje/);
+    expect(validateCommand({ kind: 'release', zone: '*' })).toBeUndefined();
+  });
+
+  it('resume el resultado del envío', () => {
+    expect(feedbackFor({ ok: 1, failed: 0, errors: [] }, false)).toEqual({
+      phase: 'ok',
+      text: 'Comando aplicado en el simulador',
+    });
+    expect(feedbackFor({ ok: 20, failed: 0, errors: [] }, true).text).toBe(
+      '20 comandos aplicados · confirmado por Node-RED'
+    );
+    const err = feedbackFor({ ok: 0, failed: 1, errors: ['HTTP 500: caído'] }, true);
+    expect(err).toEqual({ phase: 'error', text: 'HTTP 500: caído' });
+    expect(feedbackFor({ ok: 3, failed: 1, errors: ['x'] }, true).text).toBe('1 de 4 comandos fallaron: x');
+  });
+});
+
 describe('overrides en el simulador', () => {
   const t0 = at(10, 0);
   const t = at(11, 0);
-  const base = { limitKw: 75 };
+  const base = { limitKw: 170 };
 
   it('apagar el HVAC de una zona la calienta y baja su potencia', () => {
     const auto = simulate(t, base);

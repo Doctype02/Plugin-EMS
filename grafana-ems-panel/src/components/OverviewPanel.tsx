@@ -6,6 +6,7 @@ import { PV, TARIFF, ZONES } from 'building/model';
 import { Snapshot, Status } from 'building/telemetry';
 import { dayPeriod, localParts } from 'building/clock';
 import { MiniChart } from './MiniChart';
+import { DemandGauge } from './DemandGauge';
 
 interface Props {
   snapshot: Snapshot;
@@ -80,8 +81,13 @@ export const OverviewPanel: React.FC<Props> = ({
 
   return (
     <div className={styles.box} data-testid="ems-overview">
-      <div className={styles.hero} style={{ borderLeftColor: statusColors[overall] }}>
-        <div>
+      <section
+        className={styles.hero}
+        style={{ borderLeftColor: statusColors[overall] }}
+        data-testid="ems-overview-hero"
+      >
+        <div className={styles.heroHead}>
+          <span className={styles.heroDot} style={{ background: statusColors[overall] }} />
           <div className={styles.heroTitle}>
             {overall === 'ok'
               ? 'Operación normal'
@@ -89,16 +95,10 @@ export const OverviewPanel: React.FC<Props> = ({
                 ? `${warn} alerta${warn > 1 ? 's' : ''} activa${warn > 1 ? 's' : ''}`
                 : `${crit} alarma${crit > 1 ? 's' : ''} crítica${crit > 1 ? 's' : ''}`}
           </div>
-          <div className={styles.muted}>
-            {dayPeriod(p.hour, p.dow)}
-            {snapshot.ems?.drActive ? ' · limitador de demanda activo' : ''}
-          </div>
+          <div className={styles.muted}>{dayPeriod(p.hour, p.dow)}</div>
         </div>
-        <div className={styles.heroKw}>
-          {m ? m.pTotal.toFixed(1) : '—'}
-          <small> kW</small>
-        </div>
-      </div>
+        <DemandGauge meter={m} ems={snapshot.ems} limit={snapshot.ems?.limitKw || limitKw} pv={hasPv} />
+      </section>
 
       <section className={styles.card}>
         <div className={styles.cardHead}>
@@ -129,9 +129,9 @@ export const OverviewPanel: React.FC<Props> = ({
         <Stat label="Costo hoy" value={m ? `${(Math.max(eNet, 0) * m.price).toFixed(0)} USD` : '—'} />
         <Stat label="CO₂ hoy" value={m ? `${((Math.max(eNet, 0) * CO2_KG_KWH) / 1000).toFixed(2)} t` : '—'} />
         <Stat
-          label="Demanda 15 min"
-          value={m ? `${m.demand15.toFixed(1)} kW` : '—'}
-          accent={m && m.demand15 > limitKw ? statusColors.critical : undefined}
+          label="Pico de hoy"
+          value={`${peak.toFixed(1)} kW`}
+          accent={peak > limitKw ? statusColors.critical : undefined}
         />
       </div>
 
@@ -263,33 +263,38 @@ const getStyles = (theme: GrafanaTheme2) => ({
   `,
   hero: css`
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
     gap: ${theme.spacing(1)};
-    padding: ${theme.spacing(1, 1.25)};
+    padding: ${theme.spacing(1.25, 1.5)};
     border: 1px solid ${theme.colors.border.weak};
     border-left: 4px solid;
     border-radius: ${theme.shape.radius.default};
     background: ${theme.colors.background.secondary};
   `,
-  heroTitle: css`
-    font-weight: ${theme.typography.fontWeightMedium};
-  `,
-  heroKw: css`
-    font-size: ${theme.typography.h3.fontSize};
-    font-weight: ${theme.typography.fontWeightMedium};
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-    small {
-      font-size: ${theme.typography.bodySmall.fontSize};
-      color: ${theme.colors.text.secondary};
+  heroHead: css`
+    display: flex;
+    align-items: center;
+    gap: ${theme.spacing(0.75)};
+    flex-wrap: wrap;
+    & > :last-child {
+      margin-left: auto;
     }
+  `,
+  heroDot: css`
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  `,
+  heroTitle: css`
+    font-size: ${theme.typography.h5.fontSize};
+    font-weight: ${theme.typography.fontWeightMedium};
   `,
   card: css`
     display: flex;
     flex-direction: column;
     gap: ${theme.spacing(0.75)};
-    padding: ${theme.spacing(1)};
+    padding: ${theme.spacing(1.25)};
     border: 1px solid ${theme.colors.border.weak};
     border-radius: ${theme.shape.radius.default};
     background: ${theme.colors.background.secondary};
@@ -298,6 +303,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: flex;
     justify-content: space-between;
     align-items: baseline;
+    font-size: ${theme.typography.h6.fontSize};
     font-weight: ${theme.typography.fontWeightMedium};
     gap: ${theme.spacing(1)};
   `,
@@ -310,10 +316,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: ${theme.spacing(0.75, 1)};
     border: 1px solid ${theme.colors.border.weak};
     border-radius: ${theme.shape.radius.default};
-    background: ${theme.colors.background.secondary};
+    background: ${theme.colors.background.primary};
   `,
   statLabel: css`
-    font-size: 11px;
+    font-size: ${theme.typography.bodySmall.fontSize};
     color: ${theme.colors.text.secondary};
   `,
   statValue: css`

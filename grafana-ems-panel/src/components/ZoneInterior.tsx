@@ -56,6 +56,8 @@ interface Props {
   /** Opacidad del mobiliario y las personas (menos detalle cuando la escala es pequeña). */
   detail?: number;
   hovered?: boolean;
+  /** Color de realce para el paso del mouse y la selección (primario del tema). */
+  accent?: string;
 }
 
 /** Tamaño del rótulo flotante en px (dos líneas si lleva título). */
@@ -152,6 +154,7 @@ export const ZoneInterior: React.FC<Props> = ({
   labelOffset = 0,
   detail = 1,
   hovered = false,
+  accent,
 }) => {
   const s = iso.scale;
   const zf = z0 + SLAB;
@@ -425,7 +428,8 @@ export const ZoneInterior: React.FC<Props> = ({
   const tw = tag.w;
   const th = tag.h;
   const leader = (anchor.y + s * 1.2 - tagPt.y) / labelScale; // px hasta el piso de la zona
-  const border = highlight ?? colorManipulator.alpha(P.ink2, 0.35);
+  const focus = accent && (selected || hovered) ? accent : undefined;
+  const border = (selected ? highlight : focus) ?? highlight ?? colorManipulator.alpha(P.ink2, 0.35);
 
   const multi = floors.length > 1;
   return (
@@ -462,6 +466,21 @@ export const ZoneInterior: React.FC<Props> = ({
         floors.map((floor, k) => (
           <path key={`h${k}`} d={path(floor.top)} fill={`url(#${idPrefix}-hatch)`} pointerEvents="none" />
         ))}
+      {focus &&
+        floors.map((floor, k) => (
+          <path
+            key={`f${k}`}
+            d={path(floor.top)}
+            fill={focus}
+            fillOpacity={selected ? 0.22 : 0.12}
+            stroke={focus}
+            strokeWidth={selected ? 0 : 2}
+            strokeDasharray={selected ? undefined : '6 4'}
+            vectorEffect="non-scaling-stroke"
+            pointerEvents="none"
+            data-testid={selected ? `ems-zone-selected-${zone.id}` : undefined}
+          />
+        ))}
       {floors.flatMap((floor, k) =>
         floor.sides.map((sd, i) => <path key={`s${k}-${i}`} d={path(sd.points)} fill={shade(fill, 0.3 + i * 0.1)} />)
       )}
@@ -495,7 +514,7 @@ export const ZoneInterior: React.FC<Props> = ({
           fill={P.surface}
           fillOpacity={0.94}
           stroke={border}
-          strokeWidth={highlight ? 2 : 1}
+          strokeWidth={selected || hovered ? 2.5 : highlight ? 2 : 1}
         />
         <rect x={-tw / 2} y={-th / 2} width={5} height={th} rx={2} fill={statusColor} />
         {title ? (

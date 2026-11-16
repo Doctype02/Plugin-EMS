@@ -791,9 +791,9 @@ export const PV: PvSpec = {
   ],
 };
 
-export const LIMIT_KW = 90;
+export const LIMIT_KW = 170;
 /** Rango que acepta Node-RED para el límite de demanda (0.25× – 3.3× el de diseño). */
-export const LIMIT_RANGE: [number, number] = [22, 297];
+export const LIMIT_RANGE: [number, number] = [42, 561];
 export const CRITICAL_ZONES: string[] = ['Z06'];
 
 /** Horarios del modelo E+ (Schedule:Day:Interval): [hora de inicio, valor]. */

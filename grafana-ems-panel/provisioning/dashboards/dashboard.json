@@ -34,7 +34,7 @@
         "demoMode": true,
         "demoSpeed": 60,
         "refreshSeconds": 2,
-        "limitKw": 90,
+        "limitKw": 170,
         "pvMode": "auto",
         "demoController": "reglas_dr",
         "defaultView": "status",

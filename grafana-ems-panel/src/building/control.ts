@@ -3,7 +3,7 @@
  * `ems/<edif>/ems/parametros`). En modo demostración se aplican al simulador del navegador; en modo
  * en vivo se envían por HTTP al flujo de Node-RED, que los publica por MQTT y los respeta en sus reglas.
  */
-import { ZONE_BY_ID } from './model';
+import { LIMIT_RANGE, ZONE_BY_ID } from './model';
 import { EmsParams, OccupancyOverrides, Overrides, ZoneOverride } from './telemetry';
 import { SimEvent, describeEvent } from './events';
 
@@ -26,6 +26,74 @@ export type Command =
   /** Cantidad de personas: fija en una zona (`people`) o % del horario en todo el edificio (`zone: '*'`, `pct`). */
   | { kind: 'occupancy'; zone: string | '*'; people?: number; pct?: number; durationMin: number }
   | { kind: 'occupancy_release'; zone: string | '*' };
+
+/** Rango del setpoint con ocupación (`sp_ocupado`) y de los setpoints manuales por zona (°C). */
+export const SP_RANGE: [number, number] = [20, 28];
+
+/** Resultado de ejecutar uno o varios comandos del operador. */
+export interface CommandResult {
+  ok: number;
+  failed: number;
+  /** Motivos de los comandos rechazados o con error de envío. */
+  errors: string[];
+}
+
+/** Estado del último envío, para mostrarlo junto a los controles. */
+export interface SendFeedback {
+  phase: 'sending' | 'ok' | 'error';
+  text: string;
+  at: number;
+}
+
+/** Valida los parámetros del EMS contra el contrato (limite_kw 42–561 kW, sp_ocupado 20–28 °C). */
+export function validateParams(params: Partial<EmsParams>): string | undefined {
+  const { limitKw, spOccupied } = params;
+  if (limitKw === undefined && spOccupied === undefined) {
+    return 'No hay cambios que aplicar';
+  }
+  if (limitKw !== undefined && (!Number.isFinite(limitKw) || limitKw < LIMIT_RANGE[0] || limitKw > LIMIT_RANGE[1])) {
+    return `El límite de demanda debe estar entre ${LIMIT_RANGE[0]} y ${LIMIT_RANGE[1]} kW`;
+  }
+  if (
+    spOccupied !== undefined &&
+    (!Number.isFinite(spOccupied) || spOccupied < SP_RANGE[0] || spOccupied > SP_RANGE[1])
+  ) {
+    return `El setpoint con ocupación debe estar entre ${SP_RANGE[0]} y ${SP_RANGE[1]} °C`;
+  }
+  return undefined;
+}
+
+/** Valida cualquier comando antes de enviarlo; devuelve el motivo si no se puede aplicar. */
+export function validateCommand(c: Command): string | undefined {
+  switch (c.kind) {
+    case 'override':
+      return validate(c.cmd);
+    case 'occupancy':
+      return validateOccupancy(c);
+    case 'params':
+      return validateParams(c.params);
+    default:
+      return undefined;
+  }
+}
+
+/** Texto del estado de envío a partir del resultado. */
+export function feedbackFor(result: CommandResult, live: boolean): Omit<SendFeedback, 'at'> {
+  const total = result.ok + result.failed;
+  if (result.failed === 0) {
+    return {
+      phase: 'ok',
+      text: `${total > 1 ? `${total} comandos aplicados` : 'Comando aplicado'}${live ? ' · confirmado por Node-RED' : ' en el simulador'}`,
+    };
+  }
+  return {
+    phase: 'error',
+    text:
+      result.ok > 0
+        ? `${result.failed} de ${total} comandos fallaron: ${result.errors[0]}`
+        : (result.errors[0] ?? 'No se pudo aplicar el comando'),
+  };
+}
 
 /** Personas máximas admitidas al fijar una zona (el doble del aforo de diseño). */
 export const maxPeople = (zoneId: string) => Math.max(2 * (ZONE_BY_ID[zoneId]?.occupants ?? 0), 0);
@@ -94,8 +162,8 @@ export function validate(cmd: ZoneCommand): string | undefined {
   if (zone.critical) {
     return `${zone.id} es una carga crítica: no admite control manual`;
   }
-  if (cmd.setpoint !== undefined && (cmd.setpoint < 20 || cmd.setpoint > 28)) {
-    return 'El setpoint debe estar entre 20 y 28 °C';
+  if (cmd.setpoint !== undefined && (cmd.setpoint < SP_RANGE[0] || cmd.setpoint > SP_RANGE[1])) {
+    return `El setpoint debe estar entre ${SP_RANGE[0]} y ${SP_RANGE[1]} °C`;
   }
   for (const [k, v] of [
     ['iluminación', cmd.lights],
