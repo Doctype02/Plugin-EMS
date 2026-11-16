@@ -355,11 +355,22 @@ pronóstico, con fechas del 28 sep al 9 nov de 2026:
 sudo -u ems bash -c 'set -a; . /etc/ems/ems.env; cd /opt/Plugin-EMS && .venv/bin/python -m ems exportar'
 ```
 
-## 11. Dashboards adicionales (los construye infraestructura)
+## 11. Dashboards adicionales
 
-Guárdalos como JSON en `deploy/arch/grafana/dashboards/`, que el aprovisionamiento ya carga. Lo que debe
-contener cada uno está en [`AGENTE_INFRA.md`](AGENTE_INFRA.md#dashboards): Tiempo real, Zonas, Alarmas y
-Resultados. Todos usan el datasource `ems-influx` y la variable `escenario`.
+Están en `deploy/arch/grafana/dashboards/` (carpeta **EMS Edificio**, el aprovisionamiento los recarga solo al
+cambiar el archivo). Todos usan el datasource `ems-influx`, la etiqueta `ems` (enlaces entre ellos en la
+cabecera) y marcan la potencia máxima de **170 kW** como umbral (naranja 153 kW = 90 %, rojo 170 kW).
+
+| Archivo | uid | Contenido |
+|---|---|---|
+| `ems-edificio-3d.json` | `ems-edificio-3d-vivo` | Panel 3D `doctype02-ems-panel` + fila de stats (potencia, demanda, FV, red, alarmas) |
+| `ems-tiempo-real.json` | `ems-tiempo-real` | Gauges de potencia y demanda 15 min (máx. 170 kW), FV, red, energía y costo del día, red/UPS, DR, alarmas, modo y límite del EMS; series de potencia, demanda vs límite, potencia por uso, FV, clima, tarifa/FP; alarmas recientes |
+| `ems-zonas.json` | `ems-zonas` | Variables `planta` y `zona` (multi). Tabla de las 26 zonas coloreada por confort (21–26 °C), mapa de confort, temperatura, desviación respecto a la consigna, ocupación, estado del terminal, Z06 (crítica) destacada |
+| `ems-alarmas.json` | `ems-alarmas` | Conteos por nivel y código, tabla de alarmas, línea de tiempo de modo/DR/red, límite EMS vs demanda, latencia, alarmas activas y UPS |
+| `ems-resultados.json` | `ems-resultados` | Escenarios offline (medida `kpi`, variable `escenario`, con y sin FV): ahorro, pico, confort, energía, costo, CO₂, consumo por uso, tabla de KPI; series por semana tipo (enlaces *Semana 9 feb / 11 may / 10 ago / 2 nov*) y validación del pronóstico |
+
+Los paneles en vivo filtran `escenario == "live"`. No hay humedad por zona en el modelo: se muestra la HR
+exterior del medidor. Las series de UPS sólo aparecen durante un corte (`corte_energia`).
 
 ## 12. Prueba de aceptación (demo)
 
