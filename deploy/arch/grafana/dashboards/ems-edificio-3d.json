@@ -4,7 +4,7 @@
   "tags": [
     "ems"
   ],
-  "editable": true,
+  "editable": false,
   "schemaVersion": 39,
   "version": 1,
   "refresh": "10s",
@@ -516,18 +516,52 @@
   ],
   "links": [
     {
-      "title": "Dashboards EMS",
-      "type": "dashboards",
-      "tags": [
-        "ems"
-      ],
-      "asDropdown": false,
-      "includeVars": false,
-      "keepTime": false,
+      "type": "link",
+      "title": "Tiempo real",
+      "url": "/d/ems-tiempo-real",
+      "icon": "dashboard",
       "targetBlank": false,
-      "icon": "external link",
-      "tooltip": "",
-      "url": ""
+      "keepTime": false,
+      "includeVars": false,
+      "asDropdown": false,
+      "tags": [],
+      "tooltip": "Abrir EMS · Tiempo real"
+    },
+    {
+      "type": "link",
+      "title": "Zonas",
+      "url": "/d/ems-zonas",
+      "icon": "dashboard",
+      "targetBlank": false,
+      "keepTime": false,
+      "includeVars": false,
+      "asDropdown": false,
+      "tags": [],
+      "tooltip": "Abrir EMS · Zonas"
+    },
+    {
+      "type": "link",
+      "title": "Alarmas",
+      "url": "/d/ems-alarmas",
+      "icon": "bolt",
+      "targetBlank": false,
+      "keepTime": false,
+      "includeVars": false,
+      "asDropdown": false,
+      "tags": [],
+      "tooltip": "Abrir EMS · Alarmas"
+    },
+    {
+      "type": "link",
+      "title": "Resultados",
+      "url": "/d/ems-resultados",
+      "icon": "info",
+      "targetBlank": false,
+      "keepTime": false,
+      "includeVars": false,
+      "asDropdown": false,
+      "tags": [],
+      "tooltip": "Abrir EMS · Resultados"
     }
   ],
   "description": "Gemelo digital 3D del edificio en vivo (panel doctype02-ems-panel) con resumen de potencia.",

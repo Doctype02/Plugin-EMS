@@ -5,7 +5,7 @@
   "tags": [
     "ems"
   ],
-  "editable": true,
+  "editable": false,
   "graphTooltip": 1,
   "schemaVersion": 39,
   "version": 1,
@@ -28,18 +28,52 @@
   },
   "links": [
     {
-      "title": "Dashboards EMS",
-      "type": "dashboards",
-      "tags": [
-        "ems"
-      ],
-      "asDropdown": false,
-      "includeVars": false,
-      "keepTime": false,
+      "type": "link",
+      "title": "Edificio 3D",
+      "url": "/d/ems-edificio-3d-vivo",
+      "icon": "dashboard",
       "targetBlank": false,
-      "icon": "external link",
-      "tooltip": "",
-      "url": ""
+      "keepTime": false,
+      "includeVars": false,
+      "asDropdown": false,
+      "tags": [],
+      "tooltip": "Abrir EMS · Edificio 3D"
+    },
+    {
+      "type": "link",
+      "title": "Tiempo real",
+      "url": "/d/ems-tiempo-real",
+      "icon": "dashboard",
+      "targetBlank": false,
+      "keepTime": false,
+      "includeVars": false,
+      "asDropdown": false,
+      "tags": [],
+      "tooltip": "Abrir EMS · Tiempo real"
+    },
+    {
+      "type": "link",
+      "title": "Zonas",
+      "url": "/d/ems-zonas",
+      "icon": "dashboard",
+      "targetBlank": false,
+      "keepTime": false,
+      "includeVars": false,
+      "asDropdown": false,
+      "tags": [],
+      "tooltip": "Abrir EMS · Zonas"
+    },
+    {
+      "type": "link",
+      "title": "Alarmas",
+      "url": "/d/ems-alarmas",
+      "icon": "bolt",
+      "targetBlank": false,
+      "keepTime": false,
+      "includeVars": false,
+      "asDropdown": false,
+      "tags": [],
+      "tooltip": "Abrir EMS · Alarmas"
     },
     {
       "title": "Semana 9 feb",
