@@ -1,12 +1,12 @@
 {
   "uid": "ems-resultados",
   "title": "EMS · Resultados",
-  "description": "Comparación de los escenarios offline (baseline, reglas, reglas_dr, mpc, con y sin FV) desde la medida kpi.",
+  "description": "Comparación de las estrategias offline (sin EMS, reglas, reglas + DR, MPC; con y sin FV) en 4 semanas tipo de 2026.",
   "tags": [
     "ems"
   ],
   "editable": true,
-  "graphTooltip": 1,
+  "graphTooltip": 2,
   "schemaVersion": 39,
   "version": 1,
   "refresh": "",
@@ -179,19 +179,28 @@
   },
   "panels": [
     {
-      "id": 1,
+      "type": "row",
+      "title": "Resumen",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1
+    },
+    {
+      "id": 2,
       "type": "text",
       "title": "Cómo leer este tablero",
       "description": "Contexto de los escenarios offline.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
       "gridPos": {
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 1
       },
       "targets": [],
       "fieldConfig": {
@@ -200,24 +209,24 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**Escenarios offline** (simulación de **28 días**: 4 semanas tipo de 2026 — 9 feb, 11 may, 10 ago y 2 nov, de lunes a domingo). `baseline` = sin EMS · `reglas` = reglas Python · `reglas_dr` = reglas + respuesta a la demanda · `mpc` = control predictivo. El sufijo `_fv` es la misma estrategia con ≈ 55 kWp de FV (sólo medidor y KPI). Los KPI (filas superiores) no dependen del rango de tiempo; las series de abajo sí: elige la semana con los enlaces **Semana …** de la cabecera. Límite de demanda: **170 kW**."
+        "content": "**Escenarios offline** · 28 días en 4 semanas tipo de 2026 (9 feb, 11 may, 10 ago y 2 nov). **Sin EMS** = baseline · **Reglas** = reglas del EMS · **Reglas + DR** = con respuesta a la demanda · **MPC** = control predictivo. Las variantes **+ FV** añaden ≈ 55 kWp de paneles. Los paneles de las filas *Resumen*, *Energía y costo* y *Comparativa* cubren los 28 días; la fila *Semana elegida* sigue el rango de tiempo: cámbialo con los enlaces **Semana …** de la cabecera. Límite de demanda: **170 kW**."
       },
       "transparent": true
     },
     {
-      "id": 2,
+      "id": 3,
       "type": "bargauge",
       "title": "Ahorro de energía vs baseline",
-      "description": "Reducción de la energía tomada de la red respecto al edificio sin EMS ni FV (ahorro_pct). baseline no tiene valor (es la referencia).",
+      "description": "Reducción de la energía tomada de la red frente al edificio sin EMS ni FV. Sin EMS no tiene valor: es la referencia.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 8,
         "x": 0,
-        "y": 4
+        "y": 5
       },
       "targets": [
         {
@@ -258,88 +267,104 @@
           "min": 0,
           "max": 100
         },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "orientation": "horizontal",
-        "displayMode": "basic",
-        "valueMode": "color",
-        "namePlacement": "left",
-        "showUnfilled": true,
-        "sizing": "auto",
-        "minVizHeight": 12,
-        "maxVizHeight": 24,
-        "minVizWidth": 8,
-        "legend": {
-          "showLegend": false
-        }
-      }
-    },
-    {
-      "id": 3,
-      "type": "bargauge",
-      "title": "Pico de demanda 15 min",
-      "description": "Demanda máxima de 15 min en los 28 días frente a la potencia máxima de 170 kW.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 4
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "baseline"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sin EMS"
+              }
+            ]
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: 0)\n  |> filter(fn: (r) => r._measurement == \"kpi\" and r.escenario =~ /^(${escenario:pipe})$/)\n  |> filter(fn: (r) => r._field == \"demanda_max_15min_kw\")\n  |> last()\n  |> keep(columns: [\"escenario\", \"_value\"])\n  |> group(columns: [\"escenario\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "displayName": "${__field.labels.escenario}",
-          "unit": "kwatt",
-          "decimals": 0,
-          "max": 170,
-          "min": 0,
-          "color": {
-            "mode": "thresholds"
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas"
+              }
+            ]
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas_dr"
+            },
+            "properties": [
               {
-                "color": "green",
-                "value": null
-              },
+                "id": "displayName",
+                "value": "Reglas + DR"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mpc"
+            },
+            "properties": [
               {
-                "color": "#EAB839",
-                "value": 136
-              },
+                "id": "displayName",
+                "value": "MPC"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "baseline_fv"
+            },
+            "properties": [
               {
-                "color": "orange",
-                "value": 153
-              },
+                "id": "displayName",
+                "value": "Sin EMS + FV"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas_fv"
+            },
+            "properties": [
               {
-                "color": "red",
-                "value": 170
+                "id": "displayName",
+                "value": "Reglas + FV"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas_dr_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas + DR + FV"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mpc_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "MPC + FV"
               }
             ]
           }
-        },
-        "overrides": []
+        ]
       },
       "options": {
         "reduceOptions": {
@@ -366,17 +391,195 @@
     {
       "id": 4,
       "type": "bargauge",
-      "title": "Confort",
-      "description": "Porcentaje de horas ocupadas dentro de la banda de confort (21–26 °C).",
+      "title": "Pico de demanda 15 min",
+      "description": "Demanda máxima de 15 min en los 28 días frente a la potencia máxima de 170 kW (amarillo ≥ 80 %, naranja ≥ 90 %, rojo ≥ 100 %).",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
+        "w": 8,
+        "x": 8,
+        "y": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "from(bucket: \"ems\")\n  |> range(start: 0)\n  |> filter(fn: (r) => r._measurement == \"kpi\" and r.escenario =~ /^(${escenario:pipe})$/)\n  |> filter(fn: (r) => r._field == \"demanda_max_15min_kw\")\n  |> last()\n  |> keep(columns: [\"escenario\", \"_value\"])\n  |> group(columns: [\"escenario\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "${__field.labels.escenario}",
+          "unit": "kwatt",
+          "decimals": 0,
+          "max": 200,
+          "min": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 136
+              },
+              {
+                "color": "orange",
+                "value": 153
+              },
+              {
+                "color": "red",
+                "value": 170
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "baseline"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sin EMS"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas_dr"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas + DR"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mpc"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "MPC"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "baseline_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sin EMS + FV"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas + FV"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas_dr_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas + DR + FV"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mpc_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "MPC + FV"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "color",
+        "namePlacement": "left",
+        "showUnfilled": true,
+        "sizing": "auto",
+        "minVizHeight": 12,
+        "maxVizHeight": 24,
+        "minVizWidth": 8,
+        "legend": {
+          "showLegend": false
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "bargauge",
+      "title": "Confort",
+      "description": "Porcentaje de horas ocupadas dentro de la banda de confort 21–26 °C.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ems-influx"
+      },
+      "gridPos": {
+        "h": 9,
         "w": 8,
         "x": 16,
-        "y": 4
+        "y": 5
       },
       "targets": [
         {
@@ -416,7 +619,104 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "baseline"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sin EMS"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas_dr"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas + DR"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mpc"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "MPC"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "baseline_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sin EMS + FV"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas + FV"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas_dr_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas + DR + FV"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mpc_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "MPC + FV"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "reduceOptions": {
@@ -441,9 +741,22 @@
       }
     },
     {
-      "id": 5,
+      "type": "row",
+      "title": "Energía y costo (28 días)",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "id": 6
+    },
+    {
+      "id": 7,
       "type": "barchart",
-      "title": "Energía de red (28 días)",
+      "title": "Energía de red",
       "description": "Energía neta tomada de la red (energia_kwh) por estrategia, sin y con FV.",
       "datasource": {
         "type": "influxdb",
@@ -453,7 +766,7 @@
         "h": 9,
         "w": 8,
         "x": 0,
-        "y": 12
+        "y": 15
       },
       "targets": [
         {
@@ -494,10 +807,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Sin FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#5794F2"
+                  "fixedColor": "#A352CC"
                 }
               }
             ]
@@ -509,10 +826,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Con FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FADE2A"
+                  "fixedColor": "#E8B10C"
                 }
               }
             ]
@@ -544,9 +865,9 @@
       }
     },
     {
-      "id": 6,
+      "id": 8,
       "type": "barchart",
-      "title": "Costo de energía (28 días)",
+      "title": "Costo de energía",
       "description": "Costo de la energía con tarifa horaria (punta 0.245 / fuera de punta 0.185 USD/kWh); con FV descuenta el excedente inyectado. Sin cargo por demanda.",
       "datasource": {
         "type": "influxdb",
@@ -556,7 +877,7 @@
         "h": 9,
         "w": 8,
         "x": 8,
-        "y": 12
+        "y": 15
       },
       "targets": [
         {
@@ -597,10 +918,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Sin FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#5794F2"
+                  "fixedColor": "#A352CC"
                 }
               }
             ]
@@ -612,10 +937,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Con FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FADE2A"
+                  "fixedColor": "#E8B10C"
                 }
               }
             ]
@@ -647,7 +976,7 @@
       }
     },
     {
-      "id": 7,
+      "id": 9,
       "type": "barchart",
       "title": "Pico de demanda 15 min",
       "description": "Demanda máxima de 15 min por estrategia. Línea roja: potencia máxima de 170 kW.",
@@ -659,7 +988,7 @@
         "h": 9,
         "w": 8,
         "x": 16,
-        "y": 12
+        "y": 15
       },
       "targets": [
         {
@@ -698,10 +1027,6 @@
                 "value": null
               },
               {
-                "color": "orange",
-                "value": 153
-              },
-              {
                 "color": "red",
                 "value": 170
               }
@@ -717,10 +1042,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Sin FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#5794F2"
+                  "fixedColor": "#A352CC"
                 }
               }
             ]
@@ -732,10 +1061,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Con FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FADE2A"
+                  "fixedColor": "#E8B10C"
                 }
               }
             ]
@@ -767,7 +1100,7 @@
       }
     },
     {
-      "id": 8,
+      "id": 10,
       "type": "barchart",
       "title": "Ahorro anual estimado",
       "description": "Ahorro total anual extrapolado (energía + cargo por demanda) frente al baseline (ahorro_total_usd_anio).",
@@ -776,10 +1109,10 @@
         "uid": "ems-influx"
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 8,
         "x": 0,
-        "y": 21
+        "y": 24
       },
       "targets": [
         {
@@ -820,10 +1153,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Sin FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#5794F2"
+                  "fixedColor": "#A352CC"
                 }
               }
             ]
@@ -835,10 +1172,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Con FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FADE2A"
+                  "fixedColor": "#E8B10C"
                 }
               }
             ]
@@ -870,19 +1211,19 @@
       }
     },
     {
-      "id": 9,
+      "id": 11,
       "type": "barchart",
-      "title": "Emisiones de CO₂ (28 días)",
+      "title": "Emisiones de CO₂",
       "description": "Emisiones asociadas a la energía de red (factor 0.31 kg CO₂/kWh).",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 8,
         "x": 8,
-        "y": 21
+        "y": 24
       },
       "targets": [
         {
@@ -923,10 +1264,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Sin FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#5794F2"
+                  "fixedColor": "#A352CC"
                 }
               }
             ]
@@ -938,10 +1283,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Con FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FADE2A"
+                  "fixedColor": "#E8B10C"
                 }
               }
             ]
@@ -973,19 +1322,19 @@
       }
     },
     {
-      "id": 10,
+      "id": 12,
       "type": "barchart",
-      "title": "Consumo por uso (28 días)",
+      "title": "Consumo por uso",
       "description": "Energía consumida por climatización, iluminación y equipos en cada estrategia (sin FV; el consumo no cambia con FV).",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 8,
         "x": 16,
-        "y": 21
+        "y": 24
       },
       "targets": [
         {
@@ -1033,7 +1382,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#73BF69"
+                  "fixedColor": "#36A2B5"
                 }
               }
             ]
@@ -1052,7 +1401,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FFCB7D"
+                  "fixedColor": "#D6B656"
                 }
               }
             ]
@@ -1071,7 +1420,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#8AB8FF"
+                  "fixedColor": "#7C8AA5"
                 }
               }
             ]
@@ -1103,7 +1452,20 @@
       }
     },
     {
-      "id": 11,
+      "type": "row",
+      "title": "Comparativa de KPI (28 días)",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "id": 13
+    },
+    {
+      "id": 14,
       "type": "table",
       "title": "Tabla comparativa de KPI",
       "description": "Todos los KPI de cada escenario (28 días). Energía red = energía neta importada (consumo − FV). Ahorro, payback y ROI se calculan frente al baseline sin FV, con el CAPEX del EMS (y de la FV en las variantes _fv).",
@@ -1112,10 +1474,10 @@
         "uid": "ems-influx"
       },
       "gridPos": {
-        "h": 11,
+        "h": 10,
         "w": 24,
         "x": 0,
-        "y": 29
+        "y": 34
       },
       "targets": [
         {
@@ -1150,8 +1512,50 @@
                 "value": "Escenario"
               },
               {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "baseline": {
+                        "text": "Sin EMS",
+                        "index": 0
+                      },
+                      "reglas": {
+                        "text": "Reglas",
+                        "index": 1
+                      },
+                      "reglas_dr": {
+                        "text": "Reglas + DR",
+                        "index": 2
+                      },
+                      "mpc": {
+                        "text": "MPC",
+                        "index": 3
+                      },
+                      "baseline_fv": {
+                        "text": "Sin EMS + FV",
+                        "index": 4
+                      },
+                      "reglas_fv": {
+                        "text": "Reglas + FV",
+                        "index": 5
+                      },
+                      "reglas_dr_fv": {
+                        "text": "Reglas + DR + FV",
+                        "index": 6
+                      },
+                      "mpc_fv": {
+                        "text": "MPC + FV",
+                        "index": 7
+                      }
+                    }
+                  }
+                ]
+              },
+              {
                 "id": "custom.width",
-                "value": 120
+                "value": 150
               }
             ]
           },
@@ -1592,23 +1996,23 @@
       ]
     },
     {
-      "id": 12,
       "type": "row",
-      "title": "Series de la semana elegida (rango de tiempo)",
+      "title": "Semana elegida (rango de tiempo)",
       "collapsed": false,
+      "panels": [],
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 44
       },
-      "panels": []
+      "id": 15
     },
     {
-      "id": 13,
+      "id": 16,
       "type": "timeseries",
       "title": "Potencia de red por escenario",
-      "description": "Potencia tomada de la red (media de 15 min): consumo en los escenarios sin FV, importación neta en los _fv (línea discontinua). Umbral rojo: 170 kW.",
+      "description": "Potencia tomada de la red (media de 15 min): consumo en los escenarios sin FV e importación neta en las variantes + FV (línea discontinua). Línea roja: 170 kW.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -1617,7 +2021,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 41
+        "y": 45
       },
       "targets": [
         {
@@ -1642,10 +2046,6 @@
                 "value": null
               },
               {
-                "color": "orange",
-                "value": 153
-              },
-              {
                 "color": "red",
                 "value": 170
               }
@@ -1654,9 +2054,9 @@
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 2,
             "fillOpacity": 0,
-            "gradientMode": "none",
+            "gradientMode": "opacity",
             "showPoints": "never",
             "pointSize": 4,
             "spanNulls": 600000,
@@ -1686,7 +2086,8 @@
               "fill": "solid"
             },
             "axisSoftMax": 180
-          }
+          },
+          "noValue": "Sin datos en el rango"
         },
         "overrides": [
           {
@@ -1696,10 +2097,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Sin EMS"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#9FA7B3"
+                  "fixedColor": "#8E949E"
                 }
               }
             ]
@@ -1710,6 +2115,10 @@
               "options": "reglas"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas"
+              },
               {
                 "id": "color",
                 "value": {
@@ -1726,10 +2135,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Reglas + DR"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#B877D9"
+                  "fixedColor": "#A352CC"
                 }
               }
             ]
@@ -1740,6 +2153,10 @@
               "options": "mpc"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "MPC"
+              },
               {
                 "id": "color",
                 "value": {
@@ -1756,10 +2173,24 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Sin EMS + FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#C8CCD2"
+                  "fixedColor": "#C3C7CD"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    6
+                  ]
                 }
               }
             ]
@@ -1771,10 +2202,24 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Reglas + FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "#8AB8FF"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    6
+                  ]
                 }
               }
             ]
@@ -1786,10 +2231,24 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Reglas + DR + FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "#CA95E5"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    6
+                  ]
                 }
               }
             ]
@@ -1801,20 +2260,16 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "MPC + FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#96D98D"
+                  "fixedColor": "#A8DDA0"
                 }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": ".*_fv$"
-            },
-            "properties": [
+              },
               {
                 "id": "custom.lineStyle",
                 "value": {
@@ -1841,15 +2296,15 @@
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       }
     },
     {
-      "id": 14,
+      "id": 17,
       "type": "timeseries",
       "title": "Demanda 15 min por escenario",
-      "description": "Demanda de 15 min en la acometida (máximo por intervalo). Umbrales: 153 kW (90 %) y 170 kW.",
+      "description": "Demanda de 15 min en la acometida (máximo por intervalo). Línea roja: 170 kW.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -1858,7 +2313,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 50
+        "y": 54
       },
       "targets": [
         {
@@ -1883,10 +2338,6 @@
                 "value": null
               },
               {
-                "color": "orange",
-                "value": 153
-              },
-              {
                 "color": "red",
                 "value": 170
               }
@@ -1895,9 +2346,9 @@
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 2,
             "fillOpacity": 0,
-            "gradientMode": "none",
+            "gradientMode": "opacity",
             "showPoints": "never",
             "pointSize": 4,
             "spanNulls": 600000,
@@ -1927,7 +2378,8 @@
               "fill": "solid"
             },
             "axisSoftMax": 180
-          }
+          },
+          "noValue": "Sin datos en el rango"
         },
         "overrides": [
           {
@@ -1937,10 +2389,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Sin EMS"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#9FA7B3"
+                  "fixedColor": "#8E949E"
                 }
               }
             ]
@@ -1951,6 +2407,10 @@
               "options": "reglas"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas"
+              },
               {
                 "id": "color",
                 "value": {
@@ -1967,10 +2427,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Reglas + DR"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#B877D9"
+                  "fixedColor": "#A352CC"
                 }
               }
             ]
@@ -1981,6 +2445,10 @@
               "options": "mpc"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "MPC"
+              },
               {
                 "id": "color",
                 "value": {
@@ -1997,65 +2465,16 @@
             },
             "properties": [
               {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#C8CCD2"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "reglas_fv"
-            },
-            "properties": [
+                "id": "displayName",
+                "value": "Sin EMS + FV"
+              },
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#8AB8FF"
+                  "fixedColor": "#C3C7CD"
                 }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "reglas_dr_fv"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#CA95E5"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "mpc_fv"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#96D98D"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": ".*_fv$"
-            },
-            "properties": [
+              },
               {
                 "id": "custom.lineStyle",
                 "value": {
@@ -2067,188 +2486,6 @@
                 }
               }
             ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true,
-          "calcs": [
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 15,
-      "type": "timeseries",
-      "title": "Temperatura máxima de zonas por escenario",
-      "description": "Temperatura máxima entre las 25 zonas no críticas (cada 30 min). Banda de confort 21–26 °C. Sólo escenarios sin FV (las variantes _fv no exportan zonas; el confort es el mismo).",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 50
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario =~ /^(${escenario:pipe})$/ and r._field == \"temp_c\" and r.critica == \"no\")\n  |> group(columns: [\"escenario\"])\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 30m) then v.windowPeriod else 30m, fn: max, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"escenario\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "celsius",
-          "decimals": 1,
-          "displayName": "${__field.labels.escenario}",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#5794F2",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 21
-              },
-              {
-                "color": "orange",
-                "value": 26
-              },
-              {
-                "color": "red",
-                "value": 27
-              }
-            ]
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": 600000,
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "barAlignment": 0,
-            "insertNulls": false,
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            },
-            "thresholdsStyle": {
-              "mode": "line+area"
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineStyle": {
-              "fill": "solid"
-            },
-            "axisSoftMin": 20,
-            "axisSoftMax": 29
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "baseline"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#9FA7B3"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "reglas"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#5794F2"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "reglas_dr"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#B877D9"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "mpc"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#73BF69"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "baseline_fv"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#C8CCD2"
-                }
-              }
-            ]
           },
           {
             "matcher": {
@@ -2257,10 +2494,24 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Reglas + FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "#8AB8FF"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    6
+                  ]
                 }
               }
             ]
@@ -2272,10 +2523,24 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Reglas + DR + FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "#CA95E5"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    6
+                  ]
                 }
               }
             ]
@@ -2287,20 +2552,16 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "MPC + FV"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#96D98D"
+                  "fixedColor": "#A8DDA0"
                 }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": ".*_fv$"
-            },
-            "properties": [
+              },
               {
                 "id": "custom.lineStyle",
                 "value": {
@@ -2327,24 +2588,24 @@
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       }
     },
     {
-      "id": 16,
-      "type": "barchart",
-      "title": "Alarmas por escenario (28 días)",
-      "description": "Alarmas generadas por el supervisor en cada escenario (no depende del rango). Las variantes _fv no exportan alarmas.",
+      "id": 18,
+      "type": "timeseries",
+      "title": "Temperatura máxima de zonas por escenario",
+      "description": "Temperatura máxima entre las 25 zonas no críticas (cada 30 min); línea naranja: límite de confort 26 °C. Sólo escenarios sin FV (el confort es el mismo con FV).",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
-        "x": 0,
-        "y": 59
+        "x": 12,
+        "y": 54
       },
       "targets": [
         {
@@ -2353,7 +2614,304 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: 0)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario =~ /^(${escenario:pipe})$/ and r.escenario != \"live\" and r._field == \"valor\")\n  |> group(columns: [\"escenario\", \"codigo\"])\n  |> count()\n  |> group()\n  |> pivot(rowKey: [\"escenario\"], columnKey: [\"codigo\"], valueColumn: \"_value\")\n  |> rename(columns: {escenario: \"estrategia\"})"
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario =~ /^(${escenario:pipe})$/ and r._field == \"temp_c\" and r.critica == \"no\")\n  |> group(columns: [\"escenario\"])\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 30m) then v.windowPeriod else 30m, fn: max, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"escenario\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "displayName": "${__field.labels.escenario}",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 26
+              },
+              {
+                "color": "red",
+                "value": 27
+              }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "pointSize": 4,
+            "spanNulls": 600000,
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "barAlignment": 0,
+            "insertNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "axisSoftMin": 20,
+            "axisSoftMax": 29
+          },
+          "noValue": "Sin datos en el rango"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "baseline"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sin EMS"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8E949E"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794F2"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas_dr"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas + DR"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#A352CC"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mpc"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "MPC"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73BF69"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "baseline_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sin EMS + FV"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#C3C7CD"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    6
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas + FV"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8AB8FF"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    6
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reglas_dr_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reglas + DR + FV"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#CA95E5"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    6
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mpc_fv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "MPC + FV"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#A8DDA0"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    6
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "max",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "type": "barchart",
+      "title": "Alarmas por escenario (28 días)",
+      "description": "Alarmas generadas por el supervisor en cada escenario en los 28 días (no depende del rango). Las variantes + FV no exportan alarmas.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ems-influx"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 63
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "nombre = (e) => if e == \"baseline\" then \"Sin EMS\" else if e == \"reglas\" then \"Reglas\" else if e == \"reglas_dr\" then \"Reglas + DR\" else if e == \"mpc\" then \"MPC\" else if e == \"baseline_fv\" then \"Sin EMS + FV\" else if e == \"reglas_fv\" then \"Reglas + FV\" else if e == \"reglas_dr_fv\" then \"Reglas + DR + FV\" else if e == \"mpc_fv\" then \"MPC + FV\" else e\n\nfrom(bucket: \"ems\")\n  |> range(start: 0)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario =~ /^(${escenario:pipe})$/ and r.escenario != \"live\" and r._field == \"valor\")\n  |> group(columns: [\"escenario\", \"codigo\"])\n  |> count()\n  |> group()\n  |> pivot(rowKey: [\"escenario\"], columnKey: [\"codigo\"], valueColumn: \"_value\")\n  |> rename(columns: {escenario: \"estrategia\"})\n  |> map(fn: (r) => ({r with estrategia: nombre(e: r.estrategia)}))"
         }
       ],
       "fieldConfig": {
@@ -2385,10 +2943,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Pico de demanda"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FF9830"
+                  "fixedColor": "#A352CC"
                 }
               }
             ]
@@ -2400,10 +2962,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Temperatura alta"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#F2495C"
+                  "fixedColor": "#FF9830"
                 }
               }
             ]
@@ -2415,10 +2981,14 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Temperatura baja"
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#5794F2"
+                  "fixedColor": "#4C8DE6"
                 }
               }
             ]
@@ -2450,10 +3020,10 @@
       }
     },
     {
-      "id": 17,
+      "id": 20,
       "type": "timeseries",
       "title": "Generación FV (semana)",
-      "description": "Generación fotovoltaica (idéntica en todas las variantes _fv; media de 15 min).",
+      "description": "Generación fotovoltaica de la semana (idéntica en todas las variantes + FV; media de 15 min).",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -2462,7 +3032,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 63
       },
       "targets": [
         {
@@ -2481,14 +3051,14 @@
           "min": 0,
           "color": {
             "mode": "fixed",
-            "fixedColor": "#FADE2A"
+            "fixedColor": "#E8B10C"
           },
           "displayName": "Generación FV",
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
             "lineWidth": 2,
-            "fillOpacity": 30,
+            "fillOpacity": 8,
             "gradientMode": "opacity",
             "showPoints": "never",
             "pointSize": 4,
@@ -2519,30 +3089,31 @@
               "fill": "solid"
             }
           },
-          "noValue": "Elige algún escenario _fv"
+          "noValue": "Elige algún escenario con FV"
         },
         "overrides": []
       },
       "options": {
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true,
           "calcs": [
-            "max"
+            "max",
+            "mean"
           ]
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       }
     },
     {
-      "id": 18,
+      "id": 21,
       "type": "timeseries",
-      "title": "Pronóstico de demanda vs real (validación)",
-      "description": "Validación del modelo de regresión del día siguiente (p_kw_pred) frente a la potencia simulada (p_kw_real, escenario reglas_dr). Exportado para la semana del 3 al 10 nov 2026. Umbral: 170 kW.",
+      "title": "Pronóstico de demanda frente a la real",
+      "description": "Validación del modelo de regresión del día siguiente frente a la potencia simulada (escenario Reglas + DR). Exportado para la semana del 3 al 10 nov 2026. Línea roja: 170 kW.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -2551,7 +3122,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 67
+        "y": 71
       },
       "targets": [
         {
@@ -2573,7 +3144,7 @@
             "lineInterpolation": "linear",
             "lineWidth": 2,
             "fillOpacity": 0,
-            "gradientMode": "none",
+            "gradientMode": "opacity",
             "showPoints": "never",
             "pointSize": 4,
             "spanNulls": 600000,
@@ -2610,10 +3181,6 @@
               {
                 "color": "transparent",
                 "value": null
-              },
-              {
-                "color": "orange",
-                "value": 153
               },
               {
                 "color": "red",
@@ -2676,7 +3243,7 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true,
           "calcs": [
@@ -2686,7 +3253,7 @@
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       }
     }

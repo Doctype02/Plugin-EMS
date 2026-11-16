@@ -1,15 +1,15 @@
 {
   "uid": "ems-zonas",
   "title": "EMS · Zonas",
-  "description": "Temperatura, confort, ocupación y estado de climatización de las 26 zonas (Z06 crítica).",
+  "description": "Confort, ocupación, climatización y sensores de las 26 zonas (filtrables por planta y zona); Z06 es la zona crítica.",
   "tags": [
     "ems"
   ],
   "editable": true,
-  "graphTooltip": 1,
+  "graphTooltip": 2,
   "schemaVersion": 39,
   "version": 1,
-  "refresh": "1m",
+  "refresh": "30s",
   "time": {
     "from": "now-12h",
     "to": "now"
@@ -155,15 +155,42 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "influxdb",
+          "uid": "ems-influx"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "#F2495C",
+        "name": "Alarmas críticas",
+        "target": {
+          "refId": "Anno",
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"mensaje\" and r.nivel == \"crit\")\n  |> group()\n  |> map(fn: (r) => ({_time: r._time, text: r.codigo + \" · \" + r.zona + \": \" + r._value, tags: r.nivel}))"
+        }
       }
     ]
   },
   "panels": [
     {
-      "id": 1,
+      "type": "row",
+      "title": "Resumen",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1
+    },
+    {
+      "id": 2,
       "type": "stat",
       "title": "Temperatura media",
-      "description": "Temperatura media actual de las zonas seleccionadas (sin el cuarto de servidores).",
+      "description": "Temperatura media actual de las zonas seleccionadas, sin el cuarto de servidores. Verde = banda de confort 21–26 °C.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -172,7 +199,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 0
+        "y": 1
       },
       "targets": [
         {
@@ -195,7 +222,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "#5794F2",
+                "color": "#4C8DE6",
                 "value": null
               },
               {
@@ -226,19 +253,23 @@
         },
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
         "textMode": "auto",
         "wideLayout": true,
         "showPercentChange": false,
-        "percentChangeColorMode": "standard"
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 30
+        }
       }
     },
     {
-      "id": 2,
+      "id": 3,
       "type": "stat",
-      "title": "Zonas fuera de confort",
-      "description": "Zonas seleccionadas (sin Z06) con temperatura fuera de la banda de confort 21–26 °C.",
+      "title": "Fuera de confort",
+      "description": "Zonas seleccionadas (sin Z06) con la temperatura fuera de la banda de confort 21–26 °C.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -247,7 +278,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 0
+        "y": 1
       },
       "targets": [
         {
@@ -282,7 +313,19 @@
               }
             ]
           },
-          "noValue": "0"
+          "noValue": "Sin datos",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Ninguna",
+                  "color": "#73BF69",
+                  "index": 0
+                }
+              }
+            }
+          ]
         },
         "overrides": []
       },
@@ -294,18 +337,22 @@
           "fields": "",
           "values": false
         },
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
         "textMode": "auto",
         "wideLayout": true,
         "showPercentChange": false,
-        "percentChangeColorMode": "standard"
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 30
+        }
       }
     },
     {
-      "id": 3,
+      "id": 4,
       "type": "stat",
       "title": "Ocupantes",
       "description": "Personas presentes ahora en las zonas seleccionadas.",
@@ -317,7 +364,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 0
+        "y": 1
       },
       "targets": [
         {
@@ -331,7 +378,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "none",
+          "unit": "suffix: personas",
           "decimals": 0,
           "color": {
             "mode": "fixed",
@@ -351,19 +398,23 @@
         },
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
         "textMode": "auto",
         "wideLayout": true,
         "showPercentChange": false,
-        "percentChangeColorMode": "standard"
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 30
+        }
       }
     },
     {
-      "id": 4,
+      "id": 5,
       "type": "stat",
-      "title": "Terminales enfriando",
-      "description": "Número de zonas seleccionadas cuyo terminal de climatización (VRF/PTAC) está enfriando.",
+      "title": "Potencia zonas",
+      "description": "Potencia actual (climatización + luces + equipos) de las zonas seleccionadas.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -372,61 +423,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 0
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\" and r.zona =~ /^(${zona:pipe})$/ and (r._field == \"hvac_on\"))\n  |> last()\n  |> map(fn: (r) => ({r with _value: float(v: r._value)}))\n  |> pivot(rowKey: [\"zona\", \"nombre\", \"critica\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> sum(column: \"hvac_on\")"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#73BF69"
-          },
-          "noValue": "0"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard"
-      }
-    },
-    {
-      "id": 5,
-      "type": "stat",
-      "title": "Potencia de las zonas",
-      "description": "Suma de la potencia actual (climatización + luces + equipos) de las zonas seleccionadas.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 16,
-        "y": 0
+        "y": 1
       },
       "targets": [
         {
@@ -460,19 +457,23 @@
         },
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
         "textMode": "auto",
         "wideLayout": true,
         "showPercentChange": false,
-        "percentChangeColorMode": "standard"
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 30
+        }
       }
     },
     {
       "id": 6,
       "type": "stat",
-      "title": "Z06 · Servidores",
-      "description": "Temperatura del cuarto de servidores, la única zona crítica (setpoint fijo). Alarma SERVIDOR_TEMP a 27 °C. Se muestra siempre, aunque no esté seleccionada.",
+      "title": "Servidores Z06",
+      "description": "Temperatura del cuarto de servidores, la zona crítica (consigna fija). Alarma SERVIDOR_TEMP a 27 °C. Se muestra aunque no esté seleccionada.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -480,8 +481,8 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 20,
-        "y": 0
+        "x": 16,
+        "y": 1
       },
       "targets": [
         {
@@ -490,7 +491,7 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\" and r.zona == \"Z06\" and r._field == \"temp_c\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+          "query": "from(bucket: \"ems\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.zona == \"Z06\" and r.escenario == \"live\" and r._field == \"temp_c\")\n  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\"])"
         }
       ],
       "fieldConfig": {
@@ -529,30 +530,27 @@
           "fields": "",
           "values": false
         },
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
         "orientation": "auto",
         "textMode": "auto",
         "wideLayout": true,
         "showPercentChange": false,
-        "percentChangeColorMode": "standard"
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 30
+        }
       }
     },
     {
-      "id": 7,
-      "type": "table",
-      "title": "Estado de las zonas",
-      "description": "Último valor de cada zona seleccionada. Temperatura coloreada por confort: azul < 21 °C, verde 21–26 °C, naranja 26–27 °C, rojo ≥ 27 °C. Δ = temperatura − consigna. ★ / CRÍTICA = Z06 (cuarto de servidores).",
+      "type": "stat",
+      "title": "Sensores forzados",
+      "description": "Zonas seleccionadas cuyo sensor está forzado desde el panel 3D (desfase, valor fijo o congelado): el EMS lee un valor distinto del real.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 15,
-        "w": 16,
-        "x": 0,
-        "y": 4
       },
       "targets": [
         {
@@ -561,7 +559,109 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "planta = (z) => if z <= \"Z06\" then \"PB\" else if z <= \"Z11\" then \"P1\" else if z <= \"Z16\" then \"P2\" else if z <= \"Z21\" then \"P3\" else \"P4\"\n\nfrom(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\" and r.zona =~ /^(${zona:pipe})$/ and (r._field == \"temp_c\" or r._field == \"setpoint_c\" or r._field == \"ocupantes\" or r._field == \"hvac_on\" or r._field == \"hvac_enable\" or r._field == \"luces_nivel\" or r._field == \"p_hvac_kw\" or r._field == \"p_total_kw\"))\n  |> last()\n  |> map(fn: (r) => ({r with _value: float(v: r._value)}))\n  |> pivot(rowKey: [\"zona\", \"nombre\", \"critica\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> map(fn: (r) => ({\n      zona: r.zona, planta: planta(z: r.zona),\n      nombre: if r.critica == \"si\" then \"★ \" + r.nombre else r.nombre,\n      temp: r.temp_c, sp: r.setpoint_c, delta: r.temp_c - r.setpoint_c,\n      ocupantes: r.ocupantes,\n      estado: if r.hvac_enable < 0.5 then 0 else if r.hvac_on > 0.5 then 2 else 1,\n      luces: r.luces_nivel * 100.0, p_hvac: r.p_hvac_kw, p_total: r.p_total_kw, critica: r.critica\n  }))\n  |> sort(columns: [\"zona\"])"
+          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\" and r.zona =~ /^(${zona:pipe})$/ and r._field == \"sensor_forzado\")\n  |> last()\n  |> group()\n  |> map(fn: (r) => ({r with _value: int(v: r._value)}))\n  |> sum()"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null
+              },
+              {
+                "color": "#FF9830",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Sin forzados",
+                  "color": "#73BF69",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "textMode": "auto",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 30
+        }
+      },
+      "id": 7,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      }
+    },
+    {
+      "type": "row",
+      "title": "Zonas",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 8
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Estado de las zonas",
+      "description": "Último valor de cada zona seleccionada. Temperatura coloreada por confort (azul < 21 °C, verde 21–26, naranja 26–27, rojo ≥ 27). Δ = temperatura − consigna. «Sensor forzado» = el EMS lee un valor simulado.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ems-influx"
+      },
+      "gridPos": {
+        "h": 20,
+        "w": 16,
+        "x": 0,
+        "y": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "planta = (z) => if z <= \"Z06\" then \"PB\" else if z <= \"Z11\" then \"P1\" else if z <= \"Z16\" then \"P2\" else if z <= \"Z21\" then \"P3\" else \"P4\"\n\nfrom(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\" and r.zona =~ /^(${zona:pipe})$/ and (r._field == \"temp_c\" or r._field == \"setpoint_c\" or r._field == \"ocupantes\" or r._field == \"hvac_on\" or r._field == \"hvac_enable\" or r._field == \"luces_nivel\" or r._field == \"p_hvac_kw\" or r._field == \"p_total_kw\" or r._field == \"sensor_forzado\"))\n  |> last()\n  |> map(fn: (r) => ({r with _value: float(v: r._value)}))\n  |> pivot(rowKey: [\"zona\", \"nombre\", \"critica\", \"tipo\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> map(fn: (r) => ({\n      zona: r.zona, planta: planta(z: r.zona),\n      nombre: if r.critica == \"si\" then \"★ \" + r.nombre else r.nombre,\n      temp: r.temp_c, sp: r.setpoint_c, delta: r.temp_c - r.setpoint_c,\n      ocupantes: r.ocupantes,\n      estado: if r.hvac_enable < 0.5 then 0 else if r.hvac_on > 0.5 then 2 else 1,\n      luces: r.luces_nivel * 100.0, p_hvac: r.p_hvac_kw, p_total: r.p_total_kw, critica: r.critica,\n      unidad: if r.zona == \"Z06\" then \"VRF-SRV\" else if r.tipo == \"bano\" then \"PTAC-\" + planta(z: r.zona) else \"VRF-\" + planta(z: r.zona),\n      sensor: if exists r.sensor_forzado then r.sensor_forzado else 0.0\n  }))\n  |> sort(columns: [\"zona\"])"
         }
       ],
       "fieldConfig": {
@@ -649,7 +749,7 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "#5794F2",
+                      "color": "#4C8DE6",
                       "value": null
                     },
                     {
@@ -676,8 +776,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
-                  "mode": "basic"
+                  "type": "color-text"
                 }
               },
               {
@@ -808,12 +907,12 @@
                     "options": {
                       "0": {
                         "text": "Deshabilitado",
-                        "color": "#7A7F87",
+                        "color": "#8E949E",
                         "index": 0
                       },
                       "1": {
                         "text": "En espera",
-                        "color": "#5794F2",
+                        "color": "#4C8DE6",
                         "index": 1
                       },
                       "2": {
@@ -867,7 +966,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FFCB7D"
+                  "fixedColor": "#D6B656"
                 }
               },
               {
@@ -949,8 +1048,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
-                  "mode": "basic"
+                  "type": "color-text"
                 }
               },
               {
@@ -960,13 +1058,71 @@
                     "type": "value",
                     "options": {
                       "si": {
-                        "text": "CRÍTICA",
+                        "text": "Crítica",
                         "color": "#F2495C",
                         "index": 0
                       },
                       "no": {
                         "text": "—",
-                        "color": "transparent",
+                        "color": "#8E949E",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unidad"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Unidad"
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sensor"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sensor"
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Real",
+                        "color": "#8E949E",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "Forzado",
+                        "color": "#FF9830",
                         "index": 1
                       }
                     }
@@ -1003,29 +1159,31 @@
               "delta": 5,
               "ocupantes": 6,
               "estado": 7,
-              "luces": 8,
-              "p_hvac": 9,
-              "p_total": 10,
-              "critica": 11
+              "unidad": 8,
+              "luces": 9,
+              "p_hvac": 10,
+              "p_total": 11,
+              "sensor": 12,
+              "critica": 13
             }
           }
         }
       ]
     },
     {
-      "id": 8,
+      "id": 10,
       "type": "state-timeline",
       "title": "Mapa de confort por zona",
-      "description": "Temperatura media de 15 min por zona, coloreada por confort (azul < 21, verde 21–26, naranja 26–27, rojo ≥ 27 °C).",
+      "description": "Temperatura media de 15 min de cada zona, coloreada por confort (azul < 21, verde 21–26, naranja 26–27, rojo ≥ 27 °C).",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
       },
       "gridPos": {
-        "h": 15,
+        "h": 20,
         "w": 8,
         "x": 16,
-        "y": 4
+        "y": 6
       },
       "targets": [
         {
@@ -1048,7 +1206,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "#5794F2",
+                "color": "#4C8DE6",
                 "value": null
               },
               {
@@ -1074,7 +1232,8 @@
               "tooltip": false,
               "viz": false
             }
-          }
+          },
+          "noValue": "Sin datos en el rango"
         },
         "overrides": []
       },
@@ -1095,19 +1254,32 @@
       }
     },
     {
-      "id": 9,
+      "type": "row",
+      "title": "Climatización",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "id": 11
+    },
+    {
+      "id": 12,
       "type": "timeseries",
       "title": "Temperatura por zona",
-      "description": "Temperatura de las zonas seleccionadas. Banda verde = confort 21–26 °C; naranja/rojo por encima.",
+      "description": "Temperatura de las zonas seleccionadas. Línea roja discontinua: 27 °C; naranja: límite superior de confort 26 °C.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
       },
       "gridPos": {
-        "h": 9,
+        "h": 10,
         "w": 12,
         "x": 0,
-        "y": 19
+        "y": 27
       },
       "targets": [
         {
@@ -1128,12 +1300,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "#5794F2",
+                "color": "transparent",
                 "value": null
-              },
-              {
-                "color": "green",
-                "value": 21
               },
               {
                 "color": "orange",
@@ -1148,9 +1316,9 @@
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 2,
             "fillOpacity": 0,
-            "gradientMode": "none",
+            "gradientMode": "opacity",
             "showPoints": "never",
             "pointSize": 4,
             "spanNulls": 600000,
@@ -1166,7 +1334,7 @@
               "group": "A"
             },
             "thresholdsStyle": {
-              "mode": "line+area"
+              "mode": "dashed"
             },
             "scaleDistribution": {
               "type": "linear"
@@ -1181,7 +1349,8 @@
             },
             "axisSoftMin": 20,
             "axisSoftMax": 28
-          }
+          },
+          "noValue": "Sin datos en el rango"
         },
         "overrides": [
           {
@@ -1211,7 +1380,9 @@
           "placement": "right",
           "showLegend": true,
           "calcs": [
-            "lastNotNull"
+            "lastNotNull",
+            "max",
+            "mean"
           ]
         },
         "tooltip": {
@@ -1221,19 +1392,19 @@
       }
     },
     {
-      "id": 10,
+      "id": 13,
       "type": "timeseries",
       "title": "Desviación respecto a la consigna",
-      "description": "Temperatura − consigna de cada zona. Positivo = más caliente que el setpoint. Banda ±1 °C en verde.",
+      "description": "Temperatura − consigna de cada zona. Positivo = más caliente que la consigna; líneas discontinuas: banda aceptable ±1 °C.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
       },
       "gridPos": {
-        "h": 9,
+        "h": 10,
         "w": 12,
         "x": 12,
-        "y": 19
+        "y": 27
       },
       "targets": [
         {
@@ -1254,29 +1425,25 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "#5794F2",
+                "color": "transparent",
                 "value": null
               },
               {
-                "color": "green",
+                "color": "#73BF69",
                 "value": -1
               },
               {
-                "color": "orange",
+                "color": "#FF9830",
                 "value": 1
-              },
-              {
-                "color": "red",
-                "value": 2
               }
             ]
           },
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 2,
             "fillOpacity": 0,
-            "gradientMode": "none",
+            "gradientMode": "opacity",
             "showPoints": "never",
             "pointSize": 4,
             "spanNulls": 600000,
@@ -1292,7 +1459,7 @@
               "group": "A"
             },
             "thresholdsStyle": {
-              "mode": "line+area"
+              "mode": "dashed"
             },
             "scaleDistribution": {
               "type": "linear"
@@ -1307,7 +1474,8 @@
             },
             "axisSoftMin": -2,
             "axisSoftMax": 2
-          }
+          },
+          "noValue": "Sin datos en el rango"
         },
         "overrides": [
           {
@@ -1337,7 +1505,9 @@
           "placement": "right",
           "showLegend": true,
           "calcs": [
-            "lastNotNull"
+            "lastNotNull",
+            "max",
+            "mean"
           ]
         },
         "tooltip": {
@@ -1347,10 +1517,10 @@
       }
     },
     {
-      "id": 11,
-      "type": "timeseries",
-      "title": "Ocupación",
-      "description": "Personas por zona (apilado). La ocupación sigue el horario del modelo E+ salvo que se fuerce desde el panel 3D.",
+      "id": 14,
+      "type": "state-timeline",
+      "title": "Estado del terminal de climatización",
+      "description": "Verde = enfriando; azul = habilitado en espera (termostato satisfecho); gris = deshabilitado por el EMS. Z06 ignora el deshabilitado.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -1359,7 +1529,85 @@
         "h": 13,
         "w": 12,
         "x": 0,
-        "y": 28
+        "y": 37
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\" and r.zona =~ /^(${zona:pipe})$/ and (r._field == \"hvac_on\" or r._field == \"hvac_enable\"))\n  |> map(fn: (r) => ({r with _value: float(v: r._value)}))\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: last, createEmpty: false)\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({_time: r._time, etiqueta: r.zona + \" · \" + r.nombre,\n      _value: if r.hvac_enable < 0.5 then 0 else if r.hvac_on > 0.5 then 2 else 1}))\n  |> group(columns: [\"etiqueta\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "${__field.labels.etiqueta}",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#7A7F87"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Deshabilitado",
+                  "color": "#8E949E",
+                  "index": 0
+                },
+                "1": {
+                  "text": "En espera",
+                  "color": "#4C8DE6",
+                  "index": 1
+                },
+                "2": {
+                  "text": "Enfriando",
+                  "color": "#73BF69",
+                  "index": 2
+                }
+              }
+            }
+          ],
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "noValue": "Sin datos en el rango"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "alignValue": "left",
+        "rowHeight": 0.85,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Ocupación",
+      "description": "Personas por zona (apilado). Sigue el horario del modelo salvo que se fuerce desde el panel 3D.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ems-influx"
+      },
+      "gridPos": {
+        "h": 13,
+        "w": 12,
+        "x": 12,
+        "y": 37
       },
       "targets": [
         {
@@ -1380,7 +1628,7 @@
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "stepAfter",
-            "lineWidth": 1,
+            "lineWidth": 2,
             "fillOpacity": 40,
             "gradientMode": "opacity",
             "showPoints": "never",
@@ -1411,7 +1659,8 @@
             "lineStyle": {
               "fill": "solid"
             }
-          }
+          },
+          "noValue": "Sin datos en el rango"
         },
         "overrides": []
       },
@@ -1421,6 +1670,7 @@
           "placement": "right",
           "showLegend": true,
           "calcs": [
+            "lastNotNull",
             "max"
           ]
         },
@@ -1431,19 +1681,25 @@
       }
     },
     {
-      "id": 12,
-      "type": "state-timeline",
-      "title": "Estado del terminal de climatización",
-      "description": "Verde = enfriando, azul = habilitado en espera (termostato satisfecho), gris = deshabilitado por el EMS (hvac_enable = 0). Z06 ignora el deshabilitado.",
+      "type": "row",
+      "title": "Sensores",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "id": 16
+    },
+    {
+      "type": "table",
+      "title": "Sensores forzados: lectura frente a real",
+      "description": "Zonas cuyo sensor está forzado ahora: lo que leen el termostato y el EMS frente al estado real de la zona. Δ T = leída − real.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 13,
-        "w": 12,
-        "x": 12,
-        "y": 28
       },
       "targets": [
         {
@@ -1452,66 +1708,471 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\" and r.zona =~ /^(${zona:pipe})$/ and (r._field == \"hvac_on\" or r._field == \"hvac_enable\"))\n  |> map(fn: (r) => ({r with _value: float(v: r._value)}))\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: last, createEmpty: false)\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({_time: r._time, etiqueta: r.zona + \" · \" + r.nombre,\n      _value: if r.hvac_enable < 0.5 then 0 else if r.hvac_on > 0.5 then 2 else 1}))\n  |> group(columns: [\"etiqueta\"])"
+          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\" and r.zona =~ /^(${zona:pipe})$/)\n  |> filter(fn: (r) => r._field == \"sensor_forzado\" or r._field == \"temp_c\" or r._field == \"temp_real_c\" or r._field == \"hr_pct\" or r._field == \"hr_real_pct\" or r._field == \"ocupado\" or r._field == \"ocupado_real\" or r._field == \"sensor_temp_offset_c\" or r._field == \"sensor_temp_fijo_c\" or r._field == \"sensor_hr_fijo_pct\" or r._field == \"sensor_presencia\" or r._field == \"sensor_congelado\" or r._field == \"sensor_restante_min\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: float(v: r._value)}))\n  |> pivot(rowKey: [\"_time\", \"zona\", \"nombre\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group(columns: [\"zona\"])\n  |> sort(columns: [\"_time\"])\n  |> tail(n: 1)\n  |> group()\n  |> filter(fn: (r) => exists r.sensor_forzado and r.sensor_forzado > 0.5)\n  |> map(fn: (r) => ({\n      zona: r.zona, nombre: r.nombre,\n      ajuste: if exists r.sensor_congelado and r.sensor_congelado > 0.5 then \"Congelado\"\n              else if exists r.sensor_temp_fijo_c then \"T fija \" + string(v: r.sensor_temp_fijo_c) + \" °C\"\n              else if exists r.sensor_temp_offset_c then \"Desfase \" + string(v: r.sensor_temp_offset_c) + \" °C\"\n              else if exists r.sensor_hr_fijo_pct then \"HR fija \" + string(v: r.sensor_hr_fijo_pct) + \" %\"\n              else if exists r.sensor_presencia then (if r.sensor_presencia > 0.5 then \"Presencia forzada\" else \"Ausencia forzada\")\n              else \"Forzado\",\n      t_leida: r.temp_c, t_real: r.temp_real_c, dt: r.temp_c - r.temp_real_c,\n      hr_leida: r.hr_pct, hr_real: r.hr_real_pct,\n      ocup_leida: r.ocupado, ocup_real: r.ocupado_real,\n      restante: if exists r.sensor_restante_min then r.sensor_restante_min else -1.0\n  }))\n  |> sort(columns: [\"zona\"])"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "displayName": "${__field.labels.etiqueta}",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#7A7F87"
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
           },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Deshabilitado",
-                  "color": "#7A7F87",
-                  "index": 0
-                },
-                "1": {
-                  "text": "En espera",
-                  "color": "#5794F2",
-                  "index": 1
-                },
-                "2": {
-                  "text": "Enfriando",
-                  "color": "#73BF69",
-                  "index": 2
+          "noValue": "Sin forzados: todos los sensores leen el valor real"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "zona"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Zona"
+              },
+              {
+                "id": "custom.width",
+                "value": 60
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "nombre"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Nombre"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ajuste"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Ajuste"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF9830"
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
                 }
               }
-            }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "t_leida"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "T leída"
+              },
+              {
+                "id": "unit",
+                "value": "celsius"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "t_real"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "T real"
+              },
+              {
+                "id": "unit",
+                "value": "celsius"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dt"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Δ T"
+              },
+              {
+                "id": "unit",
+                "value": "celsius"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#F2495C",
+                      "value": null
+                    },
+                    {
+                      "color": "#FF9830",
+                      "value": -1
+                    },
+                    {
+                      "color": "#73BF69",
+                      "value": -0.3
+                    },
+                    {
+                      "color": "#FF9830",
+                      "value": 0.3
+                    },
+                    {
+                      "color": "#F2495C",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "hr_leida"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "HR leída"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "hr_real"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "HR real"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ocup_leida"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Presencia leída"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Libre",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "Ocupada",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ocup_real"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Presencia real"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Libre",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "Ocupada",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "restante"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Vence en"
+              },
+              {
+                "id": "unit",
+                "value": "m"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "-1": {
+                        "text": "Sin vencimiento",
+                        "index": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
           ],
+          "fields": ""
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "zona": 0,
+              "nombre": 1,
+              "ajuste": 2,
+              "t_leida": 3,
+              "t_real": 4,
+              "dt": 5,
+              "hr_leida": 6,
+              "hr_real": 7,
+              "ocup_leida": 8,
+              "ocup_real": 9,
+              "restante": 10
+            }
+          }
+        }
+      ],
+      "id": 17,
+      "gridPos": {
+        "h": 9,
+        "w": 14,
+        "x": 0,
+        "y": 52
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Error de lectura de los sensores",
+      "description": "Diferencia entre la temperatura que lee el sensor y la real, sólo en las zonas donde supera 0.3 °C en el rango (el ruido normal es ±0.1 °C).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ems-influx"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "import \"join\"\n\nbase = from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\" and r.zona =~ /^(${zona:pipe})$/ and (r._field == \"temp_c\" or r._field == \"temp_real_c\"))\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.temp_real_c)\n  |> map(fn: (r) => ({_time: r._time, etiqueta: r.zona + \" · \" + r.nombre, _value: r.temp_c - r.temp_real_c}))\n  |> group(columns: [\"etiqueta\"])\n\nforzadas = base\n  |> map(fn: (r) => ({r with _value: if r._value < 0.0 then -r._value else r._value}))\n  |> max()\n  |> filter(fn: (r) => r._value > 0.3)\n  |> keep(columns: [\"etiqueta\"])\n\njoin.inner(left: base, right: forzadas, on: (l, r) => l.etiqueta == r.etiqueta, as: (l, r) => l)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
           "custom": {
-            "fillOpacity": 80,
-            "lineWidth": 0
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "pointSize": 4,
+            "spanNulls": 900000,
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "barAlignment": 0,
+            "insertNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineStyle": {
+              "fill": "solid"
+            }
+          },
+          "noValue": "Sin forzados en el rango",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              }
+            ]
           }
         },
         "overrides": []
       },
       "options": {
-        "showValue": "never",
-        "mergeValues": true,
-        "alignValue": "left",
-        "rowHeight": 0.85,
         "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
           "showLegend": true,
-          "displayMode": "list",
-          "placement": "bottom"
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
+      },
+      "id": 18,
+      "gridPos": {
+        "h": 9,
+        "w": 10,
+        "x": 14,
+        "y": 52
       }
     },
     {
-      "id": 13,
+      "type": "row",
+      "title": "Zona crítica y entorno",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 61
+      },
+      "id": 19
+    },
+    {
+      "id": 20,
       "type": "timeseries",
-      "title": "★ Z06 · Cuarto de servidores (zona crítica)",
-      "description": "Temperatura y consigna fija del cuarto de servidores (VRF-SRV) y su potencia (TI + climatización, eje derecho). Rojo ≥ 27 °C = alarma SERVIDOR_TEMP.",
+      "title": "Z06 · Cuarto de servidores (zona crítica)",
+      "description": "Temperatura y consigna fija del cuarto de servidores (VRF-SRV) y su potencia de TI + climatización (eje derecho). Rojo ≥ 27 °C = alarma SERVIDOR_TEMP.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -1520,7 +2181,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 41
+        "y": 62
       },
       "targets": [
         {
@@ -1544,10 +2205,6 @@
                 "value": null
               },
               {
-                "color": "orange",
-                "value": 25
-              },
-              {
                 "color": "red",
                 "value": 27
               }
@@ -1558,7 +2215,7 @@
             "lineInterpolation": "linear",
             "lineWidth": 2,
             "fillOpacity": 0,
-            "gradientMode": "none",
+            "gradientMode": "opacity",
             "showPoints": "never",
             "pointSize": 4,
             "spanNulls": 600000,
@@ -1574,7 +2231,7 @@
               "group": "A"
             },
             "thresholdsStyle": {
-              "mode": "line+area"
+              "mode": "dashed"
             },
             "scaleDistribution": {
               "type": "linear"
@@ -1589,7 +2246,8 @@
             },
             "axisSoftMin": 18,
             "axisSoftMax": 29
-          }
+          },
+          "noValue": "Sin datos en el rango"
         },
         "overrides": [
           {
@@ -1600,13 +2258,13 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Temperatura Z06"
+                "value": "Temperatura"
               },
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#F2495C"
+                  "fixedColor": "#E0752D"
                 }
               }
             ]
@@ -1625,7 +2283,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#7A7F87"
+                  "fixedColor": "#8E949E"
                 }
               },
               {
@@ -1648,7 +2306,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Potencia Z06"
+                "value": "Potencia"
               },
               {
                 "id": "unit",
@@ -1658,7 +2316,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FF7383"
+                  "fixedColor": "#E87FA9"
                 }
               },
               {
@@ -1683,22 +2341,26 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true,
-          "calcs": []
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ]
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       }
     },
     {
-      "id": 14,
+      "id": 21,
       "type": "bargauge",
       "title": "Potencia actual por zona",
-      "description": "Potencia instantánea (climatización + luces + equipos) de cada zona seleccionada, de mayor a menor.",
+      "description": "Potencia actual (climatización + luces + equipos) de cada zona seleccionada, de mayor a menor.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -1707,7 +2369,7 @@
         "h": 9,
         "w": 6,
         "x": 12,
-        "y": 41
+        "y": 62
       },
       "targets": [
         {
@@ -1725,7 +2387,8 @@
           "decimals": 1,
           "min": 0,
           "color": {
-            "mode": "continuous-BlYlRd"
+            "mode": "fixed",
+            "fixedColor": "#5794F2"
           },
           "noValue": "Sin datos"
         },
@@ -1754,10 +2417,10 @@
       }
     },
     {
-      "id": 15,
+      "id": 22,
       "type": "timeseries",
-      "title": "Clima exterior (T y HR)",
-      "description": "El modelo no tiene sensores de humedad por zona: se muestra la temperatura y la HR exteriores del medidor general como referencia de la carga latente.",
+      "title": "Clima exterior",
+      "description": "Temperatura y humedad relativa exteriores del medidor general: referencia de la carga térmica y latente.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -1766,7 +2429,7 @@
         "h": 9,
         "w": 6,
         "x": 18,
-        "y": 41
+        "y": 62
       },
       "targets": [
         {
@@ -1787,7 +2450,7 @@
             "lineInterpolation": "linear",
             "lineWidth": 2,
             "fillOpacity": 0,
-            "gradientMode": "none",
+            "gradientMode": "opacity",
             "showPoints": "never",
             "pointSize": 4,
             "spanNulls": 600000,
@@ -1816,7 +2479,8 @@
             "lineStyle": {
               "fill": "solid"
             }
-          }
+          },
+          "noValue": "Sin datos en el rango"
         },
         "overrides": [
           {
@@ -1827,13 +2491,13 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "T exterior"
+                "value": "Temperatura exterior"
               },
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FF9830"
+                  "fixedColor": "#E0752D"
                 }
               }
             ]
@@ -1864,12 +2528,16 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#8AB8FF"
+                  "fixedColor": "#4FA3D9"
                 }
               },
               {
                 "id": "custom.axisPlacement",
                 "value": "right"
+              },
+              {
+                "id": "decimals",
+                "value": 0
               }
             ]
           }
@@ -1877,14 +2545,17 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true,
-          "calcs": []
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       }
     }

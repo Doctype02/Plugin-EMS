@@ -358,19 +358,28 @@ sudo -u ems bash -c 'set -a; . /etc/ems/ems.env; cd /opt/Plugin-EMS && .venv/bin
 ## 11. Dashboards adicionales
 
 Están en `deploy/arch/grafana/dashboards/` (carpeta **EMS Edificio**, el aprovisionamiento los recarga solo al
-cambiar el archivo). Todos usan el datasource `ems-influx`, la etiqueta `ems` (enlaces entre ellos en la
-cabecera) y marcan la potencia máxima de **170 kW** como umbral (naranja 153 kW = 90 %, rojo 170 kW).
+cambiar el archivo). Todos usan el datasource `ems-influx`, zona horaria America/Panama, son editables y llevan en
+la cabecera los mismos 5 enlaces (Edificio 3D · Tiempo real · Zonas · Alarmas · Resultados). Los vivos refrescan
+cada 30 s; Resultados mantiene su rango fijo.
+
+Sistema visual común: filas con título (Resumen primero, con KPI de 4 × 4 y, si hace falta, estados de 4 × 3),
+tooltip compartido, leyendas en tabla (último / máx. / media) y textos «sin datos» explícitos. Paleta fija:
+consumo azul, importación de red y demanda morado, FV dorado, límite de **170 kW** rojo discontinuo, límite
+dinámico del EMS naranja discontinuo, alarma rojo, aviso naranja, normal verde, info azul. Umbrales de potencia:
+amarillo 136 kW (80 %), naranja 153 kW (90 %), rojo 170 kW; confort: azul < 21 °C, verde 21–26, naranja 26–27,
+rojo ≥ 27.
 
 | Archivo | uid | Contenido |
 |---|---|---|
-| `ems-edificio-3d.json` | `ems-edificio-3d-vivo` | Panel 3D `doctype02-ems-panel` + fila de stats (potencia, demanda, FV, red, alarmas) |
-| `ems-tiempo-real.json` | `ems-tiempo-real` | Gauges de potencia y demanda 15 min (máx. 170 kW), FV, red, energía y costo del día, red/UPS, DR, alarmas, modo y límite del EMS; series de potencia, demanda vs límite, potencia por uso, FV, clima, tarifa/FP; alarmas recientes |
-| `ems-zonas.json` | `ems-zonas` | Variables `planta` y `zona` (multi). Tabla de las 26 zonas coloreada por confort (21–26 °C), mapa de confort, temperatura, desviación respecto a la consigna, ocupación, estado del terminal, Z06 (crítica) destacada |
-| `ems-alarmas.json` | `ems-alarmas` | Conteos por nivel y código, tabla de alarmas, línea de tiempo de modo/DR/red, límite EMS vs demanda, latencia, alarmas activas y UPS |
-| `ems-resultados.json` | `ems-resultados` | Escenarios offline (medida `kpi`, variable `escenario`, con y sin FV): ahorro, pico, confort, energía, costo, CO₂, consumo por uso, tabla de KPI; series por semana tipo (enlaces *Semana 9 feb / 11 may / 10 ago / 2 nov*) y validación del pronóstico |
+| `ems-edificio-3d.json` | `ems-edificio-3d-vivo` | Resumen (potencia, demanda, FV, red con sparkline; red eléctrica, alarmas) y el gemelo digital `doctype02-ems-panel` |
+| `ems-tiempo-real.json` | `ems-tiempo-real` | Resumen (potencia, demanda, FV, red, energía y costo del día; red, DR, estrategia, límite, alarmas, latencia) · Energía (potencia, demanda vs límite, uso, balance del día, FV, tarifa/FP, clima) · **Controladores VRF/PTAC** (measurement `unidad`: en marcha, potencia, frío, COP, manual, falla; tabla de las 11 unidades, estado en el tiempo, potencia por unidad) · Alarmas recientes |
+| `ems-zonas.json` | `ems-zonas` | Variables `planta` y `zona`. Resumen (temperatura media, fuera de confort, ocupantes, potencia, Z06, sensores forzados) · Zonas (tabla con unidad y sensor, mapa de confort) · Climatización · **Sensores** (forzados: lectura frente a real; error de lectura en el rango) · Zona crítica y entorno |
+| `ems-alarmas.json` | `ems-alarmas` | Resumen (activas, rango, por nivel, latencia) · Registro (tabla, por código) · Tendencia (por hora, por nivel) · Estado del EMS (estrategia/DR/red, límite vs demanda, latencia, alarmas y UPS) |
+| `ems-resultados.json` | `ems-resultados` | Escenarios offline (medida `kpi`, variable `escenario`, con y sin FV): resumen de ahorro, pico y confort; energía, costo, CO₂, consumo por uso; tabla de KPI; semana elegida (enlaces *Semana 9 feb / 11 may / 10 ago / 2 nov*) y validación del pronóstico |
 
-Los paneles en vivo filtran `escenario == "live"`. No hay humedad por zona en el modelo: se muestra la HR
-exterior del medidor. Las series de UPS sólo aparecen durante un corte (`corte_energia`).
+Los paneles en vivo filtran `escenario == "live"`. La HR por zona es informativa; el panel de clima muestra la
+exterior del medidor. Las series de UPS sólo aparecen durante un corte (`corte_energia`). La anotación «Alarmas
+críticas» marca en las series las alarmas de nivel crítico (se puede apagar en la cabecera).
 
 ## 12. Prueba de aceptación (demo)
 

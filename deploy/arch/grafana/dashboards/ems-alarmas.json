@@ -1,15 +1,15 @@
 {
   "uid": "ems-alarmas",
   "title": "EMS · Alarmas y eventos",
-  "description": "Alarmas del EMS, conteos por tipo y nivel, y estado del EMS (modo, DR, límite, latencia, red/UPS).",
+  "description": "Registro y análisis de alarmas y eventos del EMS y del gemelo, y estado del control (modo, DR, red, límite, latencia).",
   "tags": [
     "ems"
   ],
   "editable": true,
-  "graphTooltip": 1,
+  "graphTooltip": 2,
   "schemaVersion": 39,
   "version": 1,
-  "refresh": "1m",
+  "refresh": "30s",
   "time": {
     "from": "now-24h",
     "to": "now"
@@ -113,245 +113,35 @@
         "enable": true,
         "hide": false,
         "iconColor": "#F2495C",
-        "name": "Alarmas EMS",
+        "name": "Alarmas críticas",
         "target": {
           "refId": "Anno",
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"mensaje\")\n  |> group()\n  |> map(fn: (r) => ({_time: r._time, text: r.codigo + \" · \" + r.zona + \": \" + r._value, tags: r.nivel}))"
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"mensaje\" and r.nivel == \"crit\")\n  |> group()\n  |> map(fn: (r) => ({_time: r._time, text: r.codigo + \" · \" + r.zona + \": \" + r._value, tags: r.nivel}))"
         }
       }
     ]
   },
   "panels": [
     {
-      "id": 1,
-      "type": "stat",
-      "title": "Alarmas en el rango",
-      "description": "Total de alarmas registradas en el rango de tiempo.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
+      "type": "row",
+      "title": "Resumen",
+      "collapsed": false,
+      "panels": [],
       "gridPos": {
-        "h": 4,
-        "w": 3,
+        "h": 1,
+        "w": 24,
         "x": 0,
         "y": 0
       },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#5794F2"
-          },
-          "noValue": "0"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard"
-      }
+      "id": 1
     },
     {
-      "id": 2,
-      "type": "stat",
-      "title": "Críticas",
-      "description": "Alarmas de nivel «crit» en el rango.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 3,
-        "y": 0
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> filter(fn: (r) => r.nivel == \"crit\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#F2495C"
-          },
-          "noValue": "0"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard"
-      }
-    },
-    {
-      "id": 3,
-      "type": "stat",
-      "title": "Avisos",
-      "description": "Alarmas de nivel «warn» en el rango.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 6,
-        "y": 0
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> filter(fn: (r) => r.nivel == \"warn\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#FF9830"
-          },
-          "noValue": "0"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard"
-      }
-    },
-    {
-      "id": 4,
-      "type": "stat",
-      "title": "Informativas",
-      "description": "Alarmas de nivel «info» en el rango.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 9,
-        "y": 0
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> filter(fn: (r) => r.nivel == \"info\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#5794F2"
-          },
-          "noValue": "0"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard"
-      }
-    },
-    {
-      "id": 5,
       "type": "stat",
       "title": "Activas ahora",
-      "description": "Alarmas activas según el último estado del EMS (n_alarmas).",
+      "description": "Alarmas activas según el último estado del EMS.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 12,
-        "y": 0
       },
       "targets": [
         {
@@ -365,10 +155,11 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "decimals": 0,
+          "noValue": "Sin datos",
           "color": {
             "mode": "thresholds"
           },
+          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -386,143 +177,57 @@
               }
             ]
           },
-          "noValue": "Sin datos"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard"
-      }
-    },
-    {
-      "id": 6,
-      "type": "stat",
-      "title": "Modo EMS · DR",
-      "description": "Estrategia de control activa (tag modo) y estado de la respuesta a la demanda.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 15,
-        "y": 0
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"dr_activo\")\n  |> last()\n  |> map(fn: (r) => ({_value: r.modo}))"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"dr_activo\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#5794F2"
-          },
-          "noValue": "Sin datos",
           "mappings": [
             {
               "type": "value",
               "options": {
-                "1": {
-                  "text": "DR activa",
-                  "color": "orange"
-                },
                 "0": {
-                  "text": "DR inactiva",
-                  "color": "green"
+                  "text": "Sin alarmas",
+                  "color": "#73BF69",
+                  "index": 0
                 }
               }
             }
           ]
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "A"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Modo"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "B"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "DR"
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "/.*/",
+          "fields": "",
           "values": false
         },
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
-        "textMode": "value",
+        "textMode": "auto",
         "wideLayout": true,
         "showPercentChange": false,
-        "percentChangeColorMode": "standard"
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 30
+        }
+      },
+      "id": 2,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
       }
     },
     {
-      "id": 7,
       "type": "stat",
-      "title": "Límite EMS",
-      "description": "Límite de demanda dinámico que aplica el EMS (limite_kw). Potencia máxima del edificio: 170 kW.",
+      "title": "Alarmas en el rango",
+      "description": "Total de alarmas registradas en el rango de tiempo.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 18,
-        "y": 0
       },
       "targets": [
         {
@@ -531,20 +236,37 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"limite_kw\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "kwatt",
-          "decimals": 0,
-          "min": 0,
-          "max": 170,
+          "noValue": "Sin alarmas",
           "color": {
             "mode": "fixed",
-            "fixedColor": "#FF780A"
+            "fixedColor": "#5794F2"
           },
-          "noValue": "Sin datos"
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#5794F2",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Sin alarmas",
+                  "index": 0
+                }
+              }
+            }
+          ]
         },
         "overrides": []
       },
@@ -558,28 +280,32 @@
         },
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
         "textMode": "auto",
         "wideLayout": true,
         "showPercentChange": false,
-        "percentChangeColorMode": "standard"
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 30
+        }
+      },
+      "id": 3,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
       }
     },
     {
-      "id": 8,
       "type": "stat",
-      "title": "Latencia de control",
-      "description": "Latencia del último comando del EMS (cmd → ack del gemelo, latencia_ms).",
+      "title": "Críticas",
+      "description": "Alarmas de nivel crítico en el rango.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 21,
-        "y": 0
       },
       "targets": [
         {
@@ -588,16 +314,251 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"latencia_ms\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> filter(fn: (r) => r.nivel == \"crit\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ms",
+          "noValue": "Sin alarmas",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#F2495C"
+          },
           "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#F2495C",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Sin alarmas",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "textMode": "auto",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 30
+        }
+      },
+      "id": 4,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Avisos",
+      "description": "Alarmas de nivel aviso en el rango.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ems-influx"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> filter(fn: (r) => r.nivel == \"warn\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Sin alarmas",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#FF9830"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#FF9830",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Sin alarmas",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "textMode": "auto",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 30
+        }
+      },
+      "id": 5,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Informativas",
+      "description": "Alarmas informativas en el rango.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ems-influx"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> filter(fn: (r) => r.nivel == \"info\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Sin alarmas",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#4C8DE6"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#4C8DE6",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Sin alarmas",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "textMode": "auto",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 30
+        }
+      },
+      "id": 6,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Latencia de control",
+      "description": "Tiempo entre la orden del EMS y la confirmación del gemelo; sparkline de 6 h. Naranja ≥ 500 ms, rojo ≥ 2 s.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ems-influx"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "from(bucket: \"ems\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"latencia_ms\")\n  |> aggregateWindow(every: 5m, fn: last, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Sin datos",
           "color": {
             "mode": "thresholds"
           },
+          "unit": "ms",
+          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -614,8 +575,7 @@
                 "value": 2000
               }
             ]
-          },
-          "noValue": "Sin datos"
+          }
         },
         "overrides": []
       },
@@ -628,29 +588,53 @@
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
+        "graphMode": "area",
+        "justifyMode": "center",
         "orientation": "auto",
         "textMode": "auto",
         "wideLayout": true,
         "showPercentChange": false,
-        "percentChangeColorMode": "standard"
+        "percentChangeColorMode": "standard",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 30
+        }
+      },
+      "id": 7,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
       }
+    },
+    {
+      "type": "row",
+      "title": "Registro de alarmas",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 8
     },
     {
       "id": 9,
       "type": "table",
-      "title": "Alarmas y eventos recientes",
-      "description": "Alarmas del EMS (Node-RED o supervisor del gemelo) en el rango, de la más reciente a la más antigua. Los eventos simulados (incendio, corte, falla VRF…) aparecen a través de las alarmas que provocan. Filtra por columna.",
+      "title": "Alarmas y eventos",
+      "description": "Alarmas del EMS (Node-RED o supervisor del gemelo) en el rango, de la más reciente a la más antigua. Los eventos simulados (incendio, corte, falla VRF…) aparecen por las alarmas que provocan. Filtra por columna.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
       },
       "gridPos": {
         "h": 14,
-        "w": 14,
+        "w": 16,
         "x": 0,
-        "y": 4
+        "y": 6
       },
       "targets": [
         {
@@ -687,11 +671,11 @@
               },
               {
                 "id": "unit",
-                "value": "dateTimeAsLocal"
+                "value": "time:DD/MM HH:mm:ss"
               },
               {
                 "id": "custom.width",
-                "value": 170
+                "value": 140
               }
             ]
           },
@@ -707,13 +691,12 @@
               },
               {
                 "id": "custom.width",
-                "value": 80
+                "value": 100
               },
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
-                  "mode": "basic"
+                  "type": "color-text"
                 }
               },
               {
@@ -723,18 +706,18 @@
                     "type": "value",
                     "options": {
                       "crit": {
-                        "text": "CRÍTICA",
+                        "text": "● Crítica",
                         "color": "#F2495C",
                         "index": 0
                       },
                       "warn": {
-                        "text": "AVISO",
+                        "text": "● Aviso",
                         "color": "#FF9830",
                         "index": 1
                       },
                       "info": {
-                        "text": "INFO",
-                        "color": "#5794F2",
+                        "text": "● Info",
+                        "color": "#4C8DE6",
                         "index": 2
                       }
                     }
@@ -767,11 +750,11 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Zona"
+                "value": "Zona / equipo"
               },
               {
                 "id": "custom.width",
-                "value": 70
+                "value": 120
               }
             ]
           },
@@ -837,7 +820,23 @@
             "desc": true
           }
         ]
-      }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "_time": 0,
+              "nivel": 1,
+              "codigo": 2,
+              "zona": 3,
+              "_value": 4,
+              "mensaje": 4,
+              "valor": 5
+            }
+          }
+        }
+      ]
     },
     {
       "id": 10,
@@ -849,10 +848,10 @@
         "uid": "ems-influx"
       },
       "gridPos": {
-        "h": 7,
-        "w": 10,
-        "x": 14,
-        "y": 4
+        "h": 14,
+        "w": 8,
+        "x": 16,
+        "y": 6
       },
       "targets": [
         {
@@ -874,7 +873,7 @@
           },
           "noValue": "Sin alarmas",
           "custom": {
-            "fillOpacity": 80,
+            "fillOpacity": 70,
             "lineWidth": 0,
             "gradientMode": "none",
             "axisPlacement": "auto",
@@ -895,6 +894,10 @@
               {
                 "id": "displayName",
                 "value": "Alarmas"
+              },
+              {
+                "id": "displayName",
+                "value": "Alarmas"
               }
             ]
           }
@@ -906,7 +909,7 @@
         "showValue": "always",
         "stacking": "none",
         "groupWidth": 0.7,
-        "barWidth": 0.8,
+        "barWidth": 0.6,
         "barRadius": 0.1,
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0,
@@ -924,136 +927,32 @@
       }
     },
     {
-      "id": 11,
-      "type": "piechart",
-      "title": "Por nivel",
-      "description": "Reparto de las alarmas del rango por nivel.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
+      "type": "row",
+      "title": "Tendencia",
+      "collapsed": false,
+      "panels": [],
       "gridPos": {
-        "h": 7,
-        "w": 4,
-        "x": 14,
-        "y": 11
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 20
       },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"nivel\"])\n  |> count()\n  |> keep(columns: [\"nivel\", \"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "displayName": "${__field.labels.nivel}",
-          "noValue": "Sin alarmas",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "crit"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#F2495C"
-                }
-              },
-              {
-                "id": "displayName",
-                "value": "Crítica"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "warn"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#FF9830"
-                }
-              },
-              {
-                "id": "displayName",
-                "value": "Aviso"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "info"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#5794F2"
-                }
-              },
-              {
-                "id": "displayName",
-                "value": "Info"
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "pieType": "donut",
-        "displayLabels": [
-          "value"
-        ],
-        "legend": {
-          "showLegend": true,
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      }
+      "id": 11
     },
     {
       "id": 12,
       "type": "timeseries",
       "title": "Alarmas en el tiempo",
-      "description": "Número de alarmas por hora y código (barras apiladas).",
+      "description": "Alarmas por hora y código (barras apiladas).",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
       },
       "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 18,
-        "y": 11
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 21
       },
       "targets": [
         {
@@ -1070,7 +969,7 @@
           "decimals": 0,
           "min": 0,
           "displayName": "${__field.labels.codigo}",
-          "noValue": "Sin alarmas",
+          "noValue": "Sin alarmas en el rango",
           "custom": {
             "drawStyle": "bars",
             "lineInterpolation": "linear",
@@ -1107,39 +1006,174 @@
             }
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/.*/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "${__field.labels.codigo}"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
+          "displayMode": "table",
+          "placement": "right",
           "showLegend": true,
-          "calcs": []
+          "calcs": [
+            "sum",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       }
     },
     {
       "id": 13,
+      "type": "piechart",
+      "title": "Reparto por nivel",
+      "description": "Reparto de las alarmas del rango por nivel.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ems-influx"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 21
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"nivel\"])\n  |> count()\n  |> keep(columns: [\"nivel\", \"_value\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "displayName": "${__field.labels.nivel}",
+          "noValue": "Sin alarmas",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "crit"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Crítica"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F2495C"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "warn"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Aviso"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF9830"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "info"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Info"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#4C8DE6"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "pieType": "donut",
+        "displayLabels": [],
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
       "type": "row",
       "title": "Estado del EMS",
       "collapsed": false,
+      "panels": [],
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 29
       },
-      "panels": []
+      "id": 14
     },
     {
-      "id": 14,
+      "id": 15,
       "type": "state-timeline",
-      "title": "Modo, respuesta a la demanda y red",
-      "description": "Línea de tiempo del modo de control del EMS, de la respuesta a la demanda (DR) y del estado de la red eléctrica (un corte = evento corte_energia, con cargas críticas en UPS).",
+      "title": "Estrategia, respuesta a la demanda y red",
+      "description": "Línea de tiempo de la estrategia de control del EMS, de la respuesta a la demanda y del estado de la red eléctrica (un corte deja las cargas críticas en el UPS).",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -1148,7 +1182,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 19
+        "y": 30
       },
       "targets": [
         {
@@ -1191,28 +1225,63 @@
               "type": "value",
               "options": {
                 "10": {
-                  "text": "DR inactiva",
-                  "color": "green",
+                  "text": "DR en espera",
+                  "color": "#73BF69",
                   "index": 0
                 },
                 "11": {
                   "text": "DR activa",
-                  "color": "orange",
+                  "color": "#FF9830",
                   "index": 1
                 },
                 "20": {
                   "text": "Corte · UPS",
-                  "color": "red",
+                  "color": "#F2495C",
                   "index": 2
                 },
                 "21": {
                   "text": "Red normal",
-                  "color": "green",
+                  "color": "#73BF69",
                   "index": 3
                 }
               }
+            },
+            {
+              "type": "value",
+              "options": {
+                "reglas": {
+                  "text": "Reglas",
+                  "index": 0
+                },
+                "reglas_dr": {
+                  "text": "Reglas + DR",
+                  "index": 1
+                },
+                "mpc": {
+                  "text": "MPC predictivo",
+                  "index": 2
+                },
+                "baseline": {
+                  "text": "Sin EMS",
+                  "index": 3
+                },
+                "manual": {
+                  "text": "Manual",
+                  "index": 4
+                },
+                "seguro": {
+                  "text": "Modo seguro",
+                  "color": "#FF9830",
+                  "index": 5
+                },
+                "externo": {
+                  "text": "Node-RED",
+                  "index": 6
+                }
+              }
             }
-          ]
+          ],
+          "noValue": "Sin datos en el rango"
         },
         "overrides": [
           {
@@ -1270,19 +1339,19 @@
       }
     },
     {
-      "id": 15,
+      "id": 16,
       "type": "timeseries",
-      "title": "Límite EMS vs demanda",
-      "description": "Límite dinámico del EMS frente a la demanda de 15 min. Umbral rojo: potencia máxima de 170 kW.",
+      "title": "Límite del EMS frente a la demanda",
+      "description": "Límite dinámico del EMS (escalonado) frente a la demanda de 15 min. Línea roja: potencia máxima de 170 kW.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
       },
       "gridPos": {
         "h": 8,
-        "w": 10,
+        "w": 12,
         "x": 0,
-        "y": 25
+        "y": 36
       },
       "targets": [
         {
@@ -1311,7 +1380,7 @@
             "drawStyle": "line",
             "lineInterpolation": "linear",
             "lineWidth": 2,
-            "fillOpacity": 15,
+            "fillOpacity": 8,
             "gradientMode": "opacity",
             "showPoints": "never",
             "pointSize": 4,
@@ -1351,15 +1420,12 @@
                 "value": null
               },
               {
-                "color": "orange",
-                "value": 153
-              },
-              {
                 "color": "red",
                 "value": 170
               }
             ]
-          }
+          },
+          "noValue": "Sin datos en el rango"
         },
         "overrides": [
           {
@@ -1376,7 +1442,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FF9830"
+                  "fixedColor": "#A352CC"
                 }
               }
             ]
@@ -1395,7 +1461,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FF780A"
+                  "fixedColor": "#FF9830"
                 }
               },
               {
@@ -1415,6 +1481,10 @@
               {
                 "id": "custom.lineInterpolation",
                 "value": "stepAfter"
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
               }
             ]
           }
@@ -1422,33 +1492,34 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true,
           "calcs": [
+            "lastNotNull",
             "max"
           ]
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       }
     },
     {
-      "id": 16,
+      "id": 17,
       "type": "timeseries",
       "title": "Latencia de control",
-      "description": "Latencia cmd → ack (ms) informada por el EMS. Naranja ≥ 500 ms, rojo ≥ 2 s.",
+      "description": "Latencia orden → confirmación (ms) informada por el EMS. Naranja ≥ 500 ms, rojo ≥ 2 s.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
       },
       "gridPos": {
         "h": 8,
-        "w": 7,
-        "x": 10,
-        "y": 25
+        "w": 6,
+        "x": 12,
+        "y": 36
       },
       "targets": [
         {
@@ -1486,9 +1557,9 @@
             "drawStyle": "line",
             "lineInterpolation": "linear",
             "lineWidth": 2,
-            "fillOpacity": 15,
+            "fillOpacity": 8,
             "gradientMode": "opacity",
-            "showPoints": "auto",
+            "showPoints": "never",
             "pointSize": 4,
             "spanNulls": 600000,
             "axisPlacement": "auto",
@@ -1521,40 +1592,62 @@
             "mode": "fixed",
             "fixedColor": "#5794F2"
           },
-          "displayName": "Latencia"
+          "displayName": "Latencia",
+          "noValue": "Sin datos en el rango"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "latencia_ms"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Latencia"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794F2"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true,
           "calcs": [
-            "mean",
-            "max"
+            "lastNotNull",
+            "max",
+            "mean"
           ]
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       }
     },
     {
-      "id": 17,
+      "id": 18,
       "type": "timeseries",
       "title": "Alarmas activas y UPS",
-      "description": "Alarmas activas (n_alarmas) y, durante un corte de red, potencia que entrega el UPS (kW) y su autonomía restante (min). Sin cortes en el rango no hay serie de UPS.",
+      "description": "Alarmas activas y, durante un corte de red, potencia que entrega el UPS y su autonomía restante. Sin cortes en el rango no hay serie de UPS.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
       },
       "gridPos": {
         "h": 8,
-        "w": 7,
-        "x": 17,
-        "y": 25
+        "w": 6,
+        "x": 18,
+        "y": 36
       },
       "targets": [
         {
@@ -1612,7 +1705,8 @@
             "lineStyle": {
               "fill": "solid"
             }
-          }
+          },
+          "noValue": "Sin datos en el rango"
         },
         "overrides": [
           {
@@ -1629,7 +1723,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FF9830"
+                  "fixedColor": "#F2495C"
                 }
               }
             ]
@@ -1642,7 +1736,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "UPS"
+                "value": "Potencia del UPS"
               },
               {
                 "id": "unit",
@@ -1656,7 +1750,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FF7383"
+                  "fixedColor": "#E87FA9"
                 }
               },
               {
@@ -1673,7 +1767,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Autonomía UPS"
+                "value": "Autonomía del UPS"
               },
               {
                 "id": "unit",
@@ -1683,7 +1777,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#7A7F87"
+                  "fixedColor": "#8E949E"
                 }
               },
               {
@@ -1706,14 +1800,17 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true,
-          "calcs": []
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       }
     }
