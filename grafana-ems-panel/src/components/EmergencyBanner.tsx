@@ -97,9 +97,10 @@ export const EmergencyBanner: React.FC<Props> = ({ snapshot, events, now, canSto
   );
 };
 
+// sólo opacidad: el compositor la anima sin repintar (animar box-shadow repintaba el aviso en cada frame)
 const pulse = keyframes`
-  0%, 100% { box-shadow: 0 0 0 0 rgba(224, 47, 68, 0.0); }
-  50% { box-shadow: 0 0 0 4px rgba(224, 47, 68, 0.35); }
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
 `;
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -121,8 +122,20 @@ const getStyles = (theme: GrafanaTheme2) => ({
   crit: css`
     background: ${theme.isDark ? '#3b1016' : '#fde8ea'};
     border-color: ${theme.colors.error.border};
+    &::after {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      box-shadow: 0 0 0 4px rgba(224, 47, 68, 0.35);
+      opacity: 0;
+      pointer-events: none;
+      will-change: opacity;
+    }
     @media (prefers-reduced-motion: no-preference) {
-      animation: ${pulse} 1.6s ease-in-out infinite;
+      &::after {
+        animation: ${pulse} 1.6s ease-in-out infinite;
+      }
     }
   `,
   warn: css`

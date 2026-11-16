@@ -793,11 +793,53 @@ export function unitStatuses(t: number, k: Core, opts: SimOptions): Record<strin
 }
 
 /** Energía acumulada del día (integración cada 15 min, suficiente para el indicador). */
-function energySince(from: number, to: number, opts: SimOptions, pick = (k: Core) => k.pTotal): number {
+/**
+ * Memo por objeto de opciones (las opciones son inmutables: cada cambio crea un objeto nuevo y el WeakMap suelta
+ * el anterior). La simulación es determinista en (t, opts), así que reutilizar un resultado es exacto.
+ */
+function memoByOpts<T>(limit: number) {
+  const store = new WeakMap<SimOptions, Map<number, T>>();
+  return (opts: SimOptions, t: number, make: () => T): T => {
+    let m = store.get(opts);
+    if (!m) {
+      m = new Map();
+      store.set(opts, m);
+    }
+    let v = m.get(t);
+    if (v === undefined) {
+      v = make();
+      if (m.size >= limit) {
+        // el más antiguo primero (orden de inserción)
+        m.delete(m.keys().next().value!);
+      }
+      m.set(t, v);
+    }
+    return v;
+  };
+}
+
+/** Potencias de los tramos de 15 min ya cerrados del día: no cambian entre refrescos de la pantalla. */
+const energyCore = memoByOpts<Readonly<Pick<Core, 'pTotal' | 'pPv'>>>(200);
+
+function energySince(
+  from: number,
+  to: number,
+  opts: SimOptions,
+  pick = (k: Pick<Core, 'pTotal' | 'pPv'>) => k.pTotal
+): number {
   let e = 0;
   const step = 15 * MIN;
   for (let t = from; t < to; t += step) {
-    e += pick(core(Math.min(t + step / 2, to), opts)) * (Math.min(step, to - t) / HOUR);
+    const at = Math.min(t + step / 2, to);
+    // el tramo abierto (el último) cambia con t; sólo se memorizan los centros de tramo, que se repiten
+    const k =
+      at === t + step / 2
+        ? energyCore(opts, at, () => {
+            const c = core(at, opts);
+            return { pTotal: c.pTotal, pPv: c.pPv };
+          })
+        : core(at, opts);
+    e += pick(k) * (Math.min(step, to - t) / HOUR);
   }
   return e;
 }
@@ -1082,11 +1124,14 @@ function eventAlarms(t: number, zones: Record<string, ZoneState>, meter: MeterSt
 }
 
 /** Tendencias simuladas: `points` muestras entre `end - span` y `end`. */
+/** Instantáneas livianas de la tendencia: al avanzar la ventana un paso, todas menos una ya están calculadas. */
+const historySnap = memoByOpts<Snapshot>(160);
+
 export function simulateHistory(end: number, span: number, points: number, opts: SimOptions): History {
   const history: History = {};
   for (let i = 0; i < points; i++) {
     const t = end - span + (span * i) / (points - 1);
-    const snap = simulate(t, opts, true);
+    const snap = historySnap(opts, t, () => simulate(t, opts, true));
     for (const [id, z] of Object.entries(snap.zones)) {
       const h = (history[id] ??= {});
       for (const k of ['temp', 'setpoint', 'occupants', 'pTotal', 'pHvac', 'lights'] as const) {

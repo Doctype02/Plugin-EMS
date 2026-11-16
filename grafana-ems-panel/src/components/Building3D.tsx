@@ -26,6 +26,7 @@ import { blend, faceColor, floorFinish, lit, materials, zoneMark } from 'buildin
 import { Rooftop } from './Rooftop';
 import { SLAB, ZoneInterior, tagAnchor } from './ZoneInterior';
 import { SceneDefs, ZoneChip, chipSize, faceQuad, onFace, segments } from './IsoPrimitives';
+import { mo, useMotion } from './motion';
 
 interface Props {
   idPrefix: string;
@@ -160,6 +161,8 @@ export const Building3D: React.FC<Props> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const size = useElementSize(svgRef);
   const animate = animateOption && !reduced;
+  // movimiento a la tasa de la pantalla (rAF compartido); se detiene fuera de pantalla y en pestañas ocultas
+  useMotion(svgRef, animate);
   const dark = theme.isDark;
 
   const mode: 'building' | 'floor' | 'roof' = roofOnly ? 'roof' : floors.length === 1 ? 'floor' : 'building';
@@ -548,46 +551,43 @@ export const Building3D: React.FC<Props> = ({
       <g key={`ev-${zone.id}`} pointerEvents="none" data-testid={`ems-event-marker-${zone.id}`}>
         {s.fire && (
           <>
-            <ellipse cx={c.x} cy={c.y} rx={cfg.scale * 3.2} ry={cfg.scale * 1.8} fill={`url(#${idPrefix}-fire)`}>
-              {animate && (
-                <animate attributeName="opacity" values="0.75;1;0.6;0.9;0.75" dur="0.8s" repeatCount="indefinite" />
-              )}
-            </ellipse>
+            <ellipse
+              key={animate ? 'fire-a' : 'fire'}
+              cx={c.x}
+              cy={c.y}
+              rx={cfg.scale * 3.2}
+              ry={cfg.scale * 1.8}
+              fill={`url(#${idPrefix}-fire)`}
+              {...(animate ? mo({ attr: 'opacity', values: [0.75, 1, 0.6, 0.9, 0.75], dur: 0.8 }) : {})}
+            />
             {[0, 1, 2].map((i) => (
-              <circle key={i} cx={c.x + (i - 1) * 8} cy={c.y - 10} r={6} fill={dark ? '#777' : '#555'} opacity={0}>
-                {animate && (
-                  <>
-                    <animate
-                      attributeName="cy"
-                      values={`${c.y - 6};${c.y - 70}`}
-                      dur="2.4s"
-                      begin={`${i * 0.8}s`}
-                      repeatCount="indefinite"
-                    />
-                    <animate
-                      attributeName="r"
-                      values="5;16"
-                      dur="2.4s"
-                      begin={`${i * 0.8}s`}
-                      repeatCount="indefinite"
-                    />
-                    <animate
-                      attributeName="opacity"
-                      values="0.55;0"
-                      dur="2.4s"
-                      begin={`${i * 0.8}s`}
-                      repeatCount="indefinite"
-                    />
-                  </>
-                )}
-              </circle>
+              <circle
+                key={`${i}${animate ? 'a' : ''}`}
+                cx={c.x + (i - 1) * 8}
+                cy={c.y - 10}
+                r={6}
+                fill={dark ? '#777' : '#555'}
+                opacity={0}
+                {...(animate
+                  ? mo(
+                      { attr: 'translate', values: ['0,4', '0,-60'], dur: 2.4, offset: -i * 0.8 },
+                      { attr: 'r', values: [5, 16], dur: 2.4, offset: -i * 0.8 },
+                      { attr: 'opacity', values: [0.55, 0], dur: 2.4, offset: -i * 0.8 }
+                    )
+                  : {})}
+              />
             ))}
           </>
         )}
         <g transform={`translate(${c.x.toFixed(1)},${c.y.toFixed(1)}) scale(${u})`}>
-          <circle r={13} fill={surface} stroke={color} strokeWidth={2}>
-            {animate && <animate attributeName="r" values="13;14.5;13" dur="1.2s" repeatCount="indefinite" />}
-          </circle>
+          <circle
+            key={animate ? 'ring-a' : 'ring'}
+            r={13}
+            fill={surface}
+            stroke={color}
+            strokeWidth={2}
+            {...(animate ? mo({ attr: 'r', values: [13, 14.5, 13], dur: 1.2 }) : {})}
+          />
           <Glyph name={EVENTS[kinds[0] ?? 'incendio'].glyph} x={-8} y={-8} size={16} color={color} />
         </g>
       </g>
@@ -794,6 +794,7 @@ export const Building3D: React.FC<Props> = ({
             vectorEffect="non-scaling-stroke"
           />
           <path
+            key={animate ? 'flow-a' : 'flow'}
             d={riser.d}
             fill="none"
             stroke="#fab219"
@@ -801,17 +802,8 @@ export const Building3D: React.FC<Props> = ({
             strokeDasharray="5 7"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
-          >
-            {animate && (
-              <animate
-                attributeName="stroke-dashoffset"
-                from="24"
-                to="0"
-                dur={`${riser.speed.toFixed(2)}s`}
-                repeatCount="indefinite"
-              />
-            )}
-          </path>
+            {...(animate ? mo({ attr: 'stroke-dashoffset', values: [24, 0], dur: riser.speed }) : {})}
+          />
         </g>
       )}
 

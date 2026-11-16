@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.6.1
+
+Animaciones fluidas (~60 fps) y pruebas e2e al día con Grafana 13.2.
+
+- **Movimiento a la tasa de la pantalla**: las personas que caminan, los ventiladores de las condensadoras, el
+  aire de los casetes VRF, el flujo de la montante, los LEDs, el humo y la llama de un incendio y el brillo de
+  la FV ya no usan SMIL (`<animate>`), que en Chrome recalculaba los estilos de todo el SVG en cada frame
+  (~100 ms por frame). Cada elemento describe su animación en `data-mo` y `components/motion.ts` la ejecuta con
+  Web Animations (o con un bucle `requestAnimationFrame` compartido si no hay soporte), sin re-renderizar React.
+  La fase continúa entre refrescos de la simulación (sin saltos) y la velocidad cambia suavemente cuando cambia
+  la carga. Las animaciones se pausan con el botón, con `prefers-reduced-motion`, fuera de pantalla
+  (IntersectionObserver) y con la pestaña oculta.
+- **Reloj continuo**: con la simulación acelerada la hora y el cursor de la barra de tiempo siguen al reloj
+  visual al minuto entre instantáneas (el cursor avanza de minuto en minuto, antes de 5 en 5).
+- **Simulación más liviana**: la energía del día reutiliza los tramos de 15 min ya calculados y la tendencia de
+  2 h avanza de punto en punto (200 s) reutilizando 36 de sus 37 instantáneas: `simulate()` pasa de ~90 ms a
+  ~5 ms y la tendencia de ~115 ms a ~7 ms. La curva del día de la demostración ya no se recalcula con cada
+  tendencia. La instantánea se refresca cada ~5 min simulados (1 s a 1 min/s, 500 ms a 10 min/s, 250 ms a 1 h/s)
+  en una transición de React y se detiene con la pestaña oculta.
+- **Medido** (Grafana 13.2.4, Playwright, 5 s por caso, fps con `requestAnimationFrame`): con Chromium con GPU
+  planta 1 min/s 12 → 60 fps, planta 10 min/s 4.6 → 60, edificio 1 min/s 14 → 56, edificio 10 min/s 5.6 → 58;
+  en headless (raster por software) 11 → 59, 5.0 → 58.5, 13 → 59 y 5.3 → 58.6. Scripting de 26–91 ms a
+  0.4–1.7 ms por frame y estilos/layout de 43–116 ms a ~1–1.6 ms; el hilo principal deja de estar saturado
+  (~100 % → 36–46 % en headless).
+- **Pruebas e2e** (`tests/panel.spec.ts`) pasan contra Grafana 13.2.4: viewport de 1920×1440 (con 1280×720 el
+  editor deja el panel en ~600×300 px y el panel oculta el selector de plantas y la leyenda completa), raíz del
+  panel por `data-testid="ems-panel"`, espera de la primera carga del plugin, pestaña «Control» con coincidencia
+  exacta (chocaba con «Controladores»), clic en la ficha de la zona (queda encima de la planta) y la montante se
+  comprueba por su rótulo (es una línea vertical de ancho 0). `@grafana/plugin-e2e` 3.15.4.
+
 ## 1.6.0
 
 Escena 3D y sistema visual con acabado de producto (gemelo digital / BMS).

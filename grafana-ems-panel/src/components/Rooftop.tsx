@@ -5,6 +5,7 @@ import { Snapshot } from 'building/telemetry';
 import { placeLabels } from 'building/layout';
 import { Materials, blend, faceColor, lit } from 'building/materials';
 import { boxPaths, faceQuad, lerp, onFace, segments } from './IsoPrimitives';
+import { mo } from './motion';
 
 interface Props {
   idPrefix: string;
@@ -326,17 +327,17 @@ export const Rooftop: React.FC<Props> = ({
             ))}
             {gen > 0.02 &&
               rows.map((r, i) => (
-                <rect key={`s${i}`} x={r.x} y={r.y} width={r.w} height={r.d} fill={`url(#${idPrefix}-pvsheen)`}>
-                  {animate && (
-                    <animate
-                      attributeName="opacity"
-                      values="0.6;1;0.6"
-                      dur="4s"
-                      begin={`${((i * 0.37) % 4).toFixed(2)}s`}
-                      repeatCount="indefinite"
-                    />
-                  )}
-                </rect>
+                <rect
+                  key={`s${i}${animate ? 'a' : ''}`}
+                  x={r.x}
+                  y={r.y}
+                  width={r.w}
+                  height={r.d}
+                  fill={`url(#${idPrefix}-pvsheen)`}
+                  {...(animate
+                    ? mo({ attr: 'opacity', values: [0.6, 1, 0.6], dur: 4, offset: -((i * 0.37) % 4) })
+                    : {})}
+                />
               ))}
           </g>
         </g>
@@ -445,11 +446,11 @@ export const Rooftop: React.FC<Props> = ({
                       ])}
                       fill={led}
                       opacity={st.mode === 'sin_energia' ? 0.3 : 0.95}
-                    >
-                      {animate && st.mode === 'falla' && (
-                        <animate attributeName="opacity" values="1;0.2;1" dur="0.9s" repeatCount="indefinite" />
-                      )}
-                    </path>
+                      key={animate && st.mode === 'falla' ? 'blink' : 'led'}
+                      {...(animate && st.mode === 'falla'
+                        ? mo({ attr: 'opacity', values: [1, 0.2, 1], dur: 0.9 })
+                        : {})}
+                    />
                   )}
                 </g>
               );
@@ -465,25 +466,19 @@ export const Rooftop: React.FC<Props> = ({
                 <g key={i}>
                   <circle cx={cx} cy={cy} r={rad * 1.12} fill={lit(M.casing, 0.55)} />
                   <circle cx={cx} cy={cy} r={rad * 1.02} fill={M.dark ? '#1b1e22' : '#353941'} />
-                  <g>
+                  {/* el giro se anima en cada pala (animar el <g> recalcula los estilos de todos sus hijos) */}
+                  <g key={spinning ? 'spin' : 'still'}>
                     {[0, 72, 144, 216, 288].map((a) => (
                       <path
                         key={a}
                         d={`M${cx} ${cy} q ${rad * 0.5} ${-rad * 0.28} ${rad * 0.92} 0 q ${-rad * 0.38} ${rad * 0.3} ${-rad * 0.92} 0Z`}
-                        transform={`rotate(${a} ${cx} ${cy})`}
+                        transform={spinning ? undefined : `rotate(${a} ${cx} ${cy})`}
                         fill={M.dark ? '#8d939c' : '#9aa0a8'}
+                        {...(spinning
+                          ? mo({ attr: 'rotate', values: [`${a} ${cx} ${cy}`, `${a + 360} ${cx} ${cy}`], dur: speed })
+                          : {})}
                       />
                     ))}
-                    {spinning && (
-                      <animateTransform
-                        attributeName="transform"
-                        type="rotate"
-                        from={`0 ${cx} ${cy}`}
-                        to={`360 ${cx} ${cy}`}
-                        dur={`${speed.toFixed(2)}s`}
-                        repeatCount="indefinite"
-                      />
-                    )}
                   </g>
                   {/* rejilla protectora */}
                   <path

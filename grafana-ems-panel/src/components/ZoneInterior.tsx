@@ -6,6 +6,7 @@ import { FloorFinish, Materials, ZoneMark, blend, faceColor, lit } from 'buildin
 import { hash } from 'building/simulator';
 import { Status, ZoneState } from 'building/telemetry';
 import { boxPaths, faceQuad, onFace, segments } from './IsoPrimitives';
+import { mo } from './motion';
 
 export const SLAB = 0.3;
 const WALL_FULL = 2.9;
@@ -340,16 +341,16 @@ export const ZoneInterior: React.FC<Props> = ({
                   ? '#3d9df3'
                   : '#3ddc84';
           els.push(
-            <circle key={`led${k}`} cx={pt.x} cy={pt.y} r={0.75} fill={ledColor}>
-              {animate && k > 0 && (
-                <animate
-                  attributeName="opacity"
-                  values="1;0.2;1"
-                  dur={`${0.6 + 1.6 * hash(zone.id, i, k)}s`}
-                  repeatCount="indefinite"
-                />
-              )}
-            </circle>
+            <circle
+              key={`led${k}${animate ? 'a' : ''}`}
+              cx={pt.x}
+              cy={pt.y}
+              r={0.75}
+              fill={ledColor}
+              {...(animate && k > 0
+                ? mo({ attr: 'opacity', values: [1, 0.2, 1], dur: 0.6 + 1.6 * hash(zone.id, i, k) })
+                : {})}
+            />
           );
         }
         break;
@@ -452,7 +453,7 @@ export const ZoneInterior: React.FC<Props> = ({
     const base = toScreen(seat.x, seat.y, zf, iso, dy);
     const shirt = shirts[i % shirts.length];
     const skin = SKIN[i % SKIN.length];
-    let motion: React.ReactNode = null;
+    let motion: ReturnType<typeof mo> | undefined;
     if (walker && animate) {
       const tgt = toScreen(
         inner.hub.x + (hash(zone.id, i, 'x') - 0.5) * 2,
@@ -464,18 +465,14 @@ export const ZoneInterior: React.FC<Props> = ({
       const dx = (tgt.x - base.x).toFixed(1);
       const dyy = (tgt.y - base.y).toFixed(1);
       const dur = 9 + 7 * hash(zone.id, i, 'dur');
-      motion = (
-        <animateTransform
-          attributeName="transform"
-          type="translate"
-          additive="sum"
-          values={`0,0;${dx},${dyy};${dx},${dyy};0,0;0,0`}
-          keyTimes="0;0.3;0.5;0.8;1"
-          dur={`${dur.toFixed(1)}s`}
-          begin={`-${(dur * hash(zone.id, i, 'b')).toFixed(1)}s`}
-          repeatCount="indefinite"
-        />
-      );
+      // ida al pasillo, pausa, vuelta y pausa en el puesto; el reloj visual la mueve a la tasa de la pantalla
+      motion = mo({
+        attr: 'translate',
+        values: ['0,0', `${dx},${dyy}`, `${dx},${dyy}`, '0,0', '0,0'],
+        keyTimes: [0, 0.3, 0.5, 0.8, 1],
+        dur,
+        offset: dur * hash(zone.id, i, 'b'),
+      });
     }
     // alturas (m): sentado cadera 0.45 / hombros 1.05; de pie piernas 0–0.85 / hombros 1.45
     const hip = walker ? 0.85 : 0.45;
@@ -486,14 +483,16 @@ export const ZoneInterior: React.FC<Props> = ({
       depth: pointDepth(seat.x, seat.y, iso, dy) - 0.01,
       el: (
         <g
-          key={`p${i}`}
+          key={`p${i}${motion ? 'm' : ''}`}
           transform={`translate(${base.x.toFixed(1)},${base.y.toFixed(1)})`}
           data-testid={walker ? 'ems-walker' : undefined}
         >
-          {motion}
-          <ellipse cx={0} cy={0} rx={s * 0.24} ry={s * 0.12} fill="#000" opacity={M.aoOpacity} />
+          {/* el paseo se anima en cada pieza (no en el grupo): animar el transform de un <g> recalcula los
+              estilos de todos sus hijos en cada frame (~1 ms por persona en Grafana); en las hojas, ~0.03 ms */}
+          <ellipse {...motion} cx={0} cy={0} rx={s * 0.24} ry={s * 0.12} fill="#000" opacity={M.aoOpacity} />
           {walker && (
             <rect
+              {...motion}
               x={-bw * 0.36}
               y={-hip * s}
               width={bw * 0.72}
@@ -503,6 +502,7 @@ export const ZoneInterior: React.FC<Props> = ({
             />
           )}
           <rect
+            {...motion}
             x={-bw / 2}
             y={-shoulder * s}
             width={bw}
@@ -511,6 +511,7 @@ export const ZoneInterior: React.FC<Props> = ({
             fill={shirt}
           />
           <rect
+            {...motion}
             x={bw * 0.06}
             y={-shoulder * s + bw * 0.2}
             width={bw * 0.38}
@@ -519,7 +520,7 @@ export const ZoneInterior: React.FC<Props> = ({
             fill="#000"
             opacity={0.12}
           />
-          <circle cx={0} cy={-head * s} r={s * 0.12} fill={skin} />
+          <circle {...motion} cx={0} cy={-head * s} r={s * 0.12} fill={skin} />
         </g>
       ),
     });
@@ -549,33 +550,25 @@ export const ZoneInterior: React.FC<Props> = ({
         const bottom = toScreen(d.x + ox * 1.8, d.y, zf + 0.4, iso, dy);
         const dur = 1.8 + 0.4 * k;
         air.push(
-          <circle key={`${i}-${k}`} cx={top.x} cy={top.y} r={1.3} fill="#6da7ec" opacity={animate ? 0 : 0.5}>
-            {animate && (
-              <>
-                <animate
-                  attributeName="cx"
-                  values={`${top.x.toFixed(1)};${bottom.x.toFixed(1)}`}
-                  dur={`${dur}s`}
-                  begin={`${(k * 0.6).toFixed(1)}s`}
-                  repeatCount="indefinite"
-                />
-                <animate
-                  attributeName="cy"
-                  values={`${top.y.toFixed(1)};${bottom.y.toFixed(1)}`}
-                  dur={`${dur}s`}
-                  begin={`${(k * 0.6).toFixed(1)}s`}
-                  repeatCount="indefinite"
-                />
-                <animate
-                  attributeName="opacity"
-                  values="0;0.85;0"
-                  dur={`${dur}s`}
-                  begin={`${(k * 0.6).toFixed(1)}s`}
-                  repeatCount="indefinite"
-                />
-              </>
-            )}
-          </circle>
+          <circle
+            key={`${i}-${k}${animate ? 'a' : ''}`}
+            cx={top.x}
+            cy={top.y}
+            r={1.3}
+            fill="#6da7ec"
+            opacity={animate ? 0 : 0.5}
+            {...(animate
+              ? mo(
+                  {
+                    attr: 'translate',
+                    values: ['0,0', `${bottom.x - top.x},${bottom.y - top.y}`],
+                    dur,
+                    offset: -k * 0.6,
+                  },
+                  { attr: 'opacity', values: [0, 0.85, 0], dur, offset: -k * 0.6 }
+                )
+              : {})}
+          />
         );
       }
     });

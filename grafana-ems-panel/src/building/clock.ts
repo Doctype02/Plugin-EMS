@@ -70,8 +70,13 @@ export function atWeekday(t: number, dow: number): number {
   return t + (dow - p.dow) * DAY;
 }
 
+/**
+ * Cada cuánto se recalcula la instantánea de la simulación (ms reales). El movimiento visible (personas,
+ * ventiladores, reloj de la barra) va aparte, a la tasa de la pantalla; aquí basta con que los valores avancen
+ * de a poco: ~5 min simulados por refresco, entre 250 ms y 1 s (1 min/s → 1 s, 10 min/s → 500 ms, 1 h/s → 250 ms).
+ */
 export function tickMs(s: ClockState): number {
-  return !s.playing ? 1000 : s.speed <= 1 ? 1000 : 200;
+  return !s.playing || s.speed <= 1 ? 1000 : Math.min(1000, Math.max(250, 300_000 / s.speed));
 }
 
 export function formatClock(t: number): { time: string; day: string; date: string } {

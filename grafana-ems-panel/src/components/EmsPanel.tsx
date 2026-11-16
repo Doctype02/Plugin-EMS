@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GrafanaTheme2, PanelProps } from '@grafana/data';
 import { css, cx } from '@emotion/css';
 import { Button, IconButton, Tab, TabsBar, useStyles2, useTheme2 } from '@grafana/ui';
@@ -38,7 +38,7 @@ import {
 } from 'building/control';
 import { MAX_POWER_DENSITY, ViewMode, legendFor } from 'building/views';
 import { AlarmList, alarmKey } from './AlarmList';
-import { Building3D } from './Building3D';
+import { Building3D, useReducedMotion } from './Building3D';
 import { BuildingControl } from './BuildingControl';
 import { ZoneControl } from './ZoneControl';
 import { ControllersPanel } from './ControllersPanel';
@@ -90,15 +90,34 @@ export function demoTime(now: number, speed: number): number {
 }
 
 const HIST_SPAN = 2 * 3_600_000;
-const HIST_STEP = 2 * 60_000;
+const HIST_POINTS = 37;
+// la ventana de la tendencia avanza de punto en punto (200 s): así reaprovecha 36 de los 37 cálculos
+const HIST_STEP = HIST_SPAN / (HIST_POINTS - 1);
 
 /** Reloj de la simulación controlado por el operador (barra de tiempo). */
 function useSimClock(demo: boolean, initialSpeed: number) {
   const [clock, setClock] = useState<ClockState>(() => initialClock(Date.now(), initialSpeed));
   const [real, setReal] = useState(() => Date.now());
+  // instantáneas de la simulación a su cadencia (1 s, o 200 ms acelerada); el movimiento entre ellas lo pone el
+  // reloj visual (motion.ts). Con la pestaña oculta no se recalcula: al volver se salta a la hora actual.
   useEffect(() => {
-    const timer = setInterval(() => setReal(Date.now()), demo ? tickMs(clock) : 1000);
-    return () => clearInterval(timer);
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const run = () => {
+      clearInterval(timer);
+      timer = undefined;
+      if (!document.hidden) {
+        // en transición: React reparte el render del árbol en trozos y no bloquea los frames de la animación
+        const tick = () => startTransition(() => setReal(Date.now()));
+        tick();
+        timer = setInterval(tick, demo ? tickMs(clock) : 1000);
+      }
+    };
+    run();
+    document.addEventListener('visibilitychange', run);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', run);
+    };
   }, [demo, clock]);
   const now = simNow(clock, Math.max(real, clock.anchorReal));
   return {
@@ -121,10 +140,10 @@ function useSnapshot(
 ): { snapshot: Snapshot; history: History; now: number } {
   const { options, data } = props;
   const snapshot = useMemo(() => (options.demoMode ? simulate(simT, sim) : undefined), [options.demoMode, simT, sim]);
-  // la tendencia de 2 h sólo cambia cada 2 min simulados
+  // la tendencia de 2 h sólo cambia cada 200 s simulados
   const histT = Math.floor(simT / HIST_STEP) * HIST_STEP;
   const history = useMemo(
-    () => (options.demoMode ? simulateHistory(histT, HIST_SPAN, 37, sim) : undefined),
+    () => (options.demoMode ? simulateHistory(histT, HIST_SPAN, HIST_POINTS, sim) : undefined),
     [options.demoMode, histT, sim]
   );
   const realNow = real;
@@ -353,6 +372,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
     return () => clearTimeout(t);
   }, [feedback]);
   const [animate, setAnimate] = useState(options.animations);
+  const reducedMotion = useReducedMotion();
   const [events, setEvents] = useState<SimEvent[]>([]);
   const [demoIncidents, setDemoIncidents] = useState(true);
   const simClock = useSimClock(options.demoMode, options.demoSpeed);
@@ -582,12 +602,14 @@ export const EmsPanel: React.FC<Props> = (props) => {
 
   // curva de potencia del día (15 min): simulada en demostración, tendencia del medidor en vivo
   const dayStart = localParts(now).dayStart;
-  const curveBucket = Math.floor(now / 900_000);
+  // en vivo la curva sale de la tendencia; en demostración sólo depende del día y de las opciones (antes se
+  // recalculaba con cada tendencia, ~100 llamadas al modelo cada 200 s simulados)
+  const liveHistory = options.demoMode ? undefined : history;
   const { dayCurve, pvCurve } = useMemo(() => {
     if (!options.demoMode) {
       return {
-        dayCurve: (history.EDIF?.pTotal ?? []) as Array<[number, number]>,
-        pvCurve: history.EDIF?.pPv as Array<[number, number]> | undefined,
+        dayCurve: (liveHistory?.EDIF?.pTotal ?? []) as Array<[number, number]>,
+        pvCurve: liveHistory?.EDIF?.pPv as Array<[number, number]> | undefined,
       };
     }
     const out: Array<[number, number]> = [];
@@ -598,8 +620,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
       pvOut.push([t, k.pPv]);
     }
     return { dayCurve: out, pvCurve: sim.pv ? pvOut : undefined };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options.demoMode, dayStart, sim, curveBucket, history]);
+  }, [options.demoMode, dayStart, sim, liveHistory]);
   const activeEventCount = events.filter((e) => e.start <= now && e.end > now).length;
   const selected = selectedId ? ZONE_BY_ID[selectedId] : undefined;
   const hovered = hover ? ZONE_BY_ID[hover.id] : undefined;
@@ -783,6 +804,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
           onSpeed={simClock.setSpeed}
           onTogglePlay={simClock.togglePlay}
           onLive={simClock.goLive}
+          smooth={animate && !reducedMotion}
         />
       )}
 

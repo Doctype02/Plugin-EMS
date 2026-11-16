@@ -1,8 +1,19 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { GrafanaTheme2, colorManipulator } from '@grafana/data';
 import { css, cx } from '@emotion/css';
 import { IconButton, RadioButtonGroup, Tooltip, useStyles2 } from '@grafana/ui';
-import { ClockState, SPEEDS, WEEKDAYS, atHour, atWeekday, dayPeriod, formatClock, localParts } from 'building/clock';
+import {
+  ClockState,
+  SPEEDS,
+  WEEKDAYS,
+  atHour,
+  atWeekday,
+  dayPeriod,
+  formatClock,
+  localParts,
+  simNow,
+} from 'building/clock';
+import { useFrameValue, useOnScreen } from './motion';
 
 interface Props {
   now: number;
@@ -15,6 +26,11 @@ interface Props {
   onSpeed: (speed: number) => void;
   onTogglePlay: () => void;
   onLive: () => void;
+  /**
+   * Reloj y cursor continuos: entre refrescos de la simulación la hora mostrada sigue al reloj visual (rAF), al
+   * minuto. Apagado (animaciones en pausa, movimiento reducido) muestra la hora de la última instantánea.
+   */
+  smooth?: boolean;
 }
 
 /** Bandas del día en la escala de 24 h (noche, jornada, punta). */
@@ -30,7 +46,7 @@ const BANDS = [
 
 /** Barra de tiempo: reproducir/pausar, velocidad, día de la semana y hora del día. */
 export const TimeBar: React.FC<Props> = ({
-  now,
+  now: snapshotNow,
   clock,
   live,
   compact,
@@ -39,8 +55,15 @@ export const TimeBar: React.FC<Props> = ({
   onSpeed,
   onTogglePlay,
   onLive,
+  smooth = false,
 }) => {
   const styles = useStyles2(getStyles);
+  const barRef = useRef<HTMLDivElement>(null);
+  const onScreen = useOnScreen(barRef);
+  const ticking = smooth && onScreen && !live && !!clock?.playing && clock.speed > 1;
+  // sólo re-renderiza la barra cuando cambia el minuto mostrado
+  const shown = useFrameValue(() => Math.floor(simNow(clock!, Date.now()) / 60_000) * 60_000, ticking, snapshotNow);
+  const now = ticking ? shown : snapshotNow;
   const parts = localParts(now);
   const f = formatClock(now);
   const realTime =
@@ -62,7 +85,11 @@ export const TimeBar: React.FC<Props> = ({
   }
 
   return (
-    <div className={cx(styles.bar, compact && !dense && styles.wrap, dense && styles.dense)} data-testid="ems-timebar">
+    <div
+      ref={barRef}
+      className={cx(styles.bar, compact && !dense && styles.wrap, dense && styles.dense)}
+      data-testid="ems-timebar"
+    >
       <div className={styles.group}>
         <IconButton
           name={clock?.playing ? 'pause' : 'play'}
@@ -126,7 +153,7 @@ export const TimeBar: React.FC<Props> = ({
           className={styles.range}
           min={0}
           max={24 * 60 - 1}
-          step={5}
+          step={1}
           value={Math.round(parts.hour * 60)}
           onChange={(e) => onTime(atHour(now, Number(e.currentTarget.value) / 60))}
           aria-label="Hora del día"
