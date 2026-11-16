@@ -1,6 +1,6 @@
 // Nodo función "Comando HTTP del panel" — entrada: POST /ems/control (http in)
 // Valida el comando del panel de Grafana y lo publica por MQTT.
-// Salida 1: override/liberar → ems/<edif>/ems/override; evento simulado → ems/<edif>/sim/control
+// Salida 1: override/liberar → ems/<edif>/ems/override; evento, ocupación, unidad y sensor → ems/<edif>/sim/control
 // Salida 2: parámetros       → ems/<edif>/ems/parametros
 // Salida 3: respuesta HTTP (con CORS)
 const edif = env.get("EMS_EDIFICIO") || "edificio1";
@@ -20,6 +20,7 @@ const ZONAS = /*@ZONAS@*/["Z01", "Z02", "Z03", "Z04", "Z05", "Z06", "Z07", "Z08"
 const CRITICAS = /*@CRITICAS@*/["Z06"]/*@FIN@*/;
 const SIN_PERSONAS = /*@SIN_PERSONAS@*/["Z06"]/*@FIN@*/;
 const UNIDADES = /*@UNIDADES@*/["VRF-PB", "VRF-P1", "VRF-P2", "VRF-P3", "VRF-P4", "VRF-SRV", "PTAC-PB", "PTAC-P1", "PTAC-P2", "PTAC-P3", "PTAC-P4"]/*@FIN@*/;
+const UNIDADES_CRITICAS = /*@UNIDADES_CRITICAS@*/["VRF-SRV"]/*@FIN@*/;
 const LIMITE_KW = /*@LIMITE_KW@*/[22, 297]/*@FIN@*/;
 const zonaValida = (z) => ZONAS.includes(z);
 if (b.tipo === "override") {
@@ -88,4 +89,79 @@ if (b.tipo === "evento") {
     for (const k of ["zona", "unidad", "intensidad"]) if (b[k] !== undefined && b[k] !== null) ev[k] = b[k];
     return [{ topic: `${base}/sim/control`, payload: ev }, null, responder(200, { ok: true, mensaje: "evento publicado", id: ev.id })];
 }
-return [null, null, responder(400, { ok: false, mensaje: "tipo debe ser override, liberar, parametros, evento u ocupacion" })];
+// ---------------------------------------------------------------- controladores (ems/controladores.py)
+const enRango = (v, a, z) => typeof v === "number" && isFinite(v) && v >= a && v <= z;
+const malo = (mensaje) => [null, null, responder(400, { ok: false, mensaje })];
+/** duracion_min es opcional (sin ella el ajuste dura hasta «liberar»); devuelve [valor, error]. */
+function duracion(v) {
+    if (v === undefined || v === null) return [undefined, null];
+    return enRango(v, 1e-9, 10080) ? [v, null] : [undefined, "Duración inválida (hasta 10080 min, u omitida)"];
+}
+if (b.tipo === "unidad") {
+    // ajuste del controlador local de una unidad VRF/PTAC: encendido, modo, capacidad, setpoint, COP
+    const u = b.unidad;
+    if (b.liberar) {
+        if (u !== "*" && !UNIDADES.includes(u)) return malo(`Unidad inválida: ${u}`);
+        return [{ topic: `${base}/sim/control`, payload: { accion: "unidad", unidad: u, liberar: true, usuario: b.usuario || "" } },
+            null, responder(200, { ok: true, mensaje: "unidad liberada" })];
+    }
+    if (!UNIDADES.includes(u)) return malo(`Unidad inválida: ${u}`);
+    const p = { accion: "unidad", unidad: u, usuario: b.usuario || "" };
+    if (b.encendido !== undefined && b.encendido !== null) {
+        if (typeof b.encendido !== "boolean") return malo("encendido debe ser true o false");
+        p.encendido = b.encendido;
+    }
+    if (b.modo !== undefined && b.modo !== null) {
+        if (!["auto", "frio", "ventilacion"].includes(b.modo)) return malo("modo debe ser auto, frio o ventilacion");
+        p.modo = b.modo;
+    }
+    const rangos = { capacidad_pct: [0, 100], setpoint_c: [18, 30], cop_factor: [0.5, 1.2] };
+    for (const k of Object.keys(rangos)) {
+        if (b[k] === undefined || b[k] === null) continue;
+        if (!enRango(b[k], rangos[k][0], rangos[k][1])) return malo(`${k} fuera de rango (${rangos[k][0]}–${rangos[k][1]})`);
+        p[k] = b[k];
+    }
+    if (Object.keys(p).length === 3) return malo("Sin cambios");
+    if (UNIDADES_CRITICAS.includes(u) && b.confirmar !== true) {
+        return [null, null, responder(409, { ok: false, requiere_confirmar: true, mensaje: `${u} atiende una zona crítica: envíe confirmar: true` })];
+    }
+    const [dur, err] = duracion(b.duracion_min);
+    if (err) return malo(err);
+    if (dur !== undefined) p.duracion_min = dur;
+    if (b.confirmar === true) p.confirmar = true;
+    return [{ topic: `${base}/sim/control`, payload: p }, null, responder(200, { ok: true, mensaje: "ajuste de unidad publicado" })];
+}
+if (b.tipo === "sensor") {
+    // datos que lee el controlador de la zona (la física no cambia): offset o valor fijo, HR, presencia, congelado
+    const z = b.zona;
+    if (b.liberar) {
+        if (z !== "*" && !zonaValida(z)) return malo("Zona inválida");
+        return [{ topic: `${base}/sim/control`, payload: { accion: "sensor", zona: z, liberar: true, usuario: b.usuario || "" } },
+            null, responder(200, { ok: true, mensaje: "sensor liberado" })];
+    }
+    if (!zonaValida(z)) return malo("Zona inválida");
+    const p = { accion: "sensor", zona: z, usuario: b.usuario || "" };
+    if (b.temp_offset_c != null && b.temp_c != null) return malo("Use temp_offset_c o temp_c, no ambos");
+    const rangos = { temp_offset_c: [-10, 10], temp_c: [5, 50], hr_pct: [0, 100] };
+    for (const k of Object.keys(rangos)) {
+        if (b[k] === undefined || b[k] === null) continue;
+        if (!enRango(b[k], rangos[k][0], rangos[k][1])) return malo(`${k} fuera de rango (${rangos[k][0]}–${rangos[k][1]})`);
+        p[k] = b[k];
+    }
+    for (const k of ["presencia", "congelado"]) {
+        if (b[k] === undefined || b[k] === null) continue;
+        if (typeof b[k] !== "boolean") return malo(`${k} debe ser true o false`);
+        if (k === "congelado" && !b[k]) continue;
+        p[k] = b[k];
+    }
+    if (Object.keys(p).length === 3) return malo("Sin cambios");
+    if (CRITICAS.includes(z) && b.confirmar !== true) {
+        return [null, null, responder(409, { ok: false, requiere_confirmar: true, mensaje: `${z} es una zona crítica: envíe confirmar: true` })];
+    }
+    const [dur, err] = duracion(b.duracion_min);
+    if (err) return malo(err);
+    if (dur !== undefined) p.duracion_min = dur;
+    if (b.confirmar === true) p.confirmar = true;
+    return [{ topic: `${base}/sim/control`, payload: p }, null, responder(200, { ok: true, mensaje: "sensor forzado publicado" })];
+}
+return [null, null, responder(400, { ok: false, mensaje: "tipo debe ser override, liberar, parametros, evento, ocupacion, unidad o sensor" })];

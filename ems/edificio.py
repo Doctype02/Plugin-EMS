@@ -14,6 +14,12 @@ limitador de demanda). La potencia eléctrica es capacidad × modulación / COP 
 VRF (calibrado con la simulación de E+), más el ventilador del terminal: continuo (línea base, como
 en E+) o sólo cuando hay ocupación o compresor (EMS).
 Los sensores agregan ruido y pueden fallar (congelado, ruidoso, fuera de rango, deriva).
+
+Controladores (ems/controladores.py): el operador puede ajustar cada unidad VRF/PTAC (encendido, modo,
+límite de capacidad, setpoint local, factor de COP) y forzar los datos del sensor de una zona (temperatura,
+HR, presencia, congelado). El forzado de sensor sólo cambia lo que lee el controlador (termostato local y
+EMS); la física sigue con el estado real. La humedad de cada zona se integra con un balance de vapor
+(ventilación + infiltración, latente de las personas, condensado del serpentín) sólo para informar la HR.
 """
 from __future__ import annotations
 
@@ -22,6 +28,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from . import controladores as m_ctl
 from . import eventos as m_ev
 from .config import RHO_CP, Zona, fv_habilitada, horario, potencia_fv_kw, zonas
 from .eventos import Evento
@@ -51,12 +58,21 @@ class EstadoZona:
     hvac_on: bool = False
     t_medida: float = 0.0
     historial_medida: list = field(default_factory=list)
+    w: float = W_INTERIOR             # humedad absoluta real del aire de la zona (kg/kg)
+    hr_medida: float = 55.0
+    ocupado_medido: bool = False
 
 
 def humedad_absoluta(t_c: float, hr_pct: float, p_kpa: float = 101.325) -> float:
     psat = 0.61094 * math.exp(17.625 * t_c / (t_c + 243.04))
     pv = max(min(hr_pct, 100.0), 0.0) / 100.0 * psat
     return 0.622 * pv / (p_kpa - pv)
+
+
+def humedad_relativa(t_c: float, w: float, p_kpa: float = 101.325) -> float:
+    psat = 0.61094 * math.exp(17.625 * t_c / (t_c + 243.04))
+    pv = w * p_kpa / (0.622 + w)
+    return float(min(max(100.0 * pv / psat, 0.0), 100.0))
 
 
 def fraccion_carga(t_medida: float, sp: float, banda: float) -> float:
@@ -93,6 +109,17 @@ class Edificio:
         self.ocupacion_forzada: dict[str, dict] = {}
         self._fin_eventos: list[Evento] = []
         self.unidades = {u["id"]: list(u["zonas"]) for u in cfg.get("sistemas_vrf", [])}
+        self.sistemas = {u["id"]: u for u in cfg.get("sistemas_vrf", [])}
+        self.unidad_de = {z: uid for uid, zs in self.unidades.items() for z in zs}
+        self.criticas = {z.id for z in self.zonas if z.critica}
+        # ajustes del operador (ems/controladores.py): {unidad: ajuste} y {zona: forzado del sensor}
+        self.ajustes_unidad: dict[str, dict] = {}
+        self.sensor_forzado: dict[str, dict] = {}
+        self._estado_unidades: list[dict] = []
+        self._lecturas: dict[str, dict] = {}
+        self.fin_ajustes: list[str] = []
+        # ruido de HR y de los valores forzados: generador aparte para no alterar la secuencia del gemelo
+        self.rng_sensor = np.random.default_rng(rng_semilla + 1000)
         self.fv = fv_habilitada(cfg)
         self.e_kwh = 0.0
         self.e_fv_kwh = 0.0
@@ -148,7 +175,84 @@ class Edificio:
             elif tipo == "deriva":
                 falla["acum"] = falla.get("acum", 0.0) + falla.get("tasa_c_h", 1.0) * self.paso_h
                 m = t_real + falla["acum"]
+        fz = self.sensor_forzado.get(zid)
+        if fz:
+            if fz.get("congelado"):
+                m = fz.setdefault("t_congelada", s.t_medida)
+            elif "temp_c" in fz:
+                m = fz["temp_c"] + self.rng_sensor.normal(0, 0.08)
+            elif "temp_offset_c" in fz:
+                m += fz["temp_offset_c"]
         return round(float(m), 2)
+
+    def _medir_hr(self, zid: str, hr_real: float) -> float:
+        s = self.estado[zid]
+        m = hr_real + self.rng_sensor.normal(0, 0.5)
+        fz = self.sensor_forzado.get(zid)
+        if fz:
+            if fz.get("congelado"):
+                m = fz.setdefault("hr_congelada", s.hr_medida)
+            elif "hr_pct" in fz:
+                m = fz["hr_pct"] + self.rng_sensor.normal(0, 0.3)
+        return round(float(min(max(m, 0.0), 100.0)), 1)
+
+    def _detectar_presencia(self, zid: str, ocupado: bool) -> bool:
+        s = self.estado[zid]
+        fz = self.sensor_forzado.get(zid)
+        if fz:
+            if fz.get("congelado"):
+                return bool(fz.setdefault("ocupado_congelado", s.ocupado_medido))
+            if "presencia" in fz:
+                return bool(fz["presencia"])
+        return bool(ocupado)
+
+    # ------------------------------------------------------------ controladores
+    def ajustar_unidad(self, d: dict) -> tuple[list[dict], str | None]:
+        """Ajuste del operador sobre una unidad VRF/PTAC (o `liberar`). Devuelve (alarmas, error)."""
+        aj, err = m_ctl.validar_unidad(d, self.unidades, self.criticas)
+        if err:
+            return [], err
+        uid = d.get("unidad")
+        if aj is None:
+            if uid == "*":
+                self.ajustes_unidad.clear()
+            else:
+                self.ajustes_unidad.pop(uid, None)
+            return [], None
+        self.ajustes_unidad[uid] = aj
+        if not aj["critica"]:
+            return [], None
+        zc = ", ".join(z for z in self.unidades[uid] if z in self.criticas)
+        return [{"nivel": "warn", "codigo": "AJUSTE_CRITICO", "zona": uid,
+                 "mensaje": f"Ajuste manual de {uid} (atiende la zona crítica {zc}): {m_ctl.describir_unidad(aj)}"}], None
+
+    def forzar_sensor(self, d: dict) -> tuple[list[dict], str | None]:
+        """Fuerza los datos del sensor de una zona (o `liberar`). Devuelve (alarmas, error)."""
+        fz, err = m_ctl.validar_sensor(d, set(self.estado), self.criticas)
+        if err:
+            return [], err
+        zid = d.get("zona")
+        if fz is None:
+            if zid == "*":
+                self.sensor_forzado.clear()
+            else:
+                self.sensor_forzado.pop(zid, None)
+            return [], None
+        self.sensor_forzado[zid] = fz
+        if not fz["critica"]:
+            return [], None
+        return [{"nivel": "warn", "codigo": "AJUSTE_CRITICO", "zona": zid,
+                 "mensaje": f"Sensor de la zona crítica {zid} forzado: {m_ctl.describir_sensor(fz)}"}], None
+
+    def estado_controladores(self) -> dict:
+        """Estado de las unidades y de los sensores forzados (tópico sim/controladores)."""
+        sensores = []
+        for zid, fz in self.sensor_forzado.items():
+            lec = self._lecturas.get(zid, {})
+            sensores.append({"zona": zid, **lec,
+                             "forzado": {k: fz[k] for k in m_ctl.CAMPOS_SENSOR if k in fz},
+                             "restante_min": fz.get("restante_min"), "usuario": fz.get("usuario", "")})
+        return {"unidades": self._estado_unidades, "sensores": sensores}
 
     # -------------------------------------------------------------------- paso
     # ----------------------------------------------------------------- eventos
@@ -240,6 +344,76 @@ class Edificio:
                 fin.append(ev)
         return fin
 
+    def _modulaciones(self, ef: dict) -> dict[str, tuple]:
+        """Modulación de cada terminal: termostato local o comando del EMS, con el controlador local de la
+        unidad por encima (apagado, modo, setpoint) y el tope de capacidad repartido entre sus zonas.
+        Devuelve {zona: (mod, capacidad_kw, setpoint, modo, habilitado)}."""
+        pre = {}
+        for z in self.zonas:
+            s = self.estado[z.id]
+            aj = self.ajustes_unidad.get(self.unidad_de.get(z.id, ""))
+            cap = 0.0 if (z.id in self.falla_hvac or z.id in ef["sin_frio"]) else z.hvac_kw
+            sp = z.setpoint_fijo or s.setpoint_c
+            enable, hvac_mod, modo = s.hvac_enable, s.hvac_mod, "auto"
+            if aj:
+                if aj.get("setpoint_c") is not None:
+                    sp = aj["setpoint_c"]
+                modo = "apagado" if aj.get("encendido") is False else aj.get("modo", "auto")
+                if modo == "frio":
+                    # el controlador local ignora la habilitación y el deslastre del EMS
+                    enable, hvac_mod = True, None
+                elif modo in ("apagado", "ventilacion"):
+                    cap = 0.0
+            if modo in ("apagado", "ventilacion") or not enable:
+                mod, s.hvac_on = 0.0, False
+            elif hvac_mod is not None:
+                mod = hvac_mod
+                s.hvac_on = mod > 0
+            else:
+                mod, s.hvac_on = modulacion_termostato(s.t_medida, sp, self.banda, s.hvac_on)
+            if cap == 0.0:
+                mod = 0.0
+                if z.id in ef["sin_frio"]:
+                    s.hvac_on = False
+            pre[z.id] = (mod, cap, sp, modo, enable)
+        for uid, aj in self.ajustes_unidad.items():
+            pct = aj.get("capacidad_pct")
+            if pct is None:
+                continue
+            zs = self.unidades[uid]
+            pedido = sum(pre[z][0] * pre[z][1] for z in zs)
+            tope = pct / 100.0 * self.sistemas[uid]["capacidad_kw"]
+            if pedido > tope:
+                f = tope / pedido
+                for z in zs:
+                    mod, *resto = pre[z]
+                    pre[z] = (mod * f, *resto)
+                    if mod * f <= 0:
+                        self.estado[z].hvac_on = False
+        return pre
+
+    def _actualizar_unidades(self, acum: dict, corte: bool):
+        fallas = {ev.unidad for ev in self.eventos.values() if ev.tipo == "falla_vrf"}
+        out = []
+        for uid, zs in self.unidades.items():
+            sis = self.sistemas[uid]
+            aj = self.ajustes_unidad.get(uid) or {}
+            a = acum[uid]
+            modo = "apagado" if aj.get("encendido") is False else aj.get("modo", "auto")
+            out.append({
+                "unidad": uid, "tipo": sis.get("tipo", "vrf"), "zonas": list(zs),
+                "capacidad_kw": sis["capacidad_kw"],
+                "p_kw": round(a["p_kw"], 3), "q_frio_kw": round(a["q_frio_kw"], 3),
+                "carga_pct": round(100.0 * a["q_frio_kw"] / sis["capacidad_kw"], 1),
+                "cop": round(a["q_frio_kw"] / a["p_comp_kw"], 3) if a["p_comp_kw"] > 1e-6 else None,
+                "modo": modo, "encendido": modo != "apagado",
+                "capacidad_pct": aj.get("capacidad_pct", 100.0), "setpoint_c": aj.get("setpoint_c"),
+                "cop_factor": aj.get("cop_factor", 1.0),
+                "forzado": bool(aj), "restante_min": aj.get("restante_min"), "usuario": aj.get("usuario", ""),
+                "falla": uid in fallas, "sin_energia": corte,
+            })
+        self._estado_unidades = out
+
     def paso(self, clima: dict, ocupantes: dict[str, int], minuto_del_dia: int = 0,
              dia_semana: int = 0) -> tuple[list[dict], dict]:
         ef = self._efectos()
@@ -265,6 +439,9 @@ class Edificio:
             t_planta[pl] = sum(self.estado[z.id].t * z.area for z in zs) / sum(z.area for z in zs)
         edificio_ocupado = any(self._ocupantes(z, int(ocupantes.get(z.id, 0))) > 0 for z in no_crit)
 
+        pre = self._modulaciones(ef)
+        acum_u = {uid: {"p_kw": 0.0, "p_comp_kw": 0.0, "q_frio_kw": 0.0} for uid in self.unidades}
+
         tel = []
         tot = {"hvac": 0.0, "luces": 0.0, "equipos": 0.0, "it": 0.0}
         q_kvar = 0.0
@@ -277,35 +454,30 @@ class Edificio:
             if ef["evac"] is not None:
                 n = int(round(n * max(0.0, 1 - ef["evac"] / m_ev.MIN_EVACUACION)))
             ocupado = n > 0 or (z.tipo == "pasillo" and edificio_ocupado)
-            cap = 0.0 if (z.id in self.falla_hvac or z.id in ef["sin_frio"]) else z.hvac_kw
+            # el detector de presencia (que puede estar forzado) decide el ventilador en modo DCV
+            ocupado_det = self._detectar_presencia(z.id, ocupado)
             # la central de incendio / el corte desenergizan el terminal (ventilador incluido)
             sin_energia_hvac = bool(ef["fuego"]) or corte is not None
-            cop = z.cop * (1 - 0.012 * (t_ext - 30.0))
+            uid = self.unidad_de.get(z.id)
+            aj = self.ajustes_unidad.get(uid) if uid else None
+            cop = z.cop * (1 - 0.012 * (t_ext - 30.0)) * (aj.get("cop_factor", 1.0) if aj else 1.0)
 
-            # --- capacidad del terminal VRF
-            sp = z.setpoint_fijo or s.setpoint_c
-            if not s.hvac_enable:
-                mod, s.hvac_on = 0.0, False
-            elif s.hvac_mod is not None:
-                mod = s.hvac_mod
-                s.hvac_on = mod > 0
-            else:
-                mod, s.hvac_on = modulacion_termostato(s.t_medida, sp, self.banda, s.hvac_on)
-            if cap == 0.0:
-                mod = 0.0
-                if z.id in ef["sin_frio"]:
-                    s.hvac_on = False
+            # --- capacidad del terminal VRF (termostato/EMS + controlador local de la unidad)
+            mod, cap, sp, modo, enable = pre[z.id]
 
             # --- ventilador y aire exterior
-            if sin_energia_hvac:
+            if sin_energia_hvac or modo == "apagado":
                 fan_on, g_vent = False, 0.0
-            elif not s.hvac_enable:
+            elif modo == "ventilacion":
+                fan_on = True
+                g_vent = max(z.ocupantes, 0) * v_pers * RHO_CP
+            elif not enable:
                 fan_on, g_vent = False, 0.0
             elif s.ventilacion == "fija":
                 fan_on = True
                 g_vent = max(z.ocupantes, 0) * v_pers * RHO_CP
             else:
-                fan_on = ocupado or mod > 0
+                fan_on = ocupado_det or mod > 0
                 g_vent = n * v_pers * RHO_CP
             p_fan = z.fan_kw if fan_on else 0.0
 
@@ -349,8 +521,33 @@ class Edificio:
             q_lat_ret = min(q_lat, self.e.get("fraccion_latente_serpentin", 0.25) * q_hvac_sens) if mod > 0 else 0.0
             p_comp = (q_hvac_sens + q_lat_ret) / max(cop, 1.0)
             p_hvac = p_comp + p_fan
+            if uid:
+                a = acum_u[uid]
+                a["p_kw"] += p_hvac
+                a["p_comp_kw"] += p_comp
+                a["q_frio_kw"] += q_hvac_sens + q_lat_ret
+
+            # --- humedad real del aire (balance de vapor, solución exacta en el paso)
+            m_aire = 1.2 * z.area * self.e.get("altura_piso_m", 3.0)
+            mdot = 1.2 * caudal_ext
+            fuente = (n * Q_PERSONA_LAT_KW - q_lat_ret) / H_FG
+            dt_s = self.paso_h * 3600.0
+            if mdot > 1e-6:
+                w_eq = w_ext + fuente / mdot
+                s.w = w_eq + (s.w - w_eq) * math.exp(-mdot / m_aire * dt_s)
+            else:
+                s.w += fuente / m_aire * dt_s
+            s.w = min(max(s.w, 0.002), humedad_absoluta(s.t, 100.0))
+            hr_real = humedad_relativa(s.t, s.w)
 
             s.t_medida = self._medir(z.id, s.t)
+            s.hr_medida = self._medir_hr(z.id, hr_real)
+            s.ocupado_medido = ocupado_det
+            fz = self.sensor_forzado.get(z.id)
+            if fz:
+                self._lecturas[z.id] = {"temp_c": s.t_medida, "temp_real_c": round(s.t, 2),
+                                        "hr_pct": s.hr_medida, "hr_real_pct": round(hr_real, 1),
+                                        "ocupado": ocupado_det, "ocupado_real": bool(ocupado)}
             lux_dia = EFICACIA_LUZ_DIA * self._vt * 0.25 * sum(a * irr[o] for o, a in z.ventanas.items()) / max(z.area, 1)
             lux = lux_dia + LUX_ARTIFICIAL * s.luces_nivel
 
@@ -366,9 +563,11 @@ class Edificio:
             tel.append({
                 "zona": z.id, "nombre": z.nombre, "tipo": z.tipo, "critica": z.critica,
                 "temp_c": s.t_medida, "temp_real_c": round(s.t, 3), "setpoint_c": sp,
-                "ocupantes": n, "ocupado": bool(ocupado), "lux": round(lux, 0),
+                "hr_pct": s.hr_medida, "hr_real_pct": round(hr_real, 1),
+                "ocupantes": n, "ocupado": ocupado_det, "ocupado_real": bool(ocupado), "lux": round(lux, 0),
                 "luces_nivel": round(s.luces_nivel, 3), "equipos_nivel": round(s.equipos_nivel, 3),
-                "hvac_on": bool(s.hvac_on), "hvac_enable": bool(s.hvac_enable),
+                "hvac_on": bool(s.hvac_on), "hvac_enable": bool(enable), "sensor_forzado": bool(fz),
+                **m_ctl.campos_sensor(fz),
                 "hvac_mod": round(mod, 3), "q_frio_kw": round(q_hvac_sens + q_lat_ret, 3),
                 "p_luces_kw": round(p_luces, 3), "p_equipos_kw": round(p_eq + p_it, 3),
                 "p_hvac_kw": round(p_hvac, 3), "p_ventilador_kw": round(p_fan, 3), "p_total_kw": round(p_zona, 3),
@@ -427,7 +626,18 @@ class Edificio:
             medidor["ups_min"] = round(max(0.0, (corte.intensidad or 30) - corte.transcurrido), 1)
         if self.eventos:
             medidor["eventos"] = sorted({ev.tipo for ev in self.eventos.values()})
+        if self.ajustes_unidad:
+            medidor["unidades_ajustadas"] = sorted(self.ajustes_unidad)
+        if self.sensor_forzado:
+            medidor["sensores_forzados"] = sorted(self.sensor_forzado)
         self._fin_eventos = self._avanzar_eventos()
+        self.fin_ajustes = (m_ctl.descontar(self.ajustes_unidad, self.e["paso_min"])
+                            + m_ctl.descontar(self.sensor_forzado, self.e["paso_min"]))
+        # estado de las unidades con los ajustes vigentes después del paso (restante ya descontado)
+        self._actualizar_unidades(acum_u, corte is not None)
+        for zid in list(self._lecturas):
+            if zid not in self.sensor_forzado:
+                self._lecturas.pop(zid)
         for k in list(self.ocupacion_forzada):
             self.ocupacion_forzada[k]["restante_min"] -= self.e["paso_min"]
             if self.ocupacion_forzada[k]["restante_min"] <= 0:

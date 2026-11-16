@@ -24,6 +24,11 @@ from .influx import Escritor
 from .simulacion import simular
 
 
+OCULTOS_MQTT = ("temp_real_c", "hvac_mod", "hr_real_pct", "ocupado_real", "sensor_forzado", "sensor_temp_offset_c",
+                "sensor_temp_fijo_c", "sensor_hr_fijo_pct", "sensor_presencia", "sensor_congelado",
+                "sensor_restante_min")
+
+
 def _hoy(tz: str) -> str:
     return pd.Timestamp.now(tz=tz).normalize().strftime("%Y-%m-%d %H:%M")
 
@@ -127,6 +132,8 @@ class Puente:
                 self.influx.alarma(a)
             elif partes[-1] == "control" and data.get("accion") == "evento":
                 self._evento(ed, t, data)
+            elif partes[-1] == "control" and data.get("accion") in ("unidad", "sensor"):
+                self._controlador(ed, t, data)
             elif partes[-1] == "control" and data.get("accion") == "ocupacion":
                 err = ed.fijar_ocupacion(data)
                 print(f"[live] ocupación {data.get('zona')}: {err or 'aplicada'}")
@@ -155,6 +162,25 @@ class Puente:
             self.influx.alarma(a)
         print(f"[live] evento {ev.tipo} iniciado ({ev.minutos:.0f} min)")
         self._pub("sim/eventos", {"ts": t.isoformat(), "activos": self._eventos_activos(ed)}, retain=True)
+
+    def _controlador(self, ed: Edificio, t, data: dict):
+        """Ajuste de una unidad VRF/PTAC o forzado del sensor de una zona (ems/controladores.py)."""
+        if data["accion"] == "unidad":
+            alarmas, err = ed.ajustar_unidad(data)
+            objetivo = data.get("unidad")
+        else:
+            alarmas, err = ed.forzar_sensor(data)
+            objetivo = data.get("zona")
+        print(f"[live] {data['accion']} {objetivo}: {err or ('liberado' if data.get('liberar') else 'aplicado')}")
+        for a in alarmas:
+            a = {"ts": t, **a}
+            self._pub("alarma", a)
+            self.influx.alarma(a)
+        if not err:
+            self._pub_controladores(ed, t)
+
+    def _pub_controladores(self, ed: Edificio, t):
+        self._pub("sim/controladores", {"ts": t.isoformat(), **ed.estado_controladores()}, retain=True)
 
     @staticmethod
     def _eventos_activos(ed: Edificio) -> list[dict]:
@@ -224,9 +250,13 @@ class Puente:
                 ts = t.isoformat()
                 for z in tel:
                     z["ts"] = ts
-                    pub = {k: v for k, v in z.items() if k not in ("temp_real_c", "hvac_mod")}
+                    # el EMS sólo ve lo que miden los sensores (no el estado real ni si están forzados)
+                    pub = {k: v for k, v in z.items() if k not in OCULTOS_MQTT}
                     self._pub(f"zona/{z['zona']}/telemetria", pub)
                     self.influx.zona(t, z)
+                self._pub_controladores(ed, t)
+                for u in ed.estado_controladores()["unidades"]:
+                    self.influx.unidad(t, u)
                 self._pub("medidor/general", {"ts": ts, **med})
                 self.influx.medidor(t, med)
                 self.influx.flush(forzar=True)  # un paso = un lote (con velocidad 1 hay 1 paso cada 5 min)

@@ -37,14 +37,15 @@ Prefijo: `ems/{edificio}` (por defecto `ems/edificio1`). Zonas: `Z01` … `Z26` 
 
 | Tópico | Dirección | Contenido |
 |---|---|---|
-| `ems/edificio1/zona/{Z}/telemetria` | sim → | `{ts, zona, nombre, tipo, critica, temp_c, setpoint_c, ocupantes, ocupado, lux, luces_nivel, equipos_nivel, hvac_on, hvac_enable, p_luces_kw, p_equipos_kw, p_hvac_kw, p_total_kw}` |
+| `ems/edificio1/zona/{Z}/telemetria` | sim → | `{ts, zona, nombre, tipo, critica, temp_c, setpoint_c, hr_pct, ocupantes, ocupado, lux, luces_nivel, equipos_nivel, hvac_on, hvac_enable, p_luces_kw, p_equipos_kw, p_hvac_kw, p_total_kw}`. `temp_c`, `hr_pct` y `ocupado` son **lo que mide el sensor** (pueden estar forzados, §2.1); el estado real y el detalle del forzado no se publican por MQTT (sólo van a InfluxDB), igual que un sensor real mal calibrado |
 | `ems/edificio1/medidor/general` | sim → | `{ts, p_total_kw, p_critica_kw, p_no_critica_kw, p_hvac_kw, p_luces_kw, p_equipos_kw, p_fija_kw, q_kvar, s_kva, fp, v_ll, i_a, e_kwh, demanda_15min_kw, t_ext_c, hr_pct, irr_wm2, precio_usd_kwh, red_ok, ups_kw?, ups_min?, eventos?, p_fv_kw?, p_red_kw?, e_fv_kwh?}` (durante un corte `p_total_kw = 0`, `red_ok = false` y el UPS informa `ups_kw`/`ups_min`). `p_total_kw` es el consumo del edificio; con la variante FV (`EMS_FV=si`) se agregan la generación `p_fv_kw`, la importación neta `p_red_kw = p_total_kw − p_fv_kw` (negativa = inyección) y `e_fv_kwh`, y `demanda_15min_kw` pasa a ser la de la acometida (importación neta) |
 | `ems/edificio1/zona/{Z}/cmd` | Node-RED → sim | cualquiera de `{setpoint_c, hvac_enable, luces_nivel (0–1), equipos_nivel (0–1), ventilacion ("dcv"\|"fija"), hvac_mod (0–1 fuerza capacidad; null = termostato)}` + opcional `cmd_id`, `wall_ms` (epoch ms al enviar, para latencia) |
 | `ems/edificio1/zona/{Z}/ack` | sim → | `{cmd_id, zona, ts, recibido_wall_ms, aplicado: true}` (latencia = `recibido_wall_ms` − `wall_ms` del cmd) |
 | `ems/edificio1/ems/estado` | Node-RED/sim → | `{ts, origen, modo, dr_activo, limite_kw, n_alarmas, latencia_ms}` |
 | `ems/edificio1/alarma` | Node-RED/sim → | `{ts, nivel: info\|warn\|crit, codigo, zona, mensaje}` |
 | `ems/edificio1/pronostico` | sim → (retained) | `{generado, modelo, mae_kw, rmse_kw, puntos: [{ts, p_kw}]}` |
-| `ems/edificio1/sim/control` | → sim | `{accion: pausa\|reanuda, velocidad?}` o evento simulado `{accion: "evento", operacion: iniciar\|detener, id, evento, zona?, unidad?, duracion_min, intensidad?}` (`ems/eventos.py`) |
+| `ems/edificio1/sim/control` | → sim | `{accion: pausa\|reanuda, velocidad?}`, evento simulado `{accion: "evento", operacion: iniciar\|detener, id, evento, zona?, unidad?, duracion_min, intensidad?}` (`ems/eventos.py`), ocupación `{accion: "ocupacion", …}` o controladores `{accion: "unidad", unidad, …}` / `{accion: "sensor", zona, …}` (mismos campos que el endpoint, §2.1; `ems/controladores.py`) |
+| `ems/edificio1/sim/controladores` | sim → (retenido, cada paso y al aplicar un ajuste) | `{ts, unidades: [{unidad, tipo, zonas, capacidad_kw, p_kw, q_frio_kw, carga_pct, cop, modo, encendido, capacidad_pct, setpoint_c, cop_factor, forzado, restante_min, usuario, falla, sin_energia}], sensores: [{zona, temp_c, temp_real_c, hr_pct, hr_real_pct, ocupado, ocupado_real, forzado: {temp_offset_c?, temp_c?, hr_pct?, presencia?, congelado?}, restante_min, usuario}]}`. `modo`: `auto`\|`frio`\|`ventilacion`\|`apagado`; `cop` = frío / potencia del compresor del paso (`null` con el compresor parado); `restante_min: null` = sin vencimiento; `falla` = evento `falla_vrf` activo; `sensores` lista sólo los forzados |
 | `ems/edificio1/sim/eventos` | sim → (retenido) | `{ts, activos: [{id, evento, zona, unidad, intensidad, restante_min}]}` |
 | `ems/edificio1/sim/estado` | sim → (retained, LWT) | `{en_linea, control, velocidad}` — usar para el panel de disponibilidad |
 | `ems/edificio1/nodered/estado` | Node-RED → (retained, LWT) | `{en_linea}` |
@@ -60,10 +61,47 @@ Prefijo: `ems/{edificio}` (por defecto `ems/edificio1`). Zonas: `Z01` … `Z26` 
 | `override` | `zona`, `setpoint_c?`, `hvac_enable?`, `luces_nivel?`, `equipos_nivel?`, `duracion_min?`, `usuario?` | `ems/<edif>/ems/override` |
 | `liberar` | `zona` (`Z01`…`Z26` o `*`) | `ems/<edif>/ems/override` |
 | `parametros` | `limite_kw?` (0.25–3.3 × `ems.limite_demanda_kw`: 42–561 kW), `sp_ocupado?` (20–28) | `ems/<edif>/ems/parametros` |
+| `evento` | ver «Eventos simulados» (§4) | `ems/<edif>/sim/control` |
+| `ocupacion` | ver «Cantidad de personas» (§4) | `ems/<edif>/sim/control` |
+| `unidad` | `unidad` (id de `sistemas_vrf`), `encendido?` (bool), `modo?` (`auto`\|`frio`\|`ventilacion`), `capacidad_pct?` (0–100), `setpoint_c?` (18–30), `cop_factor?` (0.5–1.2), `duracion_min?` (>0–10080; **omitida = hasta liberar**), `confirmar?`, `usuario?` — o `{unidad: id\|"*", liberar: true}` | `ems/<edif>/sim/control` (`accion: "unidad"`) |
+| `sensor` | `zona`, `temp_offset_c?` (−10…10) **o** `temp_c?` (5–50), `hr_pct?` (0–100), `presencia?` (bool), `congelado?` (true), `duracion_min?` (omitida = hasta liberar), `confirmar?`, `usuario?` — o `{zona: Z\|"*", liberar: true}` | `ems/<edif>/sim/control` (`accion: "sensor"`) |
 
-Respuesta `{ok, mensaje, …}` con 200, o 400 si el comando no es válido (zona crítica, sin cambios, fuera de rango).
+Respuesta `{ok, mensaje, …}` con 200, 400 si el comando no es válido (zona crítica en `override`, sin cambios,
+fuera de rango, unidad/zona inválida) o **409** `{ok: false, requiere_confirmar: true}` si un ajuste de
+`unidad`/`sensor` afecta a una zona crítica y falta `confirmar: true`.
 
-Códigos de alarma: `TEMP_ALTA`, `TEMP_BAJA`, `PICO_DEMANDA`, `DR_ACTIVO`, `SENSOR_CONGELADO`, `SENSOR_FUERA_RANGO`, `HVAC_ON_SIN_OCUPACION`, `SERVIDOR_TEMP`, `COMANDO_PERDIDO`.
+### 2.1 Controladores: unidades VRF/PTAC y datos de sensores (`ems/controladores.py`)
+
+Escenarios de simulación sobre el gemelo. Cada ajuste **reemplaza** al anterior de la misma unidad o zona (lo
+no indicado vuelve a automático); con `duracion_min` vence solo, sin ella dura hasta `liberar`.
+
+**Unidad** (controlador local, prioridad sobre el EMS):
+
+| Campo | Efecto en el gemelo |
+|---|---|
+| `encendido: false` | compresor y terminales apagados (sin ventilador) en todas las zonas de la unidad |
+| `modo: "frio"` | termostato local con el setpoint de la zona (o el de la unidad): ignora `hvac_enable=false` y el deslastre (`hvac_mod`) del EMS |
+| `modo: "ventilacion"` | sólo ventiladores con aire exterior de diseño, sin compresor |
+| `capacidad_pct` | tope de la capacidad total de la unidad; si sus zonas piden más se reduce la modulación de todas en la misma proporción |
+| `setpoint_c` | setpoint del controlador local para sus zonas (reemplaza al del EMS y al fijo de las críticas) |
+| `cop_factor` | multiplica el COP: el mismo frío con más (o menos) potencia eléctrica |
+
+La **falla** de la unidad no es un ajuste: es el evento `falla_vrf` (§4), que el estado informa como `falla`.
+
+**Sensor de zona**: cambia sólo lo que leen el termostato local y el EMS (Python y Node-RED, que reciben el valor
+por la telemetría); la física sigue con el estado real. `temp_offset_c` suma un desfase; `temp_c` fija la
+lectura con el ruido normal del sensor (σ 0.08 °C, para no parecer congelado); `hr_pct` fija la HR; `presencia`
+fuerza el detector (decide setpoint, luces, enchufes y ventilador DCV); `congelado` deja todas las lecturas en
+el último valor (prioridad sobre los demás campos) y el supervisor lo detecta en 6 lecturas (≈ 30 min) como
+`SENSOR_CONGELADO` → modo seguro. La HR es **informativa**: el VRF no controla la humedad (como en el modelo E+,
+la HR interior con ocupación ronda el 90–100 %), así que ninguna regla del EMS la usa.
+
+**Zona crítica (Z06, cuarto de servidores, y su unidad VRF-SRV)**: se permite simular cualquier ajuste —es
+justamente el escenario que interesa probar— pero exige `confirmar: true` (409 sin él, en Node-RED y en el
+gemelo) y al aplicarse el gemelo emite la alarma `AJUSTE_CRITICO` (warn). `liberar` no necesita confirmación.
+El panel pide confirmación en línea antes de enviar.
+
+Códigos de alarma: `TEMP_ALTA`, `TEMP_BAJA`, `PICO_DEMANDA`, `DR_ACTIVO`, `SENSOR_CONGELADO`, `SENSOR_FUERA_RANGO`, `HVAC_ON_SIN_OCUPACION`, `SERVIDOR_TEMP`, `COMANDO_PERDIDO`, `AJUSTE_CRITICO`.
 
 ## 3. Esquema InfluxDB (bucket `ems`)
 
@@ -71,7 +109,8 @@ Timestamp = tiempo simulado. Precisión: segundos. En modo `externo` el simulado
 
 | Measurement | Tags | Fields |
 |---|---|---|
-| `zona` | `edificio`, `zona`, `nombre`, `tipo`, `critica` (`si`/`no`), `escenario` | `temp_c`, `setpoint_c`, `ocupantes`, `ocupado` (0/1), `lux`, `luces_nivel`, `equipos_nivel`, `hvac_on` (0/1), `hvac_enable` (0/1), `p_luces_kw`, `p_equipos_kw`, `p_hvac_kw`, `p_total_kw` |
+| `zona` | `edificio`, `zona`, `nombre`, `tipo`, `critica` (`si`/`no`), `escenario` | `temp_c`, `setpoint_c`, `ocupantes`, `ocupado` (0/1), `lux`, `luces_nivel`, `equipos_nivel`, `hvac_on` (0/1), `hvac_enable` (0/1), `p_luces_kw`, `p_equipos_kw`, `p_hvac_kw`, `p_total_kw`; lectura frente a real: `temp_c` / `temp_real_c`, `hr_pct` / `hr_real_pct`, `ocupado` / `ocupado_real`, `sensor_forzado` (0/1); mientras el sensor está forzado: `sensor_temp_offset_c`, `sensor_temp_fijo_c`, `sensor_hr_fijo_pct`, `sensor_presencia` (0/1), `sensor_congelado` (0/1), `sensor_restante_min` (−1 = sin vencimiento) |
+| `unidad` | `edificio`, `unidad`, `tipo` (`vrf`/`ptac`), `escenario` | `p_kw`, `q_frio_kw`, `carga_pct`, `cop` (sólo con compresor en marcha), `modo` (string), `encendido`, `capacidad_pct`, `setpoint_c` (sólo si está fijado), `cop_factor`, `forzado`, `restante_min` (−1 = sin vencimiento; sólo si `forzado`), `falla`, `sin_energia` (booleanos 0/1) |
 | `medidor` | `edificio`, `escenario` | todos los campos numéricos de `medidor/general` |
 | `ems` | `edificio`, `escenario`, `modo` | `dr_activo` (0/1), `limite_kw`, `n_alarmas`, `latencia_ms` |
 | `alarma` | `edificio`, `escenario`, `nivel`, `codigo`, `zona` | `mensaje` (string), `valor` |
@@ -91,6 +130,11 @@ from(bucket: "ems") |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
 from(bucket: "ems") |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
   |> filter(fn: (r) => r._measurement == "zona" and r._field == "temp_c" and r.escenario == "${escenario}")
   |> keep(columns: ["_time", "_value", "zona"])
+
+// Estado de las unidades VRF/PTAC (consulta E del panel 3D)
+from(bucket: "ems") |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "unidad" and r.escenario == "live") |> last()
+  |> pivot(rowKey: ["_time", "unidad"], columnKey: ["_field"], valueColumn: "_value") |> group()
 
 // Comparación de escenarios (KPI)
 from(bucket: "ems") |> range(start: 0)
@@ -152,4 +196,4 @@ o `{tipo: "evento", accion: "detener", id | "*"}`. Tipos: `incendio`, `corte_ene
 del UPS en min), `falla_vrf` (unidad: cualquier id de `sistemas_vrf`, incluidos los PTAC), `falla_terminal`, `puerta_abierta` (%), `sensor`,
 `ola_calor` (°C), `sobreocupacion` (% sobre el aforo), `pico_carga` (kW). Alarmas nuevas: `INCENDIO`,
 `CORTE_ENERGIA`, `EN_UPS`, `UPS_AGOTADO`, `FALLA_VRF`, `FALLA_TERMINAL`, `PUERTA_ABIERTA`, `OLA_CALOR`,
-`SOBREOCUPACION`, `CARGA_EXTRA`. Rango de `limite_kw` en `parametros`: 42–561 kW.
+`SOBREOCUPACION`, `CARGA_EXTRA`, `AJUSTE_CRITICO`. Rango de `limite_kw` en `parametros`: 42–561 kW.

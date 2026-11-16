@@ -17,7 +17,12 @@ interface Props {
   compact?: boolean;
   /** Muestra la generación FV en la fila de la azotea. */
   pv?: boolean;
+  /** Personas en el edificio y aforo total (botón «Edificio»). */
+  building?: { people?: number; capacity: number };
 }
+
+const pctOf = (people: number | undefined, capacity: number | undefined) =>
+  people === undefined || !capacity ? undefined : Math.min(100, (100 * people) / capacity);
 
 const kw = (v: number) => `${v < 10 ? v.toFixed(1) : v.toFixed(0)} kW`;
 
@@ -26,9 +31,22 @@ const kw = (v: number) => `${v < 10 ? v.toFixed(1) : v.toFixed(0)} kW`;
  * Cada fila muestra el peor estado de la planta (barra de color), la temperatura media, los kW y un
  * indicador de alarmas; el botón "Edificio" abre la vista de conjunto.
  */
-export const FloorSelector: React.FC<Props> = ({ levels, value, onChange, statusColors, compact = false, pv }) => {
+export const FloorSelector: React.FC<Props> = ({
+  levels,
+  value,
+  onChange,
+  statusColors,
+  compact = false,
+  pv,
+  building,
+}) => {
   const styles = useStyles2(getStyles);
   const total = levels.reduce((a, l) => a + l.crit + l.warn, 0);
+  const bPct = pctOf(building?.people, building?.capacity);
+  const bText =
+    building && building.people !== undefined
+      ? ` · ${building.people} de ${building.capacity} personas (${Math.round(bPct ?? 0)} %)`
+      : '';
   return (
     <nav
       className={cx(styles.root, compact && styles.compact)}
@@ -41,11 +59,18 @@ export const FloorSelector: React.FC<Props> = ({ levels, value, onChange, status
         onClick={() => onChange('all')}
         aria-pressed={value === 'all'}
         data-testid="ems-floorsel-all"
-        title="Vista de conjunto del edificio"
+        title={`Vista de conjunto del edificio${bText}`}
       >
         <Icon name="building" size={compact ? 'md' : 'sm'} />
         {!compact && <span>Edificio</span>}
+        {!compact && building?.people !== undefined && (
+          <span className={styles.allPeople} data-testid="ems-floorsel-people-all">
+            <Icon name="user" size="xs" />
+            {building.people}/{building.capacity}
+          </span>
+        )}
         {!compact && total > 0 && <span className={styles.allCount}>{total}</span>}
+        {bPct !== undefined && <span className={styles.occBar} style={{ width: `${bPct}%` }} aria-hidden />}
       </button>
       <div className={styles.stack}>
         {levels.map((l) => {
@@ -54,6 +79,11 @@ export const FloorSelector: React.FC<Props> = ({ levels, value, onChange, status
           const roof = key === 'roof';
           const alarms = l.crit + l.warn;
           const color = statusColors[l.status];
+          const occPct = roof ? undefined : pctOf(l.people, l.capacity);
+          const occText =
+            !roof && l.people !== undefined && l.capacity
+              ? ` · ${l.people} de ${l.capacity} personas (${Math.round(occPct ?? 0)} %)`
+              : '';
           const detail = roof
             ? pv && l.pv !== undefined
               ? `FV ${kw(l.pv)}`
@@ -70,11 +100,19 @@ export const FloorSelector: React.FC<Props> = ({ levels, value, onChange, status
               aria-pressed={active}
               data-testid={`ems-floorsel-${roof ? 'roof' : l.short}`}
               data-status={l.status}
-              title={`${l.name} · ${STATUS_LABELS[l.status]}${alarms ? ` · ${alarms} alarma${alarms > 1 ? 's' : ''}` : ''}`}
+              title={`${l.name} · ${STATUS_LABELS[l.status]}${occText}${alarms ? ` · ${alarms} alarma${alarms > 1 ? 's' : ''}` : ''}`}
             >
               <span className={styles.bar} style={{ background: color }} />
-              <span className={cx(styles.name, roof && styles.roofName)}>
-                {roof ? (compact ? 'AZ' : 'Azotea') : l.short}
+              <span className={styles.nameCol}>
+                <span className={cx(styles.name, roof && styles.roofName)}>
+                  {roof ? (compact ? 'AZ' : 'Azotea') : l.short}
+                </span>
+                {!compact && !roof && l.people !== undefined && (
+                  <span className={styles.people} data-testid={`ems-floorsel-people-${l.short}`}>
+                    <Icon name="user" size="xs" />
+                    {l.people}/{l.capacity}
+                  </span>
+                )}
               </span>
               {!compact && (
                 <span className={styles.values}>
@@ -82,6 +120,11 @@ export const FloorSelector: React.FC<Props> = ({ levels, value, onChange, status
                   <span className={styles.kw}>
                     {roof ? (pv && l.pv !== undefined ? `VRF ${l.kw.toFixed(1)}` : `${l.zones} VRF`) : kw(l.kw)}
                   </span>
+                </span>
+              )}
+              {occPct !== undefined && (
+                <span className={styles.occTrack} aria-hidden>
+                  <span className={styles.occBar} style={{ width: `${occPct}%` }} />
                 </span>
               )}
               {alarms > 0 && (
@@ -119,6 +162,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     padding: ${theme.spacing(0.75)};
   `,
   all: css`
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -135,6 +180,50 @@ const getStyles = (theme: GrafanaTheme2) => ({
     &:hover {
       border-color: ${theme.colors.border.strong};
     }
+  `,
+  allPeople: css`
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    font-weight: ${theme.typography.fontWeightRegular};
+    color: ${theme.colors.text.secondary};
+    font-variant-numeric: tabular-nums;
+  `,
+  nameCol: css`
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-width: 0;
+    flex-shrink: 0;
+  `,
+  people: css`
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    line-height: 1;
+    color: ${theme.colors.text.secondary};
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  `,
+  /** Indicador de % de ocupación: línea en el borde inferior de la tarjeta. */
+  occTrack: css`
+    position: absolute;
+    left: 6px;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: ${theme.colors.border.weak};
+  `,
+  occBar: css`
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    background: ${theme.colors.primary.main};
+    opacity: 0.85;
   `,
   allCount: css`
     margin-left: auto;

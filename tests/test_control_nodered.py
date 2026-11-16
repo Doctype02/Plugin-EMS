@@ -3,6 +3,7 @@ import json
 import shutil
 import subprocess
 
+import pandas as pd
 import pytest
 
 from ems import config
@@ -141,3 +142,72 @@ def test_endpoint_http_ocupacion(h):
     assert h("http", {"tipo": "ocupacion", "zona": "*", "porcentaje": 300, "duracion_min": 5})["status"] == 400
     lib = h("http", {"tipo": "ocupacion", "zona": "Z03", "liberar": True})
     assert lib["status"] == 200 and lib["mqtt"]["payload"]["liberar"] is True
+
+
+def test_endpoint_http_unidad(h):
+    r = h("http", {"tipo": "unidad", "unidad": "VRF-P2", "encendido": False, "modo": "ventilacion",
+                   "capacidad_pct": 60, "setpoint_c": 25.5, "cop_factor": 0.8, "duracion_min": 30, "usuario": "ana"})
+    assert r["status"] == 200 and r["mqtt"]["topic"] == "ems/edificio1/sim/control"
+    assert r["mqtt"]["payload"] == {"accion": "unidad", "unidad": "VRF-P2", "usuario": "ana", "encendido": False,
+                                    "modo": "ventilacion", "capacidad_pct": 60, "setpoint_c": 25.5,
+                                    "cop_factor": 0.8, "duracion_min": 30}
+    # sin duración: queda hasta liberar
+    sin = h("http", {"tipo": "unidad", "unidad": "PTAC-P1", "capacidad_pct": 0})
+    assert sin["status"] == 200 and "duracion_min" not in sin["mqtt"]["payload"]
+    # rangos y valores inválidos
+    for malo in ({"capacidad_pct": 101}, {"capacidad_pct": -1}, {"setpoint_c": 17}, {"setpoint_c": 31},
+                 {"cop_factor": 0.4}, {"cop_factor": 1.3}, {"modo": "calor"}, {"encendido": "no"},
+                 {"encendido": False, "duracion_min": 0}, {"encendido": False, "duracion_min": 20000}, {}):
+        out = h("http", {"tipo": "unidad", "unidad": "VRF-P2", **malo})
+        assert out["status"] == 400 and out["mqtt"] is None, malo
+    assert h("http", {"tipo": "unidad", "unidad": "VRF-X", "encendido": False})["status"] == 400
+    assert h("http", {"tipo": "unidad", "unidad": "*", "encendido": False})["status"] == 400
+
+
+def test_endpoint_http_unidad_critica_exige_confirmar(h):
+    r = h("http", {"tipo": "unidad", "unidad": "VRF-SRV", "encendido": False})
+    assert r["status"] == 409 and r["cuerpo"]["requiere_confirmar"] is True and r["mqtt"] is None
+    ok = h("http", {"tipo": "unidad", "unidad": "VRF-SRV", "encendido": False, "confirmar": True, "duracion_min": 15})
+    assert ok["status"] == 200 and ok["mqtt"]["payload"]["confirmar"] is True
+
+
+def test_endpoint_http_sensor(h):
+    r = h("http", {"tipo": "sensor", "zona": "Z03", "temp_offset_c": 2.5, "hr_pct": 80, "presencia": False,
+                   "duracion_min": 60})
+    assert r["status"] == 200 and r["mqtt"]["topic"] == "ems/edificio1/sim/control"
+    assert r["mqtt"]["payload"] == {"accion": "sensor", "zona": "Z03", "usuario": "", "temp_offset_c": 2.5,
+                                    "hr_pct": 80, "presencia": False, "duracion_min": 60}
+    fijo = h("http", {"tipo": "sensor", "zona": "Z12", "temp_c": 30, "congelado": True})
+    assert fijo["status"] == 200 and fijo["mqtt"]["payload"]["congelado"] is True
+    for malo in ({"temp_offset_c": 11}, {"temp_c": 4}, {"temp_c": 51}, {"hr_pct": 101}, {"presencia": 1},
+                 {"temp_c": 25, "temp_offset_c": 1}, {"congelado": False}, {}):
+        out = h("http", {"tipo": "sensor", "zona": "Z03", **malo})
+        assert out["status"] == 400 and out["mqtt"] is None, malo
+    assert h("http", {"tipo": "sensor", "zona": "Z27", "congelado": True})["status"] == 400
+    assert h("http", {"tipo": "sensor", "zona": "Z06", "congelado": True})["status"] == 409
+    assert h("http", {"tipo": "sensor", "zona": "Z06", "congelado": True, "confirmar": True})["status"] == 200
+
+
+def test_endpoint_http_liberar_controladores(h):
+    for cuerpo, clave in (({"tipo": "unidad", "unidad": "VRF-P1"}, "unidad"), ({"tipo": "unidad", "unidad": "*"}, "unidad"),
+                          ({"tipo": "sensor", "zona": "Z05"}, "zona"), ({"tipo": "sensor", "zona": "*"}, "zona")):
+        r = h("http", {**cuerpo, "liberar": True})
+        assert r["status"] == 200 and r["mqtt"]["payload"]["liberar"] is True
+        assert r["mqtt"]["payload"][clave] == cuerpo[clave]
+    # liberar la unidad crítica no necesita confirmación (devuelve el control al EMS)
+    assert h("http", {"tipo": "unidad", "unidad": "VRF-SRV", "liberar": True})["status"] == 200
+    assert h("http", {"tipo": "unidad", "unidad": "VRF-9", "liberar": True})["status"] == 400
+    assert h("http", {"tipo": "sensor", "zona": "Z99", "liberar": True})["status"] == 400
+
+
+def test_nodered_reacciona_al_sensor_forzado(h, paso):
+    """La telemetría lleva el valor forzado: Node-RED actúa sobre él como con un sensor real."""
+    t, zonas, med = paso
+    base = {c["zona"]: c for c in _enviar_paso(h, t, zonas, med)["cmds"]}
+    assert base["Z09"]["luces_nivel"] > 0
+    assert next(z for z in zonas if z["zona"] == "Z09")["ocupado"]
+    forzadas = [dict(z, ocupado=False) if z["zona"] == "Z09" else z for z in zonas]
+    # tras el retardo de vacancia (15 min) la zona «vacía» apaga luces y sube el setpoint
+    t2 = t + pd.Timedelta(minutes=20)
+    cmd = {c["zona"]: c for c in _enviar_paso(h, t2, forzadas, med)["cmds"]}
+    assert cmd["Z09"]["luces_nivel"] == 0 and cmd["Z09"]["setpoint_c"] > base["Z09"]["setpoint_c"]

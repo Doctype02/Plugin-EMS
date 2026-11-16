@@ -42,7 +42,7 @@ def test_lazo_en_vivo_guarda_estado_y_alarmas_y_respeta_overrides(monkeypatch):
         time.sleep(1.5)
         from ems import influx, live
 
-        registro = {"zona": [], "medidor": [], "ems": [], "alarma": []}
+        registro = {"zona": [], "medidor": [], "ems": [], "alarma": [], "unidad": []}
 
         class Grabador(influx.Escritor):
             def __init__(self, *a, **k):
@@ -50,7 +50,10 @@ def test_lazo_en_vivo_guarda_estado_y_alarmas_y_respeta_overrides(monkeypatch):
                 self.edificio = "edificio1"
 
             def zona(self, ts, z, escenario="live"):
-                registro["zona"].append((ts, z["zona"], z["hvac_enable"]))
+                registro["zona"].append((ts, z["zona"], z["hvac_enable"], z.get("sensor_temp_offset_c")))
+
+            def unidad(self, ts, u, escenario="live"):
+                registro["unidad"].append((ts, u["unidad"], u["forzado"], u["modo"]))
 
             def medidor(self, ts, m, escenario="live"):
                 registro["medidor"].append(ts)
@@ -83,6 +86,12 @@ def test_lazo_en_vivo_guarda_estado_y_alarmas_y_respeta_overrides(monkeypatch):
                                                       "duracion_min": 60}).encode(),
                                      headers={"Content-Type": "application/json"})
         assert json.loads(urllib.request.urlopen(req, timeout=5).read())["ok"] is True
+        # controladores: apagar una unidad y forzar un sensor por el mismo endpoint (Node-RED → sim/control)
+        for cuerpo in ({"tipo": "unidad", "unidad": "PTAC-P3", "encendido": False, "duracion_min": 60},
+                       {"tipo": "sensor", "zona": "Z13", "temp_offset_c": 2.0, "duracion_min": 60}):
+            req = urllib.request.Request(f"http://127.0.0.1:{http_port}/ems/control", method="POST",
+                                         data=json.dumps(cuerpo).encode(), headers={"Content-Type": "application/json"})
+            assert json.loads(urllib.request.urlopen(req, timeout=5).read())["ok"] is True
         hilo.join(timeout=40)
         assert not hilo.is_alive()
 
@@ -93,6 +102,10 @@ def test_lazo_en_vivo_guarda_estado_y_alarmas_y_respeta_overrides(monkeypatch):
         # tras el override, Z02 queda con el HVAC deshabilitado en la telemetría
         z02 = [z for z in registro["zona"] if z[1] == "Z02"]
         assert z02[-1][2] is False
+        # el estado de las unidades se guarda en cada paso y refleja el ajuste del operador
+        assert len({u[1] for u in registro["unidad"]}) == 11
+        assert any(u[1] == "PTAC-P3" and u[2] and u[3] == "apagado" for u in registro["unidad"])
+        assert any(z[1] == "Z13" and z[3] == 2.0 for z in registro["zona"])
         # las alarmas de Node-RED (p. ej. DR_ACTIVO al mediodía) también se guardan
         assert all({"ts", "nivel", "codigo", "zona", "mensaje"} <= set(a) for a in registro["alarma"])
     finally:

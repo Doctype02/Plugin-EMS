@@ -10,6 +10,7 @@ import { BUILDING, ENVELOPE, FLOORS, HVAC_SYSTEMS, PTAC_UNITS, PV, SURFACES, VRF
 
 export {
   BUILDING,
+  CONTROLLER_LIMITS,
   CRITICAL_ZONES,
   EMS_RULES,
   ENVELOPE,
@@ -89,6 +90,8 @@ export interface HvacSystem {
   capacityKw: number;
   cop: number;
   zones: string[];
+  /** Atiende una zona crítica (cuarto de servidores): los ajustes manuales exigen confirmación. */
+  critical: boolean;
 }
 
 export interface VrfUnit extends HvacSystem {

@@ -32,7 +32,7 @@ interface Props {
 const shade = (c: string, a: number) => colorManipulator.darken(c, a);
 const lerp = (a: Pt, b: Pt, t: number): Pt => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
 
-export type UnitMode = 'enfriando' | 'dr' | 'espera' | 'falla' | 'sin_energia';
+export type UnitMode = 'enfriando' | 'dr' | 'espera' | 'falla' | 'sin_energia' | 'apagada';
 
 export interface UnitState {
   mode: UnitMode;
@@ -56,13 +56,15 @@ export function unitState(u: HvacSystem, snapshot: Snapshot): UnitState {
   const mode: UnitMode =
     snapshot.meter?.gridOk === false
       ? 'sin_energia'
-      : failed
+      : failed || snapshot.units?.[u.id]?.fault
         ? 'falla'
-        : served.some((s) => s.drForced)
-          ? 'dr'
-          : on
-            ? 'enfriando'
-            : 'espera';
+        : snapshot.units?.[u.id]?.on === false
+          ? 'apagada'
+          : served.some((s) => s.drForced)
+            ? 'dr'
+            : on
+              ? 'enfriando'
+              : 'espera';
   return { mode, kw, load: Math.min(1, thermal / u.capacityKw), on };
 }
 
@@ -72,6 +74,7 @@ export const UNIT_MODE_LABEL: Record<UnitMode, string> = {
   espera: 'En espera',
   falla: 'FALLA',
   sin_energia: 'Sin energía',
+  apagada: 'Apagada (manual)',
 };
 
 const LED: Record<UnitMode, string> = {
@@ -80,6 +83,7 @@ const LED: Record<UnitMode, string> = {
   espera: '#8e8e8e',
   falla: '#f2495c',
   sin_energia: '#3a3a3a',
+  apagada: '#5c5c66',
 };
 
 const HATCH: Rect = { x: 16.5, y: 15.5, w: 1.6, d: 1.6 };
@@ -212,7 +216,13 @@ export const Rooftop: React.FC<Props> = ({
       const st = unitState(u, snapshot);
       const pt = toScreen(u.rect.x + u.rect.w / 2, u.rect.y + u.rect.d / 2, z + 0.15 + height + 0.9, iso, dy);
       const value =
-        st.mode === 'falla' ? 'FALLA' : st.mode === 'sin_energia' ? 'sin energía' : `${st.kw.toFixed(1)} kW`;
+        st.mode === 'falla'
+          ? 'FALLA'
+          : st.mode === 'sin_energia'
+            ? 'sin energía'
+            : st.mode === 'apagada'
+              ? 'apagada'
+              : `${st.kw.toFixed(1)} kW`;
       placed.push({
         id: u.id,
         x: pt.x,

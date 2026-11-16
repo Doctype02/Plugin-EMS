@@ -111,6 +111,22 @@ def unidades_azotea(vrf: list[dict], ancho: float, fondo: float) -> list[dict]:
     return out
 
 
+def limites_controladores() -> dict:
+    """Rangos de ems/controladores.py (con valores por defecto si el paquete no está disponible)."""
+    try:
+        from ems import controladores as c
+        r = {"capPct": c.RANGO_CAPACIDAD, "unitSetpoint": c.RANGO_SETPOINT, "copFactor": c.RANGO_COP,
+             "tempOffset": c.RANGO_OFFSET, "tempValue": c.RANGO_TEMP, "rh": c.RANGO_HR}
+        dur = c.DURACION_MAX_MIN
+    except Exception:  # pragma: no cover
+        r = {"capPct": (0, 100), "unitSetpoint": (18, 30), "copFactor": (0.5, 1.2), "tempOffset": (-10, 10),
+             "tempValue": (5, 50), "rh": (0, 100)}
+        dur = 10080
+    out = {k: [num(a), num(b)] for k, (a, b) in r.items()}
+    out["maxDurationMin"] = dur
+    return out
+
+
 def generar(cfg: dict) -> tuple[str, dict]:
     e = cfg["edificio"]
     n = int(e.get("plantas", 1 + max(int(z["planta"]) for z in cfg["zonas"])))
@@ -168,8 +184,10 @@ def generar(cfg: dict) -> tuple[str, dict]:
         }
 
     zona_planta = {z["id"]: int(z["planta"]) for z in cfg["zonas"]}
+    criticas_set = {z["id"] for z in cfg["zonas"] if z.get("critica")}
     hvac = [{"id": s["id"], "kind": s.get("tipo", "vrf"), "capacityKw": num(s["capacidad_kw"]),
-             "cop": num(s["cop"] * f_cop), "zones": list(s["zonas"])} for s in sistemas]
+             "cop": num(s["cop"] * f_cop), "zones": list(s["zonas"]),
+             "critical": any(z in criticas_set for z in s["zonas"])} for s in sistemas]
     vrf = [h for h in hvac if h["kind"] != "ptac"]
     rects_vrf = unidades_azotea([s for s in sistemas if s.get("tipo", "vrf") != "ptac"], ancho, fondo)
     vrf_units = [{**h, "rect": r} for h, r in zip(vrf, rects_vrf)]
@@ -262,6 +280,8 @@ def generar(cfg: dict) -> tuple[str, dict]:
     out.append("/** Parámetros del EMS por reglas (config/edificio.yaml → ems, ocupacion). */")
     out.append(f"export const EMS_RULES = {ts(rules)};\n")
     out.append(f"export const TARIFF = {ts(tariff)};\n")
+    out.append("/** Rangos de los ajustes de controladores que aceptan Node-RED y el gemelo (ems/controladores.py). */")
+    out.append(f"export const CONTROLLER_LIMITS = {ts(limites_controladores())} as const;\n")
 
     ref = {}
     if ems_config is not None:

@@ -5,6 +5,7 @@ import { useStyles2 } from '@grafana/ui';
 import { VrfUnit, ZONE_BY_ID } from 'building/model';
 import { Snapshot } from 'building/telemetry';
 import { UNIT_MODE_LABEL, unitState } from './Rooftop';
+import { UNIT_MODE_TEXT, remainingText } from 'building/controllers';
 
 interface Props {
   unit: VrfUnit;
@@ -24,6 +25,7 @@ export const VrfTooltip: React.FC<Props> = ({ unit, snapshot, x, y, containerWid
   const left = Math.max(4, x + 16 + W > containerWidth ? x - W - 16 : x + 16);
   const top = Math.max(4, Math.min(y + 12, containerHeight - 60 - unit.zones.length * 20 - 150));
   const cop = ZONE_BY_ID[unit.zones[0]]?.cop ?? 2;
+  const ctl = snapshot.units?.[unit.id];
   return (
     <div className={styles.tooltip} style={{ left, top, width: W }} data-testid="ems-vrf-tooltip">
       <div className={styles.head}>
@@ -35,8 +37,8 @@ export const VrfTooltip: React.FC<Props> = ({ unit, snapshot, x, y, containerWid
         <span>{unit.capacityKw.toFixed(1)} kW térmicos</span>
         <span className={styles.muted}>Potencia eléctrica</span>
         <span>{st.kw.toFixed(2)} kW</span>
-        <span className={styles.muted}>COP estacional</span>
-        <span>{cop.toFixed(2)}</span>
+        <span className={styles.muted}>{ctl?.cop !== undefined ? 'COP real' : 'COP estacional'}</span>
+        <span>{(ctl?.cop ?? cop * (ctl?.copFactor ?? 1)).toFixed(2)}</span>
         <span className={styles.muted}>Carga</span>
         <span className={styles.bar}>
           <i style={{ width: `${Math.round(st.load * 100)}%` }} />
@@ -62,6 +64,14 @@ export const VrfTooltip: React.FC<Props> = ({ unit, snapshot, x, y, containerWid
         <div className={styles.alert}>Corte de energía: la unidad no tiene alimentación.</div>
       )}
       {st.mode === 'dr' && <div className={styles.note}>El limitador de demanda tiene compresores en espera.</div>}
+      {ctl?.forced && (
+        <div className={styles.note} data-testid="ems-vrf-tooltip-manual">
+          Ajuste manual: {UNIT_MODE_TEXT[ctl.mode]}
+          {ctl.capPct < 100 ? ` · tope ${ctl.capPct.toFixed(0)} %` : ''}
+          {ctl.setpoint !== undefined ? ` · ${ctl.setpoint.toFixed(1)} °C` : ''}
+          {ctl.copFactor !== 1 ? ` · COP × ${ctl.copFactor.toFixed(2)}` : ''} · {remainingText(ctl.remainingMin)}
+        </div>
+      )}
     </div>
   );
 };
@@ -111,6 +121,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
   sin_energia: css`
     color: ${theme.colors.text.secondary};
     border-color: ${theme.colors.border.strong};
+  `,
+  apagada: css`
+    color: ${theme.colors.warning.text};
+    border-color: ${theme.colors.warning.border};
   `,
   grid: css`
     display: grid;

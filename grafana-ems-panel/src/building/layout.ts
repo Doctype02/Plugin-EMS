@@ -115,6 +115,27 @@ export interface LevelSummary {
   zones: number;
   /** Generación FV (sólo azotea, kW). */
   pv?: number;
+  /** Personas en la planta y aforo de diseño (no en la azotea). */
+  people?: number;
+  capacity?: number;
+}
+
+/** Personas actuales y aforo de un conjunto de zonas (por defecto, todo el edificio). */
+export function occupancyOf(
+  snapshot: Snapshot,
+  zones: Zone[] = ZONES
+): { people: number; capacity: number; pct: number; known: boolean } {
+  let people = 0;
+  let known = false;
+  for (const z of zones) {
+    const n = snapshot.zones[z.id]?.occupants;
+    if (Number.isFinite(n)) {
+      people += n as number;
+      known = true;
+    }
+  }
+  const capacity = zones.reduce((a, z) => a + z.occupants, 0);
+  return { people, capacity, pct: capacity > 0 ? (100 * people) / capacity : 0, known };
 }
 
 const alarmCounts = (alarms: EmsAlarm[], zoneIds: Set<string>) => ({
@@ -137,6 +158,10 @@ export function floorSummary(level: number, snapshot: Snapshot, statuses: Record
     kw: states.reduce((a, s) => a + (Number.isFinite(s.pTotal) ? s.pTotal : 0), 0),
     zones: zones.length,
     ...alarmCounts(snapshot.alarms, ids),
+    ...(() => {
+      const o = occupancyOf(snapshot, zones);
+      return { people: o.known ? o.people : undefined, capacity: o.capacity };
+    })(),
   };
 }
 

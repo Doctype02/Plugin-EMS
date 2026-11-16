@@ -12,7 +12,9 @@ import {
   History,
   OccupancyOverrides,
   Overrides,
+  SensorOverrides,
   Snapshot,
+  UnitAdjustments,
   Status,
   snapshotFromFrames,
   zoneStatuses,
@@ -24,10 +26,13 @@ import {
   SendFeedback,
   applyLocal,
   applyOccupancy,
+  applySensors,
+  applyUnits,
   describe,
   feedbackFor,
   prune,
   pruneOccupancy,
+  pruneTimed,
   sendToNodeRed,
   validateCommand,
 } from 'building/control';
@@ -36,6 +41,9 @@ import { AlarmList, alarmKey } from './AlarmList';
 import { Building3D } from './Building3D';
 import { BuildingControl } from './BuildingControl';
 import { ZoneControl } from './ZoneControl';
+import { ControllersPanel } from './ControllersPanel';
+import { SensorControl } from './SensorControl';
+import { sensorForceOf } from 'building/controllers';
 import { Header, Kpi } from './Header';
 import { Legend } from './Legend';
 import { MeterCard } from './MeterCard';
@@ -49,7 +57,7 @@ import { VrfTooltip } from './VrfTooltip';
 import { OverviewPanel } from './OverviewPanel';
 import { SceneCompass } from './SceneCompass';
 import { FloorKey, FloorSelector } from './FloorSelector';
-import { autoFloor, floorSummary, roofSummary } from 'building/layout';
+import { autoFloor, floorSummary, occupancyOf, roofSummary } from 'building/layout';
 import { demandLevel } from 'building/demand';
 import {
   ClockState,
@@ -330,6 +338,8 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const statusColors = useStatusColors();
   const [overrides, setOverrides] = useState<Overrides>({});
   const [occupancy, setOccupancy] = useState<OccupancyOverrides>({});
+  const [units, setUnits] = useState<UnitAdjustments>({});
+  const [sensors, setSensors] = useState<SensorOverrides>({});
   const [params, setParams] = useState<EmsParams>({ limitKw: options.limitKw ?? LIMIT_KW, spOccupied: 24 });
   const [log, setLog] = useState<LogEntry[]>([]);
   const [busy, setBusy] = useState(false);
@@ -358,8 +368,10 @@ export const EmsPanel: React.FC<Props> = (props) => {
       occupancy,
       pv: pvMode !== 'off',
       controller,
+      units,
+      sensors,
     }),
-    [params, overrides, events, demoIncidents, occupancy, pvMode, controller]
+    [params, overrides, events, demoIncidents, occupancy, pvMode, controller, units, sensors]
   );
   const { snapshot, history, now } = useSnapshot(props, sim, simClock.now, simClock.real);
   // variante con FV: en vivo se detecta por la presencia de p_fv_kw en el medidor
@@ -368,6 +380,15 @@ export const EmsPanel: React.FC<Props> = (props) => {
     : pvMode === 'on' || (pvMode === 'auto' && snapshot.meter?.pPv !== undefined);
   const activeOverrides = useMemo(() => prune(overrides, now), [overrides, now]);
   const activeOccupancy = useMemo(() => pruneOccupancy(occupancy, now), [occupancy, now]);
+  const activeUnits = useMemo(() => pruneTimed(units, now), [units, now]);
+  const activeSensors = useMemo(() => pruneTimed(sensors, now), [sensors, now]);
+  // en vivo cuenta lo que informa el gemelo; el registro local marca lo enviado hasta que llegue
+  const nControllers = useMemo(() => {
+    const u = new Set(Object.keys(activeUnits));
+    Object.entries(snapshot.units ?? {}).forEach(([id, st]) => (st.forced ? u.add(id) : u.delete(id)));
+    const z = ZONES.filter((x) => sensorForceOf(snapshot.zones[x.id], activeSensors[x.id])).length;
+    return u.size + z;
+  }, [activeUnits, activeSensors, snapshot]);
   const manual = useMemo(
     () => new Set([...Object.keys(activeOverrides), ...Object.keys(activeOccupancy).filter((k) => k !== '*')]),
     [activeOverrides, activeOccupancy]
@@ -384,7 +405,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const [hover, setHover] = useState<{ id: string; x: number; y: number; w: number; h: number }>();
   const [unitHover, setUnitHover] = useState<{ id: string; x: number; y: number; w: number; h: number }>();
   const [statusFilter, setStatusFilter] = useState<Status>();
-  const [sideTab, setSideTab] = useState<'overview' | 'alarms' | 'control' | 'simulate'>('overview');
+  const [sideTab, setSideTab] = useState<'overview' | 'alarms' | 'control' | 'controllers' | 'simulate'>('overview');
   const [help, setHelp] = useState(false);
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState<Set<string>>(() => new Set());
@@ -428,6 +449,10 @@ export const EmsPanel: React.FC<Props> = (props) => {
     ],
     [snapshot, statuses]
   );
+  const buildingOcc = useMemo(() => {
+    const o = occupancyOf(snapshot);
+    return { people: o.known ? o.people : undefined, capacity: o.capacity };
+  }, [snapshot]);
   const counts = useMemo(() => {
     const c: Record<Status, number> = { ok: 0, warning: 0, critical: 0, offline: 0 };
     ZONES.forEach((z) => c[statuses[z.id]]++);
@@ -491,6 +516,12 @@ export const EmsPanel: React.FC<Props> = (props) => {
     let nextParams = params;
     let nextEvents = events;
     let nextOcc = activeOccupancy;
+    let nextUnits = activeUnits;
+    let nextSensors = activeSensors;
+    const frozenAt = (zone: string) => {
+      const z = snapshot.zones[zone];
+      return z && Number.isFinite(z.temp) ? { temp: z.temp, rh: z.rh ?? 60, occupied: z.occupied } : undefined;
+    };
     setBusy(true);
     setFeedback(undefined);
     for (const c of commands) {
@@ -505,6 +536,8 @@ export const EmsPanel: React.FC<Props> = (props) => {
         }
         next = applyLocal(next, c, stamp(), user);
         nextOcc = applyOccupancy(nextOcc, c, stamp(), user);
+        nextUnits = applyUnits(nextUnits, c, stamp(), user);
+        nextSensors = applySensors(nextSensors, c, stamp(), user, frozenAt);
         if (c.kind === 'params') {
           nextParams = { ...nextParams, ...c.params };
         }
@@ -531,6 +564,8 @@ export const EmsPanel: React.FC<Props> = (props) => {
     setParams(nextParams);
     setEvents(nextEvents);
     setOccupancy(nextOcc);
+    setUnits(nextUnits);
+    setSensors(nextSensors);
     setLog((l) => [...entries.reverse(), ...l].slice(0, 30));
     const failed = entries.filter((e) => !e.ok);
     const result: CommandResult = {
@@ -578,19 +613,31 @@ export const EmsPanel: React.FC<Props> = (props) => {
       alarms={snapshot.alarms}
       onClose={() => setSelectedId(undefined)}
       control={
-        <ZoneControl
-          key={`${selected.id}-${activeOverrides[selected.id]?.since ?? 0}-${activeOccupancy[selected.id]?.since ?? 0}`}
-          zone={selected}
-          state={snapshot.zones[selected.id]}
-          override={activeOverrides[selected.id]}
-          occupancy={activeOccupancy[selected.id]}
-          canControl={permission.canControl}
-          reason={permission.reason}
-          busy={busy}
-          feedback={feedback}
-          onDismissFeedback={() => setFeedback(undefined)}
-          onCommand={runCommands}
-        />
+        <>
+          <ZoneControl
+            key={`${selected.id}-${activeOverrides[selected.id]?.since ?? 0}-${activeOccupancy[selected.id]?.since ?? 0}`}
+            zone={selected}
+            state={snapshot.zones[selected.id]}
+            override={activeOverrides[selected.id]}
+            occupancy={activeOccupancy[selected.id]}
+            canControl={permission.canControl}
+            reason={permission.reason}
+            busy={busy}
+            feedback={feedback}
+            onDismissFeedback={() => setFeedback(undefined)}
+            onCommand={runCommands}
+          />
+          <SensorControl
+            key={`sensor-${selected.id}-${activeSensors[selected.id]?.since ?? 0}`}
+            zone={selected}
+            state={snapshot.zones[selected.id]}
+            force={sensorForceOf(snapshot.zones[selected.id], activeSensors[selected.id])}
+            local={activeSensors[selected.id]}
+            canControl={permission.canControl}
+            busy={busy}
+            onCommand={runCommands}
+          />
+        </>
       }
     />
   ) : (
@@ -608,6 +655,12 @@ export const EmsPanel: React.FC<Props> = (props) => {
           active={sideTab === 'control'}
           counter={manual.size || null}
           onChangeTab={() => setSideTab('control')}
+        />
+        <Tab
+          label="Controladores"
+          active={sideTab === 'controllers'}
+          counter={nControllers || null}
+          onChangeTab={() => setSideTab('controllers')}
         />
         <Tab
           label="Simular"
@@ -640,6 +693,21 @@ export const EmsPanel: React.FC<Props> = (props) => {
           live={!options.demoMode}
           onCommand={runCommands}
           onDemoIncidents={setDemoIncidents}
+        />
+      ) : sideTab === 'controllers' ? (
+        <ControllersPanel
+          snapshot={snapshot}
+          now={now}
+          units={activeUnits}
+          sensors={activeSensors}
+          canControl={permission.canControl}
+          reason={permission.reason}
+          busy={busy}
+          feedback={feedback}
+          onDismissFeedback={() => setFeedback(undefined)}
+          live={!options.demoMode}
+          onCommand={runCommands}
+          onSelectZone={selectZone}
         />
       ) : sideTab === 'control' ? (
         <BuildingControl
@@ -725,6 +793,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
               statusColors={statusColors}
               compact={selectorCompact}
               pv={pvVisible}
+              building={buildingOcc}
             />
           )}
           <div className={styles.canvas} ref={sceneRef}>

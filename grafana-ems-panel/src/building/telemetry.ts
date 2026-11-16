@@ -36,6 +36,88 @@ export interface ZoneState {
   noPower?: boolean;
   /** La cantidad de personas la fijó el operador (escenario). */
   peopleForced?: boolean;
+  /** Estado real del modelo cuando difiere de lo que mide el sensor (temperatura, HR, presencia). */
+  tempReal?: number;
+  /** HR que lee el sensor de la zona y HR real del aire (%). */
+  rh?: number;
+  rhReal?: number;
+  occupiedReal?: boolean;
+  /** Datos del sensor forzados por el operador (la física sigue con el estado real). */
+  sensorForce?: SensorForce;
+  /** Minutos que quedan del forzado (undefined = sin vencimiento). */
+  sensorRemainingMin?: number;
+  updatedAt: number;
+}
+
+/** Datos que lee el controlador de la zona, forzados por el operador (ems/controladores.py). */
+export interface SensorForce {
+  /** Descalibración de la temperatura (°C, se suma a la real). */
+  tempOffset?: number;
+  /** Temperatura fija (°C, con el ruido normal del sensor). Excluye `tempOffset`. */
+  tempValue?: number;
+  /** HR fija (%). */
+  rh?: number;
+  /** Detector de presencia forzado. */
+  presence?: boolean;
+  /** Todas las lecturas quedan fijas en el último valor. */
+  frozen?: boolean;
+}
+
+export interface SensorOverride extends SensorForce {
+  since: number;
+  /** `Infinity` = hasta liberar. */
+  until: number;
+  user?: string;
+  /** Lecturas en el instante del forzado (para «congelado» en el simulador local). */
+  frozenAt?: { temp: number; rh: number; occupied: boolean };
+}
+
+export type SensorOverrides = Record<string, SensorOverride>;
+
+/** Modo del controlador local de una unidad VRF/PTAC. */
+export type UnitMode = 'auto' | 'frio' | 'ventilacion';
+
+/** Ajuste del operador sobre una unidad (lo no indicado sigue en automático). */
+export interface UnitAdjust {
+  /** false = unidad apagada (compresor y terminales). */
+  on?: boolean;
+  mode?: UnitMode;
+  /** Tope de capacidad total (%). */
+  capPct?: number;
+  /** Setpoint del controlador local para sus zonas (°C). */
+  setpoint?: number;
+  /** Multiplicador del COP (degradación simulada). */
+  copFactor?: number;
+}
+
+export interface UnitAdjustment extends UnitAdjust {
+  since: number;
+  /** `Infinity` = hasta liberar. */
+  until: number;
+  user?: string;
+}
+
+export type UnitAdjustments = Record<string, UnitAdjustment>;
+
+/** Estado real de una unidad VRF/PTAC (tópico sim/controladores, measurement `unidad`). */
+export interface UnitStatus {
+  pKw: number;
+  /** Frío entregado (kW térmicos). */
+  qKw: number;
+  loadPct: number;
+  /** COP real del paso (frío / potencia del compresor); undefined con el compresor parado. */
+  cop?: number;
+  mode: UnitMode | 'apagado';
+  on: boolean;
+  capPct: number;
+  setpoint?: number;
+  copFactor: number;
+  /** Tiene un ajuste del operador. */
+  forced: boolean;
+  /** Minutos que quedan del ajuste (undefined = sin vencimiento). */
+  remainingMin?: number;
+  fault: boolean;
+  noPower?: boolean;
   updatedAt: number;
 }
 
@@ -133,6 +215,8 @@ export type OccupancyOverrides = Record<string, OccupancyOverride>;
 export interface Snapshot {
   time: number;
   zones: Record<string, ZoneState>;
+  /** Estado de las unidades VRF/PTAC (si el gemelo lo publica). */
+  units?: Record<string, UnitStatus>;
   meter?: MeterState;
   ems?: EmsState;
   alarms: EmsAlarm[];
@@ -156,8 +240,20 @@ const ZONE_FIELDS: Record<string, keyof ZoneState> = {
   p_equipos_kw: 'pPlugs',
   p_hvac_kw: 'pHvac',
   p_total_kw: 'pTotal',
+  temp_real_c: 'tempReal',
+  hr_pct: 'rh',
+  hr_real_pct: 'rhReal',
+  ocupado_real: 'occupiedReal',
 };
-const BOOL_ZONE = new Set<keyof ZoneState>(['occupied', 'hvacOn', 'hvacEnable']);
+const BOOL_ZONE = new Set<keyof ZoneState>(['occupied', 'hvacOn', 'hvacEnable', 'occupiedReal']);
+/** Campos `sensor_*` de la zona mientras el sensor está forzado (docs/CONTRATO.md §3). */
+const SENSOR_FIELDS: Record<string, keyof SensorForce> = {
+  sensor_temp_offset_c: 'tempOffset',
+  sensor_temp_fijo_c: 'tempValue',
+  sensor_hr_fijo_pct: 'rh',
+  sensor_presencia: 'presence',
+  sensor_congelado: 'frozen',
+};
 
 const METER_FIELDS: Record<string, keyof MeterState> = {
   p_total_kw: 'pTotal',
@@ -192,7 +288,7 @@ const EMS_FIELDS: Record<string, keyof EmsState> = {
 
 const LEVELS: AlarmLevel[] = ['info', 'warn', 'crit'];
 
-type Measurement = 'zona' | 'medidor' | 'ems' | 'alarma';
+type Measurement = 'zona' | 'medidor' | 'ems' | 'alarma' | 'unidad';
 
 interface Row {
   measurement?: Measurement;
@@ -217,8 +313,11 @@ function asNumber(v: unknown): number | undefined {
 
 function guessMeasurement(keys: string[], tags: Record<string, string>): Measurement | undefined {
   const m = tags._measurement as Measurement | undefined;
-  if (m && ['zona', 'medidor', 'ems', 'alarma'].includes(m)) {
+  if (m && ['zona', 'medidor', 'ems', 'alarma', 'unidad'].includes(m)) {
     return m;
+  }
+  if (tags.unidad && keys.includes('carga_pct')) {
+    return 'unidad';
   }
   if (keys.includes('mensaje') || tags.codigo) {
     return 'alarma';
@@ -291,6 +390,7 @@ export function snapshotFromFrames(series: DataFrame[]): { snapshot: Snapshot; h
   let meter: Partial<MeterState> | undefined;
   let ems: Partial<EmsState> | undefined;
   const alarms: EmsAlarm[] = [];
+  const units: Record<string, UnitStatus> = {};
   let time = 0;
 
   const push = (key: string, field: string, t: number, v: number) => {
@@ -312,7 +412,31 @@ export function snapshotFromFrames(series: DataFrame[]): { snapshot: Snapshot; h
         rec[key] = BOOL_ZONE.has(key) ? n > 0 : n;
         push(row.zone, key, row.time, n);
       }
+      // la fila más reciente decide si el sensor sigue forzado (los campos sensor_* sólo existen mientras dura)
+      const forced = asNumber(row.values.sensor_forzado);
+      if (forced !== undefined) {
+        if (forced > 0) {
+          const f: SensorForce = {};
+          for (const [k, key] of Object.entries(SENSOR_FIELDS)) {
+            const n = asNumber(row.values[k]);
+            if (n !== undefined) {
+              (f as Record<string, number | boolean>)[key] = key === 'presence' || key === 'frozen' ? n > 0 : n;
+            }
+          }
+          const left = asNumber(row.values.sensor_restante_min);
+          z.sensorForce = f;
+          z.sensorRemainingMin = left === undefined || left < 0 ? undefined : left;
+        } else {
+          delete z.sensorForce;
+          delete z.sensorRemainingMin;
+        }
+      }
       z.updatedAt = Math.max(z.updatedAt, row.time);
+    } else if (row.measurement === 'unidad' && row.tags.unidad) {
+      const u = unitFromRow(row);
+      if (u && (units[row.tags.unidad]?.updatedAt ?? -1) <= row.time) {
+        units[row.tags.unidad] = u;
+      }
     } else if (row.measurement === 'medidor') {
       meter ??= {};
       const rec = meter as Record<string, number>;
@@ -354,11 +478,41 @@ export function snapshotFromFrames(series: DataFrame[]): { snapshot: Snapshot; h
   const snapshot: Snapshot = {
     time,
     zones,
+    ...(Object.keys(units).length ? { units } : {}),
     meter: meter && meter.pTotal !== undefined ? (fillMeter(meter) as MeterState) : undefined,
     ems: ems ? fillEms(ems) : undefined,
     alarms: activeAlarms(alarms, time),
   };
   return { snapshot, history };
+}
+
+const UNIT_MODES = ['auto', 'frio', 'ventilacion', 'apagado'];
+
+/** Estado de una unidad desde una fila de la measurement `unidad`. */
+function unitFromRow(row: Row): UnitStatus | undefined {
+  const v = row.values;
+  const n = (k: string) => asNumber(v[k]);
+  if (n('p_kw') === undefined) {
+    return undefined;
+  }
+  const mode = String(v.modo ?? row.tags.modo ?? 'auto');
+  const left = n('restante_min');
+  return {
+    pKw: n('p_kw') ?? 0,
+    qKw: n('q_frio_kw') ?? 0,
+    loadPct: n('carga_pct') ?? 0,
+    cop: n('cop'),
+    mode: (UNIT_MODES.includes(mode) ? mode : 'auto') as UnitStatus['mode'],
+    on: (n('encendido') ?? 1) > 0,
+    capPct: n('capacidad_pct') ?? 100,
+    setpoint: n('setpoint_c'),
+    copFactor: n('cop_factor') ?? 1,
+    forced: (n('forzado') ?? 0) > 0,
+    remainingMin: left === undefined || left < 0 ? undefined : left,
+    fault: (n('falla') ?? 0) > 0,
+    noPower: (n('sin_energia') ?? 0) > 0,
+    updatedAt: row.time,
+  };
 }
 
 function emptyZone(z: Zone): ZoneState {

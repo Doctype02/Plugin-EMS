@@ -654,17 +654,52 @@ export const ENVELOPE = {
 
 /** Sistemas de climatización: unidades exteriores VRF y PTAC de pared (config/edificio.yaml → sistemas_vrf). */
 export const HVAC_SYSTEMS: HvacSystem[] = [
-  { id: 'VRF-PB', kind: 'vrf', capacityKw: 54.18, cop: 2.185, zones: ['Z01', 'Z02', 'Z03', 'Z04'] },
-  { id: 'VRF-P1', kind: 'vrf', capacityKw: 58.18, cop: 2.415, zones: ['Z07', 'Z08', 'Z09', 'Z10'] },
-  { id: 'VRF-P2', kind: 'vrf', capacityKw: 60.31, cop: 2.415, zones: ['Z12', 'Z13', 'Z14', 'Z15'] },
-  { id: 'VRF-P3', kind: 'vrf', capacityKw: 60.95, cop: 2.415, zones: ['Z17', 'Z18', 'Z19', 'Z20'] },
-  { id: 'VRF-P4', kind: 'vrf', capacityKw: 62.47, cop: 2.415, zones: ['Z22', 'Z23', 'Z24', 'Z25'] },
-  { id: 'VRF-SRV', kind: 'vrf', capacityKw: 3.87, cop: 2.415, zones: ['Z06'] },
-  { id: 'PTAC-PB', kind: 'ptac', capacityKw: 1.53, cop: 2.185, zones: ['Z05'] },
-  { id: 'PTAC-P1', kind: 'ptac', capacityKw: 2.09, cop: 2.185, zones: ['Z11'] },
-  { id: 'PTAC-P2', kind: 'ptac', capacityKw: 2.27, cop: 2.185, zones: ['Z16'] },
-  { id: 'PTAC-P3', kind: 'ptac', capacityKw: 2.34, cop: 2.185, zones: ['Z21'] },
-  { id: 'PTAC-P4', kind: 'ptac', capacityKw: 2.68, cop: 2.185, zones: ['Z26'] },
+  {
+    id: 'VRF-PB',
+    kind: 'vrf',
+    capacityKw: 54.18,
+    cop: 2.185,
+    zones: ['Z01', 'Z02', 'Z03', 'Z04'],
+    critical: false,
+  },
+  {
+    id: 'VRF-P1',
+    kind: 'vrf',
+    capacityKw: 58.18,
+    cop: 2.415,
+    zones: ['Z07', 'Z08', 'Z09', 'Z10'],
+    critical: false,
+  },
+  {
+    id: 'VRF-P2',
+    kind: 'vrf',
+    capacityKw: 60.31,
+    cop: 2.415,
+    zones: ['Z12', 'Z13', 'Z14', 'Z15'],
+    critical: false,
+  },
+  {
+    id: 'VRF-P3',
+    kind: 'vrf',
+    capacityKw: 60.95,
+    cop: 2.415,
+    zones: ['Z17', 'Z18', 'Z19', 'Z20'],
+    critical: false,
+  },
+  {
+    id: 'VRF-P4',
+    kind: 'vrf',
+    capacityKw: 62.47,
+    cop: 2.415,
+    zones: ['Z22', 'Z23', 'Z24', 'Z25'],
+    critical: false,
+  },
+  { id: 'VRF-SRV', kind: 'vrf', capacityKw: 3.87, cop: 2.415, zones: ['Z06'], critical: true },
+  { id: 'PTAC-PB', kind: 'ptac', capacityKw: 1.53, cop: 2.185, zones: ['Z05'], critical: false },
+  { id: 'PTAC-P1', kind: 'ptac', capacityKw: 2.09, cop: 2.185, zones: ['Z11'], critical: false },
+  { id: 'PTAC-P2', kind: 'ptac', capacityKw: 2.27, cop: 2.185, zones: ['Z16'], critical: false },
+  { id: 'PTAC-P3', kind: 'ptac', capacityKw: 2.34, cop: 2.185, zones: ['Z21'], critical: false },
+  { id: 'PTAC-P4', kind: 'ptac', capacityKw: 2.68, cop: 2.185, zones: ['Z26'], critical: false },
 ];
 
 /** Unidades exteriores VRF en la franja de mantenimiento norte de la azotea. */
@@ -675,6 +710,7 @@ export const VRF_UNITS: VrfUnit[] = [
     capacityKw: 54.18,
     cop: 2.185,
     zones: ['Z01', 'Z02', 'Z03', 'Z04'],
+    critical: false,
     rect: { x: 0.8, y: 18.05, w: 2.4, d: 1.4 },
   },
   {
@@ -683,6 +719,7 @@ export const VRF_UNITS: VrfUnit[] = [
     capacityKw: 58.18,
     cop: 2.415,
     zones: ['Z07', 'Z08', 'Z09', 'Z10'],
+    critical: false,
     rect: { x: 4, y: 18.05, w: 2.4, d: 1.4 },
   },
   {
@@ -691,6 +728,7 @@ export const VRF_UNITS: VrfUnit[] = [
     capacityKw: 60.31,
     cop: 2.415,
     zones: ['Z12', 'Z13', 'Z14', 'Z15'],
+    critical: false,
     rect: { x: 7.2, y: 18.05, w: 2.4, d: 1.4 },
   },
   {
@@ -699,6 +737,7 @@ export const VRF_UNITS: VrfUnit[] = [
     capacityKw: 60.95,
     cop: 2.415,
     zones: ['Z17', 'Z18', 'Z19', 'Z20'],
+    critical: false,
     rect: { x: 10.4, y: 18.05, w: 2.4, d: 1.4 },
   },
   {
@@ -707,6 +746,7 @@ export const VRF_UNITS: VrfUnit[] = [
     capacityKw: 62.47,
     cop: 2.415,
     zones: ['Z22', 'Z23', 'Z24', 'Z25'],
+    critical: false,
     rect: { x: 13.6, y: 18.05, w: 2.4, d: 1.4 },
   },
   {
@@ -715,6 +755,7 @@ export const VRF_UNITS: VrfUnit[] = [
     capacityKw: 3.87,
     cop: 2.415,
     zones: ['Z06'],
+    critical: true,
     rect: { x: 17.4, y: 18.45, w: 1.2, d: 1 },
   },
 ];
@@ -727,6 +768,7 @@ export const PTAC_UNITS: PtacUnit[] = [
     capacityKw: 1.53,
     cop: 2.185,
     zones: ['Z05'],
+    critical: false,
     zone: 'Z05',
     floor: 0,
     facade: 's',
@@ -737,6 +779,7 @@ export const PTAC_UNITS: PtacUnit[] = [
     capacityKw: 2.09,
     cop: 2.185,
     zones: ['Z11'],
+    critical: false,
     zone: 'Z11',
     floor: 1,
     facade: 's',
@@ -747,6 +790,7 @@ export const PTAC_UNITS: PtacUnit[] = [
     capacityKw: 2.27,
     cop: 2.185,
     zones: ['Z16'],
+    critical: false,
     zone: 'Z16',
     floor: 2,
     facade: 's',
@@ -757,6 +801,7 @@ export const PTAC_UNITS: PtacUnit[] = [
     capacityKw: 2.34,
     cop: 2.185,
     zones: ['Z21'],
+    critical: false,
     zone: 'Z21',
     floor: 3,
     facade: 's',
@@ -767,6 +812,7 @@ export const PTAC_UNITS: PtacUnit[] = [
     capacityKw: 2.68,
     cop: 2.185,
     zones: ['Z26'],
+    critical: false,
     zone: 'Z26',
     floor: 4,
     facade: 's',
@@ -903,3 +949,14 @@ export const TARIFF = {
   co2KgKwh: 0.31,
   exportUsdKwh: 0.1,
 };
+
+/** Rangos de los ajustes de controladores que aceptan Node-RED y el gemelo (ems/controladores.py). */
+export const CONTROLLER_LIMITS = {
+  capPct: [0, 100],
+  unitSetpoint: [18, 30],
+  copFactor: [0.5, 1.2],
+  tempOffset: [-10, 10],
+  tempValue: [5, 50],
+  rh: [0, 100],
+  maxDurationMin: 10080,
+} as const;

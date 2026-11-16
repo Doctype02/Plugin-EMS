@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.5.0
+
+Simulación y modificación de los **controladores** del edificio, en vivo (gemelo vía Node-RED) y en el modo
+simulado local.
+
+- **Pestaña «Controladores»**: las 11 unidades (6 VRF + 5 PTAC) con su estado real — potencia, carga %, COP
+  real, modo, zonas servidas (con su temperatura) — y un editor por unidad: encender/apagar, modo (_Auto_
+  obedece al EMS, _Frío local_ con termostato propio que ignora el deslastre, _Ventilación_ sin compresor),
+  **capacidad máxima** 0–100 %, **setpoint propio** de sus zonas (18–30 °C) y **factor de COP** 0.5–1.2
+  (degradación). Duración 15 min / 1 h / 4 h o _sin límite_ (hasta liberar), _Automático_ por unidad,
+  _Liberar todo_ y botón _Falla_ que reutiliza el evento `falla_vrf`. Se confirma en línea al apagar una
+  unidad y siempre en **VRF-SRV** (zona crítica Z06), que se envía con `confirmar: true`.
+- **Datos del sensor** en el detalle de cada zona (también en Z06, con confirmación): tabla _lee el
+  controlador_ frente a _real_ (temperatura, HR, presencia) y forzado de la lectura: desfase (−10…10 °C) o
+  valor fijo (5–50 °C), HR fija, presencia ocupada/vacía y sensor congelado. El EMS y el termostato reaccionan
+  al dato forzado; la física sigue con el valor real.
+- **Simulador local**: las unidades ajustadas cambian la física (libre flotación sin frío, tope de capacidad,
+  COP), quedan fuera del limitador de demanda en control local y se informan en `snapshot.units`; los
+  sensores forzados mueven la regulación (con +x °C la zona real queda x °C bajo el setpoint), disparan
+  `TEMP_ALTA`, `SENSOR_CONGELADO` (a los 30 min → modo seguro) y `AJUSTE_CRITICO`.
+- **En vivo**: lee la measurement `unidad` y los campos de zona `temp_real_c`, `hr_pct`, `hr_real_pct`,
+  `ocupado_real`, `sensor_*` (docs/CONTRATO.md). El dashboard de ejemplo agrega la consulta E (`unidad`).
+- **Selector de plantas con ocupación**: cada planta muestra personas / aforo con una barrita de % en el borde
+  inferior; el botón _Edificio_ muestra el total y su tooltip el porcentaje.
+- Azotea: estado _Apagada (manual)_ y, en la ventana de la unidad, COP real y ajuste manual vigente.
+- `modelData.ts` incluye `critical` por unidad y `CONTROLLER_LIMITS` (rangos de `ems/controladores.py`).
+
 ## 1.4.0
 
 Interfaz más clara en el panel 3D y en los controles de operación.

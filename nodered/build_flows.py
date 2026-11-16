@@ -43,7 +43,8 @@ def _desde_config(codigo: str) -> str:
 
 
 def _listas(codigo: str) -> str:
-    """Inyecta las listas de zonas, críticas, zonas sin aforo y unidades de config/edificio.yaml."""
+    """Inyecta las listas de zonas, críticas, zonas sin aforo, unidades (y las que atienden zonas críticas)
+    de config/edificio.yaml."""
     import re
     import sys
 
@@ -58,6 +59,8 @@ def _listas(codigo: str) -> str:
         "CRITICAS": [z["id"] for z in zs if z.get("critica")],
         "SIN_PERSONAS": [z["id"] for z in zs if z.get("critica") or not z.get("ocupantes")],
         "UNIDADES": [s["id"] for s in cfg.get("sistemas_vrf", [])],
+        "UNIDADES_CRITICAS": [s["id"] for s in cfg.get("sistemas_vrf", [])
+                              if any(z["id"] in s["zonas"] and z.get("critica") for z in zs)],
         "LIMITE_KW": [round(lim * 0.25), round(lim * 3.3)],
     }
     for k, v in listas.items():
@@ -137,7 +140,7 @@ flows = [
      "payloadType": "json", "x": 170, "y": 560, "wires": [["fn_par"]]},
     fn("fn_par", "Cambiar parámetros EMS", "parametros.js", 450, 480, [["dbg_par"]]),
     {"id": "c_ctl", "type": "comment", "z": TAB, "name": "Control desde el panel de Grafana (POST /ems/control)",
-     "info": "Cuerpo JSON: {tipo: override|liberar|parametros, ...}. Ver docs/CONTRATO.md", "x": 230, "y": 620, "wires": []},
+     "info": "Cuerpo JSON: {tipo: override|liberar|parametros|evento|ocupacion|unidad|sensor, ...}. Ver docs/CONTRATO.md", "x": 230, "y": 620, "wires": []},
     {"id": "http_ctl", "type": "http in", "z": TAB, "name": "POST /ems/control", "url": "/ems/control", "method": "post",
      "upload": False, "swaggerDoc": "", "x": 150, "y": 660, "wires": [["fn_http"]]},
     fn("fn_http", "Comando HTTP del panel", "http_control.js", 400, 660, [["out_override"], ["out_param"], ["http_res"]], outputs=3),

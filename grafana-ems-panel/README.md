@@ -258,7 +258,26 @@ from(bucket: "ems")
   |> group()
 ```
 
+```flux
+// E — unidades VRF/PTAC (pestaña Controladores; opcional: sin ella se estima con las zonas)
+from(bucket: "ems")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "unidad" and r.escenario == "live")
+  |> last()
+  |> pivot(rowKey: ["_time", "unidad"], columnKey: ["_field"], valueColumn: "_value")
+  |> group()
+```
+
 Como el simulador corre más rápido que el reloj real, use el rango `now/d` → `now/d+1d`.
+
+### Controladores
+
+La pestaña _Controladores_ lista las 11 unidades (6 VRF + 5 PTAC) con potencia, carga, COP real, modo y zonas,
+y permite ajustar su controlador local: encender/apagar, modo (_Auto_, _Frío local_, _Ventilación_), capacidad
+máxima, setpoint propio y factor de COP, por un tiempo o hasta liberar. En el detalle de cada zona, _Datos del
+sensor_ compara lo que lee el controlador con el valor real y permite forzar la lectura (desfase o valor fijo
+de temperatura, HR, presencia, congelado). La unidad VRF-SRV y la zona Z06 (servidores) piden confirmación.
+Contrato: `tipo: "unidad"` y `tipo: "sensor"` en [`../docs/CONTRATO.md`](../docs/CONTRATO.md) §2.1.
 
 ## Desarrollo
 

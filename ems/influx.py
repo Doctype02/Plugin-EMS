@@ -6,7 +6,13 @@ import os
 import pandas as pd
 
 CAMPOS_ZONA = ["temp_c", "setpoint_c", "ocupantes", "ocupado", "lux", "luces_nivel", "equipos_nivel",
-               "hvac_on", "hvac_enable", "p_luces_kw", "p_equipos_kw", "p_hvac_kw", "p_total_kw"]
+               "hvac_on", "hvac_enable", "p_luces_kw", "p_equipos_kw", "p_hvac_kw", "p_total_kw",
+               "temp_real_c", "hr_pct", "hr_real_pct", "ocupado_real", "sensor_forzado",
+               # sólo mientras el sensor está forzado (ems/controladores.py)
+               "sensor_temp_offset_c", "sensor_temp_fijo_c", "sensor_hr_fijo_pct", "sensor_presencia",
+               "sensor_congelado", "sensor_restante_min"]
+CAMPOS_UNIDAD = ["p_kw", "q_frio_kw", "carga_pct", "cop", "modo", "encendido", "capacidad_pct", "setpoint_c",
+                 "cop_factor", "forzado", "restante_min", "falla", "sin_energia"]
 CAMPOS_MEDIDOR = ["p_total_kw", "p_critica_kw", "p_no_critica_kw", "p_hvac_kw", "p_luces_kw", "p_equipos_kw",
                   "p_fija_kw", "q_kvar", "s_kva", "fp", "v_ll", "i_a", "e_kwh", "demanda_15min_kw", "t_ext_c",
                   "hr_pct", "irr_wm2", "precio_usd_kwh", "p_fv_kw", "p_red_kw", "e_fv_kwh", "red_ok", "ups_kw", "ups_min"]
@@ -55,6 +61,12 @@ class Escritor:
         tags = {"zona": z["zona"], "nombre": z["nombre"], "tipo": z["tipo"],
                 "critica": "si" if z["critica"] else "no", "escenario": escenario}
         self._p("zona", ts, tags, {k: z[k] for k in CAMPOS_ZONA if k in z})
+
+    def unidad(self, ts, u: dict, escenario: str = "live"):
+        if self.habilitado:
+            self._p("unidad", ts, {"unidad": u["unidad"], "tipo": u["tipo"], "escenario": escenario},
+                    {k: (-1.0 if k == "restante_min" and u[k] is None and u.get("forzado") else u[k])
+                     for k in CAMPOS_UNIDAD if k in u})
 
     def medidor(self, ts, m: dict, escenario: str = "live"):
         if self.habilitado:

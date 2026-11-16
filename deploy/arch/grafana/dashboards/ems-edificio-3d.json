@@ -66,6 +66,14 @@
             "uid": "ems-influx"
           },
           "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\")\n  |> pivot(rowKey: [\"_time\", \"zona\", \"codigo\", \"nivel\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"unidad\" and r.escenario == \"live\")\n  |> last()\n  |> pivot(rowKey: [\"_time\", \"unidad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()"
         }
       ],
       "options": {

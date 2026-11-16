@@ -1,4 +1,13 @@
-import { autoFloor, declutter, fitView, floorSummary, roofSummary, shortZoneName, worstStatus } from './layout';
+import {
+  autoFloor,
+  declutter,
+  fitView,
+  floorSummary,
+  occupancyOf,
+  roofSummary,
+  shortZoneName,
+  worstStatus,
+} from './layout';
 import { FLOORS, ZONES, ZONE_BY_ID } from './model';
 import { simulate } from './simulator';
 import { Status, zoneStatuses } from './telemetry';
@@ -108,5 +117,43 @@ describe('resumen por planta', () => {
     expect(shortZoneName(ZONE_BY_ID.Z07)).toBe('Oficina 1');
     expect(shortZoneName(ZONE_BY_ID.Z06)).toBe('Servidores');
     expect(shortZoneName(ZONE_BY_ID.Z10)).toBe('Pasillo');
+  });
+});
+
+describe('ocupación por planta', () => {
+  const at = (h: number) => Date.UTC(2026, 10, 3, h + 5, 0);
+
+  it('suma las personas de las zonas de cada planta frente a su aforo', () => {
+    const snap = simulate(at(11), { limitKw: 170, demoIncidents: false });
+    const st = zoneStatuses(snap);
+    let total = 0;
+    for (const f of FLOORS) {
+      const s = floorSummary(f.level, snap, st);
+      const zs = ZONES.filter((z) => z.floor === f.level);
+      expect(s.capacity).toBe(zs.reduce((a, z) => a + z.occupants, 0));
+      expect(s.people).toBe(zs.reduce((a, z) => a + snap.zones[z.id].occupants, 0));
+      total += s.people!;
+    }
+    const b = occupancyOf(snap);
+    expect(b.known).toBe(true);
+    expect(b.people).toBe(total);
+    expect(b.capacity).toBe(ZONES.reduce((a, z) => a + z.occupants, 0));
+    expect(b.pct).toBeCloseTo((100 * total) / b.capacity);
+    // la azotea no tiene personas
+    expect(roofSummary(snap, st).people).toBeUndefined();
+  });
+
+  it('refleja la ocupación forzada y queda sin dato si no hay telemetría', () => {
+    const occ = { Z09: { people: 30, since: at(0), until: at(23) } };
+    const snap = simulate(at(11), { limitKw: 170, demoIncidents: false, occupancy: occ });
+    const p1 = floorSummary(1, snap, zoneStatuses(snap));
+    const sinZ09 = ZONES.filter((z) => z.floor === 1 && z.id !== 'Z09').reduce(
+      (a, z) => a + snap.zones[z.id].occupants,
+      0
+    );
+    expect(p1.people).toBe(sinZ09 + 30);
+    const empty = { time: 0, zones: {}, alarms: [] };
+    expect(floorSummary(1, empty, {}).people).toBeUndefined();
+    expect(occupancyOf(empty).known).toBe(false);
   });
 });

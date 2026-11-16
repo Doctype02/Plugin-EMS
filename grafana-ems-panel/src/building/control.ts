@@ -3,8 +3,17 @@
  * `ems/<edif>/ems/parametros`). En modo demostración se aplican al simulador del navegador; en modo
  * en vivo se envían por HTTP al flujo de Node-RED, que los publica por MQTT y los respeta en sus reglas.
  */
-import { LIMIT_RANGE, ZONE_BY_ID } from './model';
-import { EmsParams, OccupancyOverrides, Overrides, ZoneOverride } from './telemetry';
+import { CONTROLLER_LIMITS, HVAC_BY_ID, LIMIT_RANGE, ZONE_BY_ID } from './model';
+import {
+  EmsParams,
+  OccupancyOverrides,
+  Overrides,
+  SensorForce,
+  SensorOverrides,
+  UnitAdjust,
+  UnitAdjustments,
+  ZoneOverride,
+} from './telemetry';
 import { SimEvent, describeEvent } from './events';
 
 export interface ZoneCommand {
@@ -25,7 +34,13 @@ export type Command =
   | { kind: 'event_stop'; id: string | '*' }
   /** Cantidad de personas: fija en una zona (`people`) o % del horario en todo el edificio (`zone: '*'`, `pct`). */
   | { kind: 'occupancy'; zone: string | '*'; people?: number; pct?: number; durationMin: number }
-  | { kind: 'occupancy_release'; zone: string | '*' };
+  | { kind: 'occupancy_release'; zone: string | '*' }
+  /** Ajuste del controlador local de una unidad VRF/PTAC (sin `durationMin` = hasta liberar). */
+  | { kind: 'unit'; unit: string; adjust: UnitAdjust; durationMin?: number; confirm?: boolean }
+  | { kind: 'unit_release'; unit: string | '*' }
+  /** Datos forzados del sensor de una zona (la física no cambia). */
+  | { kind: 'sensor'; zone: string; force: SensorForce; durationMin?: number; confirm?: boolean }
+  | { kind: 'sensor_release'; zone: string | '*' };
 
 /** Rango del setpoint con ocupación (`sp_ocupado`) y de los setpoints manuales por zona (°C). */
 export const SP_RANGE: [number, number] = [20, 28];
@@ -72,6 +87,14 @@ export function validateCommand(c: Command): string | undefined {
       return validateOccupancy(c);
     case 'params':
       return validateParams(c.params);
+    case 'unit':
+      return validateUnit(c);
+    case 'sensor':
+      return validateSensor(c);
+    case 'unit_release':
+      return c.unit === '*' || HVAC_BY_ID[c.unit] ? undefined : `Unidad desconocida: ${c.unit}`;
+    case 'sensor_release':
+      return c.zone === '*' || ZONE_BY_ID[c.zone] ? undefined : `Zona desconocida: ${c.zone}`;
     default:
       return undefined;
   }
@@ -142,6 +165,166 @@ export function applyOccupancy(occ: OccupancyOverrides, c: Command, now: number,
 export function pruneOccupancy(occ: OccupancyOverrides, now: number): OccupancyOverrides {
   return Object.fromEntries(Object.entries(occ).filter(([, v]) => v.until > now));
 }
+
+// ------------------------------------------------------------------ controladores (ems/controladores.py)
+const L = CONTROLLER_LIMITS;
+const inRange = (v: number | undefined, r: readonly [number, number]) =>
+  v === undefined || (Number.isFinite(v) && v >= r[0] && v <= r[1]);
+const fmtR = (r: readonly [number, number], unit: string) => `entre ${r[0]} y ${r[1]} ${unit}`.trim();
+
+function validateDuration(d?: number): string | undefined {
+  return d === undefined || (d > 0 && d <= L.maxDurationMin) ? undefined : 'Duración inválida';
+}
+
+/** Valida un ajuste de unidad (rangos del contrato; las unidades de zonas críticas exigen confirmación). */
+export function validateUnit(c: Extract<Command, { kind: 'unit' }>): string | undefined {
+  const u = HVAC_BY_ID[c.unit];
+  if (!u) {
+    return `Unidad desconocida: ${c.unit}`;
+  }
+  const a = c.adjust;
+  if (
+    a.on === undefined &&
+    !a.mode &&
+    a.capPct === undefined &&
+    a.setpoint === undefined &&
+    a.copFactor === undefined
+  ) {
+    return 'No hay cambios que aplicar';
+  }
+  if (!inRange(a.capPct, L.capPct)) {
+    return `La capacidad debe estar ${fmtR(L.capPct, '%')}`;
+  }
+  if (!inRange(a.setpoint, L.unitSetpoint)) {
+    return `El setpoint de la unidad debe estar ${fmtR(L.unitSetpoint, '°C')}`;
+  }
+  if (!inRange(a.copFactor, L.copFactor)) {
+    return `El factor de COP debe estar ${fmtR(L.copFactor, '')}`;
+  }
+  if (u.critical && !c.confirm) {
+    return `${u.id} atiende una zona crítica: hay que confirmar el ajuste`;
+  }
+  return validateDuration(c.durationMin);
+}
+
+/** Valida el forzado de un sensor de zona. */
+export function validateSensor(c: Extract<Command, { kind: 'sensor' }>): string | undefined {
+  const z = ZONE_BY_ID[c.zone];
+  if (!z) {
+    return `Zona desconocida: ${c.zone}`;
+  }
+  const f = c.force;
+  if (f.tempOffset !== undefined && f.tempValue !== undefined) {
+    return 'Use desfase o valor fijo de temperatura, no ambos';
+  }
+  if (
+    f.tempOffset === undefined &&
+    f.tempValue === undefined &&
+    f.rh === undefined &&
+    f.presence === undefined &&
+    !f.frozen
+  ) {
+    return 'No hay cambios que aplicar';
+  }
+  if (!inRange(f.tempOffset, L.tempOffset)) {
+    return `El desfase debe estar ${fmtR(L.tempOffset, '°C')}`;
+  }
+  if (!inRange(f.tempValue, L.tempValue)) {
+    return `La temperatura fija debe estar ${fmtR(L.tempValue, '°C')}`;
+  }
+  if (!inRange(f.rh, L.rh)) {
+    return `La HR debe estar ${fmtR(L.rh, '%')}`;
+  }
+  if (z.critical && !c.confirm) {
+    return `${z.id} es una zona crítica: hay que confirmar el forzado`;
+  }
+  return validateDuration(c.durationMin);
+}
+
+const untilOf = (now: number, d?: number) => (d === undefined ? Infinity : now + d * 60_000);
+
+/** Aplica un ajuste o liberación de unidad al conjunto local. */
+export function applyUnits(units: UnitAdjustments, c: Command, now: number, user?: string): UnitAdjustments {
+  if (c.kind === 'unit_release') {
+    if (c.unit === '*') {
+      return {};
+    }
+    const { [c.unit]: _u, ...rest } = units;
+    return rest;
+  }
+  if (c.kind !== 'unit') {
+    return units;
+  }
+  return { ...units, [c.unit]: { ...c.adjust, since: now, until: untilOf(now, c.durationMin), user } };
+}
+
+/** Aplica un forzado o liberación de sensor al conjunto local (`frozenAt` = lecturas del instante). */
+export function applySensors(
+  sensors: SensorOverrides,
+  c: Command,
+  now: number,
+  user?: string,
+  frozenAt?: (zone: string) => { temp: number; rh: number; occupied: boolean } | undefined
+): SensorOverrides {
+  if (c.kind === 'sensor_release') {
+    if (c.zone === '*') {
+      return {};
+    }
+    const { [c.zone]: _z, ...rest } = sensors;
+    return rest;
+  }
+  if (c.kind !== 'sensor') {
+    return sensors;
+  }
+  return {
+    ...sensors,
+    [c.zone]: {
+      ...c.force,
+      since: now,
+      until: untilOf(now, c.durationMin),
+      user,
+      frozenAt: c.force.frozen ? frozenAt?.(c.zone) : undefined,
+    },
+  };
+}
+
+/** Quita los ajustes vencidos (unidades, sensores u otros registros con `until`). */
+export function pruneTimed<T extends { until: number }>(rec: Record<string, T>, now: number): Record<string, T> {
+  return Object.fromEntries(Object.entries(rec).filter(([, v]) => v.until > now));
+}
+
+/** Texto corto de un ajuste de unidad. */
+export function describeUnitAdjust(a: UnitAdjust): string {
+  return (
+    [
+      a.on === false ? 'apagada' : undefined,
+      a.on !== false && a.mode === 'frio' ? 'frío local (sin EMS)' : undefined,
+      a.on !== false && a.mode === 'ventilacion' ? 'sólo ventilación' : undefined,
+      a.capPct !== undefined ? `capacidad ${a.capPct} %` : undefined,
+      a.setpoint !== undefined ? `setpoint ${a.setpoint.toFixed(1)} °C` : undefined,
+      a.copFactor !== undefined ? `COP × ${a.copFactor.toFixed(2)}` : undefined,
+    ]
+      .filter(Boolean)
+      .join(', ') || 'automático'
+  );
+}
+
+/** Texto corto de un forzado de sensor. */
+export function describeSensorForce(f: SensorForce): string {
+  return (
+    [
+      f.frozen ? 'congelado' : undefined,
+      f.tempValue !== undefined ? `T fija ${f.tempValue.toFixed(1)} °C` : undefined,
+      f.tempOffset !== undefined ? `T ${f.tempOffset >= 0 ? '+' : ''}${f.tempOffset.toFixed(1)} °C` : undefined,
+      f.rh !== undefined ? `HR ${Math.round(f.rh)} %` : undefined,
+      f.presence !== undefined ? (f.presence ? 'presencia' : 'sin presencia') : undefined,
+    ]
+      .filter(Boolean)
+      .join(', ') || 'real'
+  );
+}
+
+const forLabel = (d?: number) => (d === undefined ? 'hasta liberar' : `por ${durationLabel(d)}`);
 
 export interface LogEntry {
   at: number;
@@ -278,6 +461,62 @@ export function toPayload(command: Command, user?: string): Record<string, unkno
     }
     case 'occupancy_release':
       return { tipo: 'ocupacion', zona: command.zone, liberar: true, usuario: user };
+    case 'unit': {
+      const a = command.adjust;
+      const body: Record<string, unknown> = { tipo: 'unidad', unidad: command.unit, usuario: user };
+      if (a.on !== undefined) {
+        body.encendido = a.on;
+      }
+      if (a.mode) {
+        body.modo = a.mode;
+      }
+      if (a.capPct !== undefined) {
+        body.capacidad_pct = a.capPct;
+      }
+      if (a.setpoint !== undefined) {
+        body.setpoint_c = a.setpoint;
+      }
+      if (a.copFactor !== undefined) {
+        body.cop_factor = a.copFactor;
+      }
+      if (command.durationMin !== undefined) {
+        body.duracion_min = command.durationMin;
+      }
+      if (command.confirm) {
+        body.confirmar = true;
+      }
+      return body;
+    }
+    case 'unit_release':
+      return { tipo: 'unidad', unidad: command.unit, liberar: true, usuario: user };
+    case 'sensor': {
+      const f = command.force;
+      const body: Record<string, unknown> = { tipo: 'sensor', zona: command.zone, usuario: user };
+      if (f.tempOffset !== undefined) {
+        body.temp_offset_c = f.tempOffset;
+      }
+      if (f.tempValue !== undefined) {
+        body.temp_c = f.tempValue;
+      }
+      if (f.rh !== undefined) {
+        body.hr_pct = f.rh;
+      }
+      if (f.presence !== undefined) {
+        body.presencia = f.presence;
+      }
+      if (f.frozen) {
+        body.congelado = true;
+      }
+      if (command.durationMin !== undefined) {
+        body.duracion_min = command.durationMin;
+      }
+      if (command.confirm) {
+        body.confirmar = true;
+      }
+      return body;
+    }
+    case 'sensor_release':
+      return { tipo: 'sensor', zona: command.zone, liberar: true, usuario: user };
     default: {
       const body: Record<string, unknown> = { tipo: 'parametros', usuario: user };
       if (command.params.limitKw !== undefined) {
@@ -315,6 +554,14 @@ export function describe(command: Command): string {
         : `${command.zone}: ${command.people} personas por ${durationLabel(command.durationMin)}`;
     case 'occupancy_release':
       return command.zone === '*' ? 'Ocupación del edificio según horario' : `${command.zone}: personas según horario`;
+    case 'unit':
+      return `${command.unit}: ${describeUnitAdjust(command.adjust)} ${forLabel(command.durationMin)}`;
+    case 'unit_release':
+      return command.unit === '*' ? 'Todas las unidades vuelven a automático' : `${command.unit} vuelve a automático`;
+    case 'sensor':
+      return `Sensor de ${command.zone}: ${describeSensorForce(command.force)} ${forLabel(command.durationMin)}`;
+    case 'sensor_release':
+      return command.zone === '*' ? 'Todos los sensores leen el valor real' : `Sensor de ${command.zone}: valor real`;
     default:
       return [
         command.params.limitKw !== undefined ? `límite de demanda ${command.params.limitKw} kW` : undefined,

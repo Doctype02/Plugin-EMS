@@ -10,10 +10,17 @@
  * Con `controller: 'baseline'` reproduce la operación del modelo E+ (setpoint de horario 24 h, luces por
  * horario, sin limitador). Incluye las cargas fijas (ascensor, extractores) y, con `pv`, la fotovoltaica
  * de la azotea (la demanda de 15 min es la importación neta, como en ems/edificio.py).
+ *
+ * Controladores (como ems/controladores.py): `units` ajusta el controlador local de cada VRF/PTAC (apagado,
+ * modo frío local o ventilación, tope de capacidad —aquí aproximado por zona—, setpoint propio y factor de
+ * COP) y `sensors` fuerza lo que lee el sensor de una zona. El EMS y el termostato regulan la lectura: con un
+ * desfase de +x °C la zona real queda x °C por debajo del setpoint; con un valor fijo alto enfrían a plena
+ * capacidad y con uno bajo dejan de enfriar; un sensor congelado se detecta a los 30 min (modo seguro).
  */
 import {
   BUILDING,
   EMS_RULES,
+  HVAC_SYSTEMS,
   ENVELOPE,
   FIXED_LOADS,
   SCHEDULES,
@@ -34,7 +41,13 @@ import {
   OccupancyOverride,
   OccupancyOverrides,
   Overrides,
+  SensorForce,
+  SensorOverride,
+  SensorOverrides,
   Snapshot,
+  UnitAdjustment,
+  UnitAdjustments,
+  UnitStatus,
   ZoneOverride,
   ZoneState,
 } from './telemetry';
@@ -65,7 +78,40 @@ export interface SimOptions {
   pv?: boolean;
   /** 'reglas_dr' (EMS) o 'baseline' (setpoints de E+ 24 h, luces por horario, sin limitador). */
   controller?: SimController;
+  /** Ajustes del operador sobre las unidades VRF/PTAC (controlador local). */
+  units?: UnitAdjustments;
+  /** Datos forzados de los sensores de zona. */
+  sensors?: SensorOverrides;
 }
+
+/** Minutos hasta que el supervisor detecta un sensor congelado (6 lecturas iguales de 5 min). */
+const FROZEN_DETECT_MIN = 30;
+
+export function activeUnit(unitId: string, t: number, opts: SimOptions): UnitAdjustment | undefined {
+  const a = opts.units?.[unitId];
+  return a && t >= a.since && t < a.until ? a : undefined;
+}
+
+export function activeSensor(zoneId: string, t: number, opts: SimOptions): SensorOverride | undefined {
+  const s = opts.sensors?.[zoneId];
+  return s && t >= s.since && t < s.until ? s : undefined;
+}
+
+/** Humedad absoluta (kg/kg) y relativa (%) a 101.325 kPa (mismas fórmulas que ems/edificio.py). */
+const psat = (tc: number) => 0.61094 * Math.exp((17.625 * tc) / (tc + 243.04));
+export function absHumidity(tc: number, rh: number): number {
+  const pv = (Math.min(Math.max(rh, 0), 100) / 100) * psat(tc);
+  return (0.622 * pv) / (101.325 - pv);
+}
+export function relHumidity(tc: number, w: number): number {
+  const pv = (w * 101.325) / (0.622 + w);
+  return Math.min(100, Math.max(0, (100 * pv) / psat(tc)));
+}
+
+const forceOf = (s: SensorOverride): SensorForce => {
+  const { since: _s, until: _u, user: _w, frozenAt: _f, ...f } = s;
+  return f;
+};
 
 function activeOcc(key: string, t: number, opts: SimOptions): OccupancyOverride | undefined {
   const o = opts.occupancy?.[key];
@@ -191,6 +237,10 @@ interface ZoneCore extends ZoneState {
   wantsCooling: boolean;
   compressorKw: number;
   urgency: number;
+  /** COP efectivo del instante (con el factor de degradación de la unidad). */
+  copEff: number;
+  /** La unidad está en control local (el limitador del EMS no la toca). */
+  unitLocal: boolean;
 }
 
 /** Estado de los eventos del instante para una zona. */
@@ -279,7 +329,12 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     occupants = Math.round(occupants * Math.max(0, 1 - (t - ev.fireAnywhere.start) / (5 * MIN)));
   }
   // el pasillo no tiene aforo: se considera ocupado (tránsito) cuando hay gente en el edificio
-  const occupied = occupants > 0 || (z.type === 'pasillo' && buildingOccupied);
+  const occupiedReal = occupants > 0 || (z.type === 'pasillo' && buildingOccupied);
+  // el EMS y el terminal usan el detector de presencia (que puede estar forzado o congelado)
+  const sensor = activeSensor(z.id, t, opts);
+  const frozen = sensor?.frozen ? sensor.frozenAt : undefined;
+  const occupied = frozen ? frozen.occupied : (sensor?.presence ?? occupiedReal);
+  const unitAdj = activeUnit(z.system, t, opts);
   const precool = c.weekday && c.h >= ENTRY - PRECOOL_H && c.h < ENTRY;
   const workHours = c.weekday && c.h >= ENTRY - 0.5 && c.h < EXIT + 0.5;
   const baseline = opts.controller === 'baseline';
@@ -317,6 +372,26 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     hvacEnable = true;
   }
 
+  // ---- controlador local de la unidad (prioridad sobre el EMS)
+  const unitMode: UnitStatus['mode'] = !unitAdj ? 'auto' : unitAdj.on === false ? 'apagado' : (unitAdj.mode ?? 'auto');
+  if (unitAdj?.setpoint !== undefined) {
+    setpoint = unitAdj.setpoint;
+  }
+  if (unitMode === 'frio') {
+    hvacEnable = true;
+  }
+  const unitLocal =
+    !!unitAdj && (unitMode !== 'auto' || unitAdj.setpoint !== undefined || unitAdj.capPct !== undefined);
+  const capFrac = unitAdj?.capPct !== undefined ? unitAdj.capPct / 100 : 1;
+
+  // ---- lo que «ve» el control: con un desfase regula la lectura (la zona real queda en setpoint − desfase);
+  // con un valor fijo (o congelado) alto enfría a plena capacidad y con uno bajo deja de enfriar
+  const seen = frozen?.temp ?? sensor?.tempValue;
+  const frozenDetected = !!sensor?.frozen && t - sensor.since >= FROZEN_DETECT_MIN * MIN;
+  const sensorCtl: 'normal' | 'full' | 'none' =
+    seen === undefined || frozenDetected ? 'normal' : seen > setpoint + BAND ? 'full' : 'none';
+  const spPhys = setpoint - (sensor?.tempOffset ?? 0);
+
   // ---- iluminación, enchufes y ganancia solar
   const glass = th.glass;
   const luxDay = (110 * ENVELOPE.vt * 0.25 * glass * w.irr * 0.4) / Math.max(z.area, 1);
@@ -352,11 +427,11 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
   // ---- carga sensible relativa a la capacidad del terminal → modulación (mismo RC que el gemelo; las
   // plantas vecinas están acondicionadas a una temperatura parecida, el acople por las losas se desprecia)
   const vent = occupants * ENVELOPE.ventilationPerPerson * ENVELOPE.rhoCp;
-  const envelope = th.ua * (w.tExt - ENVELOPE.skyDeltaT - setpoint) + (th.gInf + vent) * (w.tExt - setpoint);
-  const ground = th.uaGround * (ENVELOPE.tGround - setpoint);
+  const envelope = th.ua * (w.tExt - ENVELOPE.skyDeltaT - spPhys) + (th.gInf + vent) * (w.tExt - spPhys);
+  const ground = th.uaGround * (ENVELOPE.tGround - spPhys);
   const internal = occupants * Q_PERSON + pLights + pPlugs + z.fanKw;
   // puerta o ventana abierta: aire exterior caliente (sensible) — el VRF también debe retirar su humedad
-  const door = ev.doorFlow * ENVELOPE.rhoCp * Math.max(w.tExt - setpoint, 0) * 1.6;
+  const door = ev.doorFlow * ENVELOPE.rhoCp * Math.max(w.tExt - spPhys, 0) * 1.6;
   const load = Math.max(0, internal + solar + envelope + ground + door);
   const plr = Math.min(1, load / Math.max(z.hvacKw, 0.01));
   const period = 30 * MIN;
@@ -366,6 +441,11 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
   let hvacOn: boolean;
   let mod = 0;
   const fault = inc?.zone === z.id ? inc : undefined;
+  // período del ajuste que gobierna la zona (para la libre flotación o el enfriamiento forzado)
+  const adjSince = Math.max(unitAdj?.since ?? -Infinity, sensor?.since ?? -Infinity);
+  const ffHours = Number.isFinite(adjSince) ? (t - adjSince) / HOUR : 0;
+  const ffGains = occupants * Q_PERSON + pLights + pPlugs + solar * 2;
+  const unitNoCooling = unitMode === 'apagado' || unitMode === 'ventilacion';
   if (ev.noCoolingSince !== undefined) {
     // sin enfriamiento (falla, incendio o corte): libre flotación desde el inicio del evento
     const hours = (t - ev.noCoolingSince) / HOUR;
@@ -380,6 +460,16 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     }
     hvacOn = false;
     hvacEnable = false;
+  } else if (unitNoCooling || (hvacEnable && sensorCtl === 'none')) {
+    // unidad apagada / sólo ventilación, o el control cree que ya hace frío: libre flotación
+    temp = freeFloat(z, spPhys, ffHours, ffGains + (unitMode === 'ventilacion' ? z.fanKw : 0), w.tExt);
+    hvacOn = false;
+  } else if (hvacEnable && (sensorCtl === 'full' || plr > capFrac)) {
+    // enfriamiento a plena capacidad (lectura alta) o limitado por el tope de la unidad
+    hvacOn = capFrac > 0;
+    mod = capFrac;
+    temp = freeFloat(z, spPhys, ffHours, ffGains + z.fanKw - capFrac * z.hvacKw, w.tExt);
+    temp = sensorCtl === 'full' ? Math.max(temp, 16) : Math.max(temp, spPhys);
   } else if (fault?.kind === 'falla_hvac') {
     const mins = (c.h - fault.from) * 60;
     temp = setpoint + BAND + Math.min(4, mins / 18);
@@ -389,14 +479,14 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     if (plr >= PLR_MIN) {
       hvacOn = true;
       mod = plr;
-      temp = setpoint + 0.2 * Math.sin(2 * Math.PI * phase) + (plr - 0.5) * 0.4;
+      temp = spPhys + 0.2 * Math.sin(2 * Math.PI * phase) + (plr - 0.5) * 0.4;
     } else {
       const duty = plr / PLR_MIN;
       hvacOn = phase < duty;
       mod = hvacOn ? PLR_MIN : 0;
       temp = hvacOn
-        ? setpoint + BAND - (2 * BAND * phase) / duty
-        : setpoint - BAND + (2 * BAND * (phase - duty)) / (1 - duty);
+        ? spPhys + BAND - (2 * BAND * phase) / duty
+        : spPhys - BAND + (2 * BAND * (phase - duty)) / (1 - duty);
     }
     if (fault?.kind === 'sobreocupacion') {
       temp += Math.min(2.8, (c.h - fault.from) * 3.5);
@@ -414,18 +504,35 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     hvacOn = false;
   }
 
-  if (fault?.kind === 'sensor' || ev.sensor) {
-    temp = setpoint + 0.12; // lectura congelada: el sensor deja de variar
-  }
   if (ev.doorFlow > 0) {
     temp += Math.min(2.5, ev.doorFlow * 3);
   }
+  const tempReal = temp;
+  if (fault?.kind === 'sensor' || ev.sensor) {
+    temp = setpoint + 0.12; // lectura congelada: el sensor deja de variar
+  }
+  // ---- lectura del sensor forzada por el operador
+  if (frozen) {
+    temp = frozen.temp;
+  } else if (sensor?.tempValue !== undefined) {
+    temp = sensor.tempValue + 0.16 * (hash('ruido', z.id, Math.floor(t / (5 * MIN))) - 0.5);
+  } else if (sensor?.tempOffset !== undefined) {
+    temp = tempReal + sensor.tempOffset;
+  }
+  // HR: el aire interior tiene la humedad del exterior menos lo que condensa el serpentín (el VRF no la controla)
+  const rhReal = relHumidity(tempReal, Math.max(0.004, absHumidity(w.tExt, w.rh) - (hvacOn ? 0.0015 * mod : 0)));
+  const rh = frozen ? frozen.rh : (sensor?.rh ?? rhReal);
 
-  const cop = z.cop * (1 - 0.012 * (w.tExt - 30));
+  const cop = z.cop * (1 - 0.012 * (w.tExt - 30)) * (unitAdj?.copFactor ?? 1);
   // incluye el latente que condensa el serpentín (fraccion_latente_serpentin)
   const compressorKw = (mod * z.hvacKw * (1 + ENVELOPE.latentFraction)) / Math.max(cop, 1);
   const fanAlways = baseline && z.fanMode === 'continuo';
-  const fan = hvacEnable && !sinRed && (occupied || hvacOn || fanAlways) ? z.fanKw : 0;
+  const fan =
+    sinRed || unitMode === 'apagado'
+      ? 0
+      : unitMode === 'ventilacion' || (hvacEnable && (occupied || hvacOn || fanAlways))
+        ? z.fanKw
+        : 0;
   const pHvac = (hvacOn ? compressorKw : 0) + fan;
   const lux = Math.round(luxDay + 500 * lights);
   return {
@@ -442,7 +549,17 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     pPlugs,
     pHvac,
     pTotal: pLights + pPlugs + pHvac,
-    sensorFault: fault?.kind === 'sensor' || ev.sensor,
+    sensorFault: fault?.kind === 'sensor' || ev.sensor || frozenDetected,
+    tempReal,
+    rh,
+    rhReal,
+    occupiedReal,
+    ...(sensor
+      ? {
+          sensorForce: forceOf(sensor),
+          sensorRemainingMin: Number.isFinite(sensor.until) ? (sensor.until - t) / MIN : undefined,
+        }
+      : {}),
     events: ev.kinds.length ? ev.kinds : undefined,
     fire: !!ev.fire,
     noPower: sinRed,
@@ -452,6 +569,8 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     wantsCooling: hvacOn,
     compressorKw,
     urgency: temp - setpoint,
+    copEff: Math.max(cop, 1),
+    unitLocal,
   };
 }
 
@@ -506,7 +625,12 @@ function core(t: number, opts: SimOptions): Core {
       .map((z) => zones[z.id])
       .filter(
         (s) =>
-          s.hvacOn && !s.sensorFault && !s.override && !s.events && s.temp < EMS_RULES.comfortMax - EMS_RULES.drMarginC
+          s.hvacOn &&
+          !s.sensorFault &&
+          !s.override &&
+          !s.unitLocal &&
+          !s.events &&
+          s.temp < EMS_RULES.comfortMax - EMS_RULES.drMarginC
       )
       .sort((a, b) => a.urgency - b.urgency);
     for (const s of candidates) {
@@ -566,7 +690,7 @@ export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
   let pCritical = fixed.critical;
   let q = fixed.q;
   for (const z of ZONES) {
-    const { wantsCooling: _w, compressorKw: _c, urgency: _u, ...s } = now.zones[z.id];
+    const { wantsCooling: _w, compressorKw: _c, urgency: _u, copEff: _e, unitLocal: _l, ...s } = now.zones[z.id];
     zones[z.id] = { ...s, temp: Math.round(s.temp * 100) / 100 };
     pHvac += s.pHvac;
     pLights += s.pLights;
@@ -634,7 +758,38 @@ export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
     events: act.length ? [...new Set(act.map((e) => e.kind))] : undefined,
     fireAlarm: !!fire,
   };
-  return { time: t, zones, meter, ems, alarms };
+  return { time: t, zones, meter, ems, alarms, units: unitStatuses(t, now, opts) };
+}
+
+/** Estado de cada unidad VRF/PTAC (equivalente al tópico sim/controladores del gemelo). */
+export function unitStatuses(t: number, k: Core, opts: SimOptions): Record<string, UnitStatus> {
+  const act = activeEvents(opts.events, t);
+  const outage = act.some((e) => e.kind === 'corte_energia');
+  const out: Record<string, UnitStatus> = {};
+  for (const u of HVAC_SYSTEMS) {
+    const zs = u.zones.map((id) => k.zones[id]).filter(Boolean);
+    const pComp = zs.reduce((a, s) => a + (s.hvacOn ? s.compressorKw : 0), 0);
+    const q = zs.reduce((a, s) => a + (s.hvacOn ? s.compressorKw * s.copEff : 0), 0);
+    const adj = activeUnit(u.id, t, opts);
+    const mode: UnitStatus['mode'] = !adj ? 'auto' : adj.on === false ? 'apagado' : (adj.mode ?? 'auto');
+    out[u.id] = {
+      pKw: zs.reduce((a, s) => a + s.pHvac, 0),
+      qKw: q,
+      loadPct: (100 * q) / u.capacityKw,
+      cop: pComp > 1e-6 ? q / pComp : undefined,
+      mode,
+      on: mode !== 'apagado',
+      capPct: adj?.capPct ?? 100,
+      setpoint: adj?.setpoint,
+      copFactor: adj?.copFactor ?? 1,
+      forced: !!adj,
+      remainingMin: adj && Number.isFinite(adj.until) ? (adj.until - t) / MIN : undefined,
+      fault: act.some((e) => e.kind === 'falla_vrf' && e.unit === u.id),
+      noPower: outage,
+      updatedAt: t,
+    };
+  }
+  return out;
 }
 
 /** Energía acumulada del día (integración cada 15 min, suficiente para el indicador). */
@@ -657,6 +812,7 @@ function demoAlarms(
   const out: EmsAlarm[] = [];
   const inc = incident(t, opts.demoIncidents !== false);
   out.push(...eventAlarms(t, zones, meter, opts));
+  out.push(...controllerAlarms(t, zones, opts));
   const c = clock(t);
   const startOf = (h: number) => t - (c.h - h) * HOUR;
   if (inc) {
@@ -715,6 +871,76 @@ function demoAlarms(
     });
   }
   return out.sort((a, b) => ({ crit: 0, warn: 1, info: 2 })[a.level] - { crit: 0, warn: 1, info: 2 }[b.level]);
+}
+
+/** Alarmas que provocan los ajustes de controladores: el supervisor reacciona a lo que lee el sensor. */
+function controllerAlarms(t: number, zones: Record<string, ZoneState>, opts: SimOptions): EmsAlarm[] {
+  const out: EmsAlarm[] = [];
+  for (const [id, sen] of Object.entries(opts.sensors ?? {})) {
+    const z = zones[id];
+    if (!z || t < sen.since || t >= sen.until) {
+      continue;
+    }
+    const zone = ZONE_BY_ID[id];
+    if (zone?.critical) {
+      out.push({
+        ts: sen.since,
+        level: 'warn',
+        code: 'AJUSTE_CRITICO',
+        zone: id,
+        message: `Sensor de la zona crítica ${id} forzado`,
+      });
+    }
+    if (z.sensorFault && sen.frozen) {
+      out.push({
+        ts: sen.since + FROZEN_DETECT_MIN * MIN,
+        level: 'crit',
+        code: 'SENSOR_CONGELADO',
+        zone: id,
+        message: `Sensor de temperatura sin variación (${z.temp.toFixed(2)} °C) → modo seguro`,
+        value: z.temp,
+      });
+    } else if (zone?.type === 'servidores' && z.temp > EMS_RULES.serverAlarm) {
+      out.push({
+        ts: t,
+        level: 'crit',
+        code: 'SERVIDOR_TEMP',
+        zone: id,
+        message: `Cuarto de servidores a ${z.temp.toFixed(1)} °C`,
+        value: z.temp,
+      });
+    } else if (z.occupied && z.temp > EMS_RULES.comfortMax) {
+      out.push({
+        ts: t,
+        level: 'warn',
+        code: 'TEMP_ALTA',
+        zone: id,
+        message: `${z.temp.toFixed(1)} °C > ${EMS_RULES.comfortMax} °C con ocupación`,
+        value: z.temp,
+      });
+    } else if (z.occupied && z.temp < EMS_RULES.comfortMin) {
+      out.push({
+        ts: t,
+        level: 'info',
+        code: 'TEMP_BAJA',
+        zone: id,
+        message: `${z.temp.toFixed(1)} °C < ${EMS_RULES.comfortMin} °C con ocupación`,
+        value: z.temp,
+      });
+    }
+  }
+  for (const [id, adj] of Object.entries(opts.units ?? {})) {
+    if (t >= adj.since && t < adj.until && HVAC_SYSTEMS.find((u) => u.id === id)?.critical) {
+      out.push({
+        ts: adj.since,
+        level: 'warn',
+        code: 'AJUSTE_CRITICO',
+        zone: id,
+        message: `Ajuste manual de ${id}, que atiende una zona crítica`,
+      });
+    }
+  }
+  return out;
 }
 
 /** Alarmas que el supervisor del EMS emitiría ante los eventos simulados. */
