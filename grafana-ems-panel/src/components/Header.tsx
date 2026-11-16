@@ -1,7 +1,7 @@
 import React from 'react';
 import { GrafanaTheme2, colorManipulator } from '@grafana/data';
 import { css, cx } from '@emotion/css';
-import { Icon, IconName, RadioButtonGroup, useStyles2, useTheme2 } from '@grafana/ui';
+import { Combobox, Icon, IconName, RadioButtonGroup, useStyles2, useTheme2 } from '@grafana/ui';
 import { Status } from 'building/telemetry';
 import { VIEW_LABELS, ViewMode } from 'building/views';
 import { useStatusColors } from './useStatusColors';
@@ -30,6 +30,8 @@ interface Props {
   compact: boolean;
   /** Panel bajo: indicadores en una línea y sin subtítulo. */
   dense?: boolean;
+  /** Panel muy pequeño: una sola fila con el título y la capa en un desplegable. */
+  tiny?: boolean;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
 }
@@ -44,6 +46,7 @@ export const Header: React.FC<Props> = ({
   showKpis,
   compact,
   dense,
+  tiny,
   viewMode,
   onViewModeChange,
 }) => {
@@ -52,7 +55,7 @@ export const Header: React.FC<Props> = ({
   const theme = useTheme2();
 
   return (
-    <div className={cx(styles.header, dense && styles.headerDense)}>
+    <div className={cx(styles.header, dense && styles.headerDense, tiny && styles.headerTiny)}>
       <div className={styles.titleBlock}>
         <div className={styles.title} title={title}>
           <Icon name="building" />
@@ -116,7 +119,18 @@ export const Header: React.FC<Props> = ({
       )}
 
       <div className={styles.viewMode}>
-        <RadioButtonGroup size="sm" options={VIEW_OPTIONS} value={viewMode} onChange={onViewModeChange} />
+        {tiny ? (
+          <Combobox
+            options={VIEW_OPTIONS}
+            value={viewMode}
+            onChange={(o) => onViewModeChange(o.value)}
+            width={18}
+            prefixIcon="layer-group"
+            aria-label="Capa de la escena"
+          />
+        ) : (
+          <RadioButtonGroup size="sm" options={VIEW_OPTIONS} value={viewMode} onChange={onViewModeChange} />
+        )}
       </div>
     </div>
   );
@@ -133,6 +147,12 @@ const getStyles = (theme: GrafanaTheme2) => ({
   headerDense: css`
     gap: ${theme.spacing(0.75, 1.5)};
     padding-bottom: ${theme.spacing(0.75)};
+  `,
+  headerTiny: css`
+    flex-wrap: nowrap;
+    & > div:first-child {
+      flex: 1 1 auto;
+    }
   `,
   titleBlock: css`
     min-width: 0;

@@ -132,8 +132,13 @@ export const TimeBar: React.FC<Props> = ({
           aria-label="Hora del día"
           data-testid="ems-time-slider"
         />
-        <div className={styles.period}>{dayPeriod(parts.hour, parts.dow)}</div>
       </div>
+
+      {!dense && (
+        <span className={styles.period} title="Periodo del día (horario del edificio)">
+          {dayPeriod(parts.hour, parts.dow)}
+        </span>
+      )}
 
       <Tooltip content="Volver a la hora real de Panamá">
         <button type="button" className={cx(styles.now, realTime && styles.nowOn)} onClick={onLive}>
@@ -224,8 +229,8 @@ const getStyles = (theme: GrafanaTheme2) => {
     sliderBox: css`
       position: relative;
       flex: 1;
-      min-width: 220px;
-      height: 40px;
+      min-width: 200px;
+      height: 32px;
     `,
     track: css`
       position: absolute;
@@ -305,10 +310,8 @@ const getStyles = (theme: GrafanaTheme2) => {
       }
     `,
     period: css`
-      position: absolute;
-      right: 0;
-      bottom: 0;
-      font-size: 10px;
+      flex-shrink: 0;
+      font-size: ${theme.typography.bodySmall.fontSize};
       color: ${theme.colors.text.secondary};
       white-space: nowrap;
     `,

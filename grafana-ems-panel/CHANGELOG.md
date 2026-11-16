@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.6.0
+
+Escena 3D y sistema visual con acabado de producto (gemelo digital / BMS).
+
+- **Luz y materiales**: una sola luz direccional para toda la escena (cara superior plena, frontal en media luz,
+  lateral en sombra) y paleta neutra y desaturada en los dos temas (`building/materials.ts`). Losas con canto
+  y filo claro, muros con grosor y remate, ventanas con vidrio que refleja el cielo (cálido de noche con las
+  luces encendidas), carpintería y muro cortina translúcido sobre el antepecho de las fachadas delanteras.
+  Sombra ambiental al pie de los muros y sombras de contacto bajo muebles, equipos y unidades de la azotea.
+- **Pisos con su acabado** por tipo de zona (alfombra modular, madera, piedra, porcelanato y piso técnico),
+  dibujados en el plano con patrones compartidos.
+- **Estado y capas sin tapar los materiales**: en _Estado_ una zona normal queda limpia; alerta y crítico
+  llevan tinte translúcido, contorno grueso y rayado diagonal (no sólo color); sin datos, rayado gris. Las
+  capas de datos (temperatura, ocupación, potencia, iluminación, HVAC) son un tinte translúcido con contorno.
+  En la vista de volumen cada zona lleva una franja con el color de la capa al pie de la fachada.
+- **Mobiliario y equipos a escala** con un mismo lenguaje: puestos con escritorio, pedestal, monitor (encendido
+  si hay gente) y silla orientada; mesa de juntas con sillas alrededor; recepción con mostrador y sofás;
+  racks con puerta, unidades y LEDs; baños con mamparas, inodoros y lavamanos; plantas; núcleo del ascensor
+  con puertas hacia el pasillo; casetes VRF de 4 vías con LED de estado y flujo de aire; personas sentadas o
+  de pie con proporciones reales.
+- **Azotea**: membrana con juntas y sombra en el parapeto, módulos FV con celdas y brillo según la
+  generación, condensadoras VRF con serpentín de lamas, bancada metálica, ventiladores con rejilla y tuberías.
+- **Fichas de zona** compactas (marca de estado + código + nombre + valor de la capa, «M» si está en manual)
+  con **anti-solape 2D** (`placeLabels`: prueba desplazamientos alrededor del ancla, prioriza la zona
+  seleccionada y las alarmas, respeta los márgenes de la escena y esquiva los marcadores de eventos) y línea
+  guía al ancla; se pueden pulsar y pasar el mouse como la zona. El detalle queda en la ventana emergente.
+  En escalas diminutas se omiten las fichas.
+- **Accesibilidad**: la marca de estado tiene forma propia (círculo normal, triángulo alerta, rombo crítico,
+  anillo sin datos) en las fichas y en la leyenda.
+- **Sistema visual común**: pestañas del panel lateral compactas (ya no se corta «Controladores»), periodo
+  del día fuera de la regla de la barra de tiempo (ya no se encima con «24»), insignia de alarmas del botón
+  _Edificio_ que no empuja la ocupación, radios del tema en el selector de plantas, rótulos de la vista de
+  conjunto y de la azotea con el mismo estilo de ficha.
+- **Paneles pequeños**: cabecera en una sola fila con la capa en un desplegable, barra de herramientas
+  reducida, título corto de la planta y la escena aprovecha más alto.
+
 ## 1.5.0
 
 Simulación y modificación de los **controladores** del edificio, en vivo (gemelo vía Node-RED) y en el modo

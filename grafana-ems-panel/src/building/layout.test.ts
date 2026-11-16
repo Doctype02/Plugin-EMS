@@ -1,6 +1,7 @@
 import {
   autoFloor,
   declutter,
+  placeLabels,
   fitView,
   floorSummary,
   occupancyOf,
@@ -155,5 +156,62 @@ describe('ocupación por planta', () => {
     const empty = { time: 0, zones: {}, alarms: [] };
     expect(floorSummary(1, empty, {}).people).toBeUndefined();
     expect(occupancyOf(empty).known).toBe(false);
+  });
+});
+
+describe('colocación de rótulos (anti-solape 2D)', () => {
+  const collide = (a: { x: number; y: number; w: number; h: number }, b: typeof a) =>
+    Math.abs(a.x - b.x) < (a.w + b.w) / 2 - 1e-6 && Math.abs(a.y - b.y) < (a.h + b.h) / 2 - 1e-6;
+
+  it('deja en su ancla los rótulos que no chocan', () => {
+    const off = placeLabels([
+      { id: 'a', x: 0, y: 0, w: 100, h: 22 },
+      { id: 'b', x: 300, y: 0, w: 100, h: 22 },
+    ]);
+    expect(off.a).toEqual({ dx: 0, dy: 0 });
+    expect(off.b).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it('desplaza el segundo de dos rótulos encimados lo mínimo y sin solape', () => {
+    const boxes = [
+      { id: 'a', x: 0, y: 0, w: 120, h: 22 },
+      { id: 'b', x: 10, y: 4, w: 120, h: 22 },
+    ];
+    const off = placeLabels(boxes, { gap: 4 });
+    expect(off.a).toEqual({ dx: 0, dy: 0 });
+    const b = { ...boxes[1], x: boxes[1].x + off.b.dx, y: boxes[1].y + off.b.dy };
+    expect(collide(boxes[0], b)).toBe(false);
+    // basta con moverlo una fila (alto + separación)
+    expect(Math.abs(off.b.dy)).toBeLessThanOrEqual(26 + 1e-6);
+  });
+
+  it('un grupo denso de rótulos queda sin solapes y dentro de los límites', () => {
+    const boxes = Array.from({ length: 8 }, (_, i) => ({
+      id: `z${i}`,
+      x: 200 + (i % 3) * 30,
+      y: 150 + Math.floor(i / 3) * 10,
+      w: 110,
+      h: 22,
+    }));
+    const bounds = { x: 0, y: 0, w: 500, h: 320 };
+    const off = placeLabels(boxes, { gap: 3, bounds });
+    const moved = boxes.map((b) => ({ ...b, x: b.x + off[b.id].dx, y: b.y + off[b.id].dy }));
+    for (let i = 0; i < moved.length; i++) {
+      const m = moved[i];
+      expect(m.x - m.w / 2).toBeGreaterThanOrEqual(bounds.x);
+      expect(m.x + m.w / 2).toBeLessThanOrEqual(bounds.x + bounds.w);
+      expect(m.y - m.h / 2).toBeGreaterThanOrEqual(bounds.y);
+      expect(m.y + m.h / 2).toBeLessThanOrEqual(bounds.y + bounds.h);
+      for (let j = 0; j < i; j++) {
+        expect(collide(m, moved[j])).toBe(false);
+      }
+    }
+  });
+
+  it('esquiva los obstáculos fijos', () => {
+    const off = placeLabels([{ id: 'a', x: 0, y: 0, w: 80, h: 20 }], {
+      obstacles: [{ id: 'obs', x: 0, y: 0, w: 60, h: 30 }],
+    });
+    expect(off.a.dx !== 0 || off.a.dy !== 0).toBe(true);
   });
 });

@@ -11,7 +11,7 @@ describe('interior de las zonas', () => {
     for (const f of it.furniture) {
       expect(inside(f.rect.x, f.rect.y) && inside(f.rect.x + f.rect.w, f.rect.y + f.rect.d)).toBe(true);
     }
-    for (const p of [...it.seats, ...it.diffusers, ...it.lights, it.hub]) {
+    for (const p of [...it.seats, ...it.chairs, ...it.diffusers, ...it.lights, it.hub]) {
       expect(inside(p.x, p.y)).toBe(true);
     }
   });
@@ -22,6 +22,21 @@ describe('interior de las zonas', () => {
     for (const id of ['Z01', 'Z02', 'Z07', 'Z08', 'Z09', 'Z24']) {
       const zone = ZONES.find((z) => z.id === id)!;
       expect(interiorOf(zone).seats.length).toBeGreaterThanOrEqual(zone.occupants);
+    }
+  });
+
+  it('los puestos de oficina y la mesa de juntas tienen silla orientada hacia la mesa', () => {
+    const office = interiorOf(ZONES.find((z) => z.id === 'Z07')!);
+    expect(office.chairs.length).toBe(office.furniture.filter((f) => f.kind === 'desk').length);
+    expect(office.chairs.every((c) => c.facing === 'n')).toBe(true);
+    const conf = interiorOf(ZONES.find((z) => z.id === 'Z03')!);
+    const table = conf.furniture.find((f) => f.kind === 'table')!.rect;
+    for (const c of conf.chairs) {
+      const cx = table.x + table.w / 2;
+      const cy = table.y + table.d / 2;
+      // mirar hacia la mesa: el vector de la silla al centro coincide con la orientación
+      const dir = { n: [0, 1], s: [0, -1], e: [1, 0], w: [-1, 0] }[c.facing];
+      expect(dir[0] * (cx - c.x) + dir[1] * (cy - c.y)).toBeGreaterThan(0);
     }
   });
 

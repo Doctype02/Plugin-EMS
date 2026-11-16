@@ -18,9 +18,18 @@ export interface P2 {
   y: number;
 }
 
+/** Hacia dónde mira la persona sentada (la silla tiene el respaldo en el lado opuesto). */
+export type Facing = 'n' | 's' | 'e' | 'w';
+
+export interface Chair extends P2 {
+  facing: Facing;
+}
+
 export interface Interior {
   furniture: Furniture[];
   seats: P2[];
+  /** Sillas de los puestos de trabajo y de la mesa de juntas (mismas posiciones que sus puestos). */
+  chairs: Chair[];
   hub: P2;
   diffusers: P2[];
   lights: P2[];
@@ -42,39 +51,44 @@ function grid(r: Rect, every: number): P2[] {
   return spread(r.x, r.x + r.w, nx).flatMap((x) => spread(r.y, r.y + r.d, ny).map((y) => ({ x, y })));
 }
 
-function offices(r: Rect, stepX = 3, stepY = 2.7): Pick<Interior, 'furniture' | 'seats'> {
+type Base = Pick<Interior, 'furniture' | 'seats'> & { chairs?: Chair[] };
+
+function offices(r: Rect, stepX = 3, stepY = 2.7): Base {
   const furniture: Furniture[] = [];
   const seats: P2[] = [];
+  const chairs: Chair[] = [];
   const cols = Math.max(1, Math.floor((r.w - 2 * M) / stepX));
   const rows = Math.max(1, Math.floor((r.d - 2 * M) / stepY));
   for (const cx of spread(r.x + M, r.x + r.w - M, cols)) {
     for (const cy of spread(r.y + M, r.y + r.d - M, rows)) {
       furniture.push({ kind: 'desk', rect: { x: cx - 0.8, y: cy - 0.1, w: 1.6, d: 0.75 }, h: 0.75 });
       seats.push({ x: cx, y: cy - 0.55 });
+      chairs.push({ x: cx, y: cy - 0.55, facing: 'n' });
     }
   }
-  return { furniture, seats };
+  return { furniture, seats, chairs };
 }
 
-function conference(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
+function conference(r: Rect): Base {
   const long = r.d >= r.w;
   const tw = long ? Math.min(2.2, r.w * 0.35) : r.w * 0.6;
   const td = long ? r.d * 0.6 : Math.min(2.2, r.d * 0.35);
   const tx = r.x + (r.w - tw) / 2;
   const ty = r.y + (r.d - td) / 2;
-  const seats: P2[] = [];
+  const chairs: Chair[] = [];
   const n = Math.floor((long ? td : tw) / 1.1);
   for (const s of spread(long ? ty : tx, long ? ty + td : tx + tw, n)) {
     if (long) {
-      seats.push({ x: tx - 0.5, y: s }, { x: tx + tw + 0.5, y: s });
+      chairs.push({ x: tx - 0.5, y: s, facing: 'e' }, { x: tx + tw + 0.5, y: s, facing: 'w' });
     } else {
-      seats.push({ x: s, y: ty - 0.5 }, { x: s, y: ty + td + 0.5 });
+      chairs.push({ x: s, y: ty - 0.5, facing: 'n' }, { x: s, y: ty + td + 0.5, facing: 's' });
     }
   }
-  return { furniture: [{ kind: 'table', rect: { x: tx, y: ty, w: tw, d: td }, h: 0.75 }], seats };
+  const seats: P2[] = chairs.map(({ x, y }) => ({ x, y }));
+  return { furniture: [{ kind: 'table', rect: { x: tx, y: ty, w: tw, d: td }, h: 0.75 }], seats, chairs };
 }
 
-function servers(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
+function servers(r: Rect): Base {
   const furniture: Furniture[] = [];
   const m = margin(r);
   const long = r.w >= r.d;
@@ -101,7 +115,7 @@ function servers(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
 }
 
 /** Baños: fila de cubículos contra el muro exterior más largo y lavamanos enfrente. */
-function bathroom(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
+function bathroom(r: Rect): Base {
   const furniture: Furniture[] = [];
   const long = r.w >= r.d;
   const len = (long ? r.w : r.d) - 1;
@@ -131,17 +145,17 @@ function bathroom(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
 }
 
 /** Oficina abierta: bancadas de escritorios y plantas entre islas. */
-function openOffice(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
+function openOffice(r: Rect): Base {
   const base = offices(r, 2.1, 2.4);
   const plants: Furniture[] = [0.2, 0.8].map((f) => ({
     kind: 'plant',
     rect: { x: r.x + 0.3, y: r.y + r.d * f - 0.25, w: 0.5, d: 0.5 },
     h: 1.3,
   }));
-  return { furniture: [...base.furniture, ...plants], seats: base.seats };
+  return { furniture: [...base.furniture, ...plants], seats: base.seats, chairs: base.chairs };
 }
 
-function corridor(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
+function corridor(r: Rect): Base {
   const long = r.d >= r.w;
   const plants = [0.12, 0.5, 0.88].map((f) =>
     long
@@ -154,7 +168,7 @@ function corridor(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
   return { furniture: plants, seats };
 }
 
-function reception(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
+function reception(r: Rect): Base {
   const furniture: Furniture[] = [
     { kind: 'counter', rect: { x: r.x + r.w * 0.5, y: r.y + r.d * 0.45, w: 3.2, d: 0.9 }, h: 1.1 },
     { kind: 'sofa', rect: { x: r.x + M, y: r.y + M + 0.5, w: 0.9, d: 2.4 }, h: 0.8 },
@@ -167,7 +181,7 @@ function reception(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
     ...spread(r.y + M + 0.5, r.y + M + 2.9, 2).map((y) => ({ x: r.x + M + 1.3, y })),
     ...spread(r.x + 2.5, r.x + r.w - 2.5, 3).map((x) => ({ x, y: r.y + r.d * 0.25 })),
   ];
-  return { furniture, seats };
+  return { furniture, seats, chairs: [{ ...seats[0], facing: 's' }] };
 }
 
 /** Punto de paso: el lado de la zona más cercano al centro del edificio (pasillo o núcleo). */
@@ -208,7 +222,13 @@ export function interiorOf(zone: Zone): Interior {
   const diffusers = spread(long ? r.x : r.y, long ? r.x + r.w : r.y + r.d, nDiff).map((s) =>
     long ? { x: s, y: r.y + r.d / 2 } : { x: r.x + r.w / 2, y: s }
   );
-  const result: Interior = { ...base, hub: hubOf(r), diffusers, lights: zone.rects.flatMap((p) => grid(p, 5)) };
+  const result: Interior = {
+    ...base,
+    chairs: base.chairs ?? [],
+    hub: hubOf(r),
+    diffusers,
+    lights: zone.rects.flatMap((p) => grid(p, 5)),
+  };
   CACHE.set(zone.id, result);
   return result;
 }

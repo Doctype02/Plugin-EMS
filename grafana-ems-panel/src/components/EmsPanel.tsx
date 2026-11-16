@@ -432,6 +432,8 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const canvasWidth = canvas.w || sceneWidth - (selectorCompact ? 64 : 156);
   // escena baja: la leyenda sube a la barra superior y la planta usa toda la altura
   const shortScene = canvas.h > 0 && canvas.h < 400;
+  // escena diminuta: barra de herramientas reducida y título corto
+  const tinyScene = canvasWidth < 640 || (canvas.h > 0 && canvas.h < 260);
 
   const statuses = useMemo(() => zoneStatuses(snapshot), [snapshot]);
   const defaultFloor = options.defaultFloor ?? 'auto';
@@ -642,7 +644,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
     />
   ) : (
     <div className={styles.sideContent}>
-      <TabsBar className={styles.sideTabs}>
+      <TabsBar className={cx(styles.sideTabs, sidebarWidth < 380 && styles.sideTabsNarrow)}>
         <Tab label="Resumen" active={sideTab === 'overview'} onChangeTab={() => setSideTab('overview')} />
         <Tab
           label="Alarmas"
@@ -764,6 +766,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
           showKpis={panelWidth >= 480 && panelHeight >= 340}
           compact={panelWidth < 1200}
           dense={panelHeight < 640}
+          tiny={panelWidth < 760 || panelHeight < 460}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
         />
@@ -819,7 +822,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
               onLeaveUnit={() => setUnitHover(undefined)}
               pv={pvVisible}
               insets={{
-                top: 56,
+                top: tinyScene ? 20 : 56,
                 right: 8,
                 bottom: (emergencyMessage(snapshot, events, now) ? 66 : 0) + (shortScene ? 8 : 46),
                 left: 8,
@@ -828,7 +831,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
             />
 
             <div className={styles.topLeft} style={{ right: shortScene ? (docked ? 260 : 330) : 200 }}>
-              <div className={styles.toolbar}>
+              <div className={cx(styles.toolbar, tinyScene && styles.toolbarTiny)}>
                 <IconButton
                   name={fullscreen.active ? 'compress-arrows' : 'expand-arrows-alt'}
                   tooltip={fullscreen.active ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'}
@@ -860,18 +863,22 @@ export const EmsPanel: React.FC<Props> = (props) => {
                   onClick={() => setExploded((e) => !e)}
                   data-testid="ems-explode"
                 />
-                <IconButton
-                  name={animate ? 'pause' : 'play'}
-                  tooltip={animate ? 'Pausar animaciones' : 'Reanudar animaciones'}
-                  onClick={() => setAnimate((a) => !a)}
-                  data-testid="ems-animate"
-                />
-                <IconButton
-                  name="question-circle"
-                  tooltip="Cómo usar el panel"
-                  onClick={() => setHelp(true)}
-                  data-testid="ems-help-button"
-                />
+                {!tinyScene && (
+                  <IconButton
+                    name={animate ? 'pause' : 'play'}
+                    tooltip={animate ? 'Pausar animaciones' : 'Reanudar animaciones'}
+                    onClick={() => setAnimate((a) => !a)}
+                    data-testid="ems-animate"
+                  />
+                )}
+                {!tinyScene && (
+                  <IconButton
+                    name="question-circle"
+                    tooltip="Cómo usar el panel"
+                    onClick={() => setHelp(true)}
+                    data-testid="ems-help-button"
+                  />
+                )}
               </div>
               <div className={styles.sceneTitle} data-testid="ems-scene-title">
                 {(() => {
@@ -880,9 +887,11 @@ export const EmsPanel: React.FC<Props> = (props) => {
                     return (
                       <>
                         <span className={styles.titleMain}>Edificio</span>
-                        <span className={styles.titleSub}>
-                          {FLOORS.length} plantas + azotea · {fmt(snapshot.meter?.pTotal, 1, 'kW')}
-                        </span>
+                        {!tinyScene && (
+                          <span className={styles.titleSub}>
+                            {FLOORS.length} plantas + azotea · {fmt(snapshot.meter?.pTotal, 1, 'kW')}
+                          </span>
+                        )}
                       </>
                     );
                   }
@@ -890,7 +899,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
                     <>
                       <span className={styles.titleDot} style={{ background: statusColors[sm.status] }} />
                       <span className={styles.titleMain}>
-                        {sm.key === 'roof' ? 'Azotea' : `${sm.short} · ${sm.name}`}
+                        {sm.key === 'roof' ? 'Azotea' : tinyScene ? sm.short : `${sm.short} · ${sm.name}`}
                       </span>
                       {canvasWidth >= 860 && (
                         <span className={styles.titleSub}>
@@ -1060,6 +1069,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     box-shadow: ${theme.shadows.z1};
     flex-shrink: 0;
   `,
+  toolbarTiny: css`
+    height: 32px;
+    gap: 2px;
+    padding: ${theme.spacing(0, 0.5)};
+  `,
   sceneTitle: css`
     display: flex;
     align-items: baseline;
@@ -1134,6 +1148,30 @@ const getStyles = (theme: GrafanaTheme2) => ({
   `,
   sideTabs: css`
     margin: ${theme.spacing(-0.5, -1.5, 0)};
-    padding: ${theme.spacing(0, 1.5)};
+    padding: ${theme.spacing(0, 1)};
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    & [role='tablist'] {
+      flex-wrap: nowrap;
+    }
+    & [role='tablist'] {
+      gap: ${theme.spacing(0.5)};
+    }
+    & [role='tablist'] > div {
+      margin: 0;
+      padding: 0;
+    }
+    & [role='tab'] {
+      padding: ${theme.spacing(0, 0.75)};
+      font-size: ${theme.typography.bodySmall.fontSize};
+      white-space: nowrap;
+    }
+  `,
+  sideTabsNarrow: css`
+    & [role='tab'] {
+      padding: ${theme.spacing(0, 0.5)};
+      font-size: 11.5px;
+    }
   `,
 });

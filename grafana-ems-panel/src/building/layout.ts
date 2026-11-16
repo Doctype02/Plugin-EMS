@@ -93,6 +93,62 @@ export function declutter(boxes: LabelBox[], gap = 2): Record<string, number> {
   return out;
 }
 
+export interface LabelOffset {
+  dx: number;
+  dy: number;
+}
+
+const overlap = (a: LabelBox, b: LabelBox, gap: number) =>
+  Math.max(0, (a.w + b.w) / 2 + gap - Math.abs(a.x - b.x)) * Math.max(0, (a.h + b.h) / 2 + gap - Math.abs(a.y - b.y));
+
+/**
+ * Coloca rótulos sin solaparse: cada uno se queda en su ancla si cabe; si no, prueba desplazamientos en
+ * una rejilla alrededor (arriba/abajo primero, luego a los lados y en diagonal) y elige el más cercano
+ * libre de choques y dentro de `bounds`. Si ninguno queda libre, el de menor solape. El orden de entrada
+ * es la prioridad (los primeros no se mueven). Devuelve el desplazamiento de cada rótulo (mismas unidades).
+ */
+export function placeLabels(
+  boxes: LabelBox[],
+  opts: { gap?: number; bounds?: Box; obstacles?: LabelBox[]; maxSteps?: number } = {}
+): Record<string, LabelOffset> {
+  const gap = opts.gap ?? 2;
+  const steps = opts.maxSteps ?? 3;
+  const placed: LabelBox[] = [...(opts.obstacles ?? [])];
+  const out: Record<string, LabelOffset> = {};
+  const inside = (b: LabelBox) =>
+    !opts.bounds ||
+    (b.x - b.w / 2 >= opts.bounds.x &&
+      b.x + b.w / 2 <= opts.bounds.x + opts.bounds.w &&
+      b.y - b.h / 2 >= opts.bounds.y &&
+      b.y + b.h / 2 <= opts.bounds.y + opts.bounds.h);
+  for (const b of boxes) {
+    const cands: LabelOffset[] = [];
+    for (let ky = -steps; ky <= steps; ky++) {
+      for (let kx = -2; kx <= 2; kx++) {
+        cands.push({ dx: kx * (b.w / 2 + gap), dy: ky * (b.h + gap) });
+      }
+    }
+    cands.sort((p, q) => Math.hypot(p.dx * 0.8, p.dy) - Math.hypot(q.dx * 0.8, q.dy));
+    let best: { off: LabelOffset; cost: number } | undefined;
+    for (const off of cands) {
+      const c = { ...b, x: b.x + off.dx, y: b.y + off.dy };
+      const hit = placed.reduce((a, p) => a + overlap(p, c, gap - 1e-6), 0);
+      const cost = hit + (inside(c) ? 0 : 1e9);
+      if (cost === 0) {
+        best = { off, cost };
+        break;
+      }
+      if (!best || cost < best.cost) {
+        best = { off, cost };
+      }
+    }
+    const off = best!.off;
+    out[b.id] = off;
+    placed.push({ ...b, x: b.x + off.dx, y: b.y + off.dy });
+  }
+  return out;
+}
+
 const SEVERITY: Record<Status, number> = { critical: 3, warning: 2, ok: 1, offline: 0 };
 
 /** Peor estado de un conjunto (crítico > alerta > normal > sin datos). */

@@ -5,23 +5,27 @@ import { GrafanaTheme2, colorManipulator } from '@grafana/data';
 import { css, cx, keyframes } from '@emotion/css';
 import { useStyles2, useTheme2 } from '@grafana/ui';
 import { BUILDING, FLOORS, PTAC_BY_ZONE, VRF_UNITS, VrfUnit, ZONES, Zone } from 'building/model';
-import { IsoConfig, Prism, Pt, path, placement, prism, rotate, toScreen } from 'building/iso';
+import { IsoConfig, Prism, Pt, path, placement, planeMatrix, prism, rotate, toScreen } from 'building/iso';
 import { localParts } from 'building/clock';
 import { EVENTS, EventKind } from 'building/events';
 import { Snapshot, Status } from 'building/telemetry';
-import { MAX_POWER_DENSITY, ViewMode, mixHex, zoneFill, zoneLabel } from 'building/views';
+import { MAX_POWER_DENSITY, ViewMode, zoneFill, zoneLabel } from 'building/views';
 import {
   Box,
   Insets,
+  LabelBox,
   LevelSummary,
   declutter,
   fitView,
   floorSummary,
+  placeLabels,
   roofSummary,
   shortZoneName,
 } from 'building/layout';
+import { blend, faceColor, floorFinish, lit, materials, zoneMark } from 'building/materials';
 import { Rooftop } from './Rooftop';
-import { SLAB, ScenePalette, ZoneInterior, tagAnchor, tagSize } from './ZoneInterior';
+import { SLAB, ZoneInterior, tagAnchor } from './ZoneInterior';
+import { SceneDefs, ZoneChip, chipSize, faceQuad, onFace, segments } from './IsoPrimitives';
 
 interface Props {
   idPrefix: string;
@@ -59,21 +63,21 @@ export function skyColors(hour: number, dark: boolean): { top: string; bottom: s
   const night = hour < 5.5 || hour > 19 ? 1 : hour < 7 ? (7 - hour) / 1.5 : hour > 17.5 ? (hour - 17.5) / 1.5 : 0;
   const dusk = (hour > 5.5 && hour < 7.5) || (hour > 17 && hour < 19);
   // fondo sobrio: sólo un matiz que sugiere la hora (día neutro, atardecer cálido, noche azulada)
+  const m = materials(dark);
   if (dark) {
     return night >= 1
-      ? { top: '#10141c', bottom: '#171b24', night }
+      ? { top: '#0f1218', bottom: '#161a21', night }
       : dusk
-        ? { top: '#191a22', bottom: '#201d22', night }
-        : { top: '#161a20', bottom: '#1c2027', night };
+        ? { top: '#16171d', bottom: '#1d1b1f', night }
+        : { top: m.skyTop, bottom: m.skyBottom, night };
   }
   return night >= 1
-    ? { top: '#e3e7ef', bottom: '#eef0f5', night }
+    ? { top: '#e4e8ef', bottom: '#eff1f5', night }
     : dusk
-      ? { top: '#eef0f5', bottom: '#f7f2ec', night }
-      : { top: '#f3f5f8', bottom: '#fafbfc', night };
+      ? { top: '#eef0f4', bottom: '#f7f3ee', night }
+      : { top: m.skyTop, bottom: m.skyBottom, night };
 }
 
-const shade = (color: string, amount: number) => colorManipulator.darken(color, amount);
 const ROOF_DECK = 0.25;
 /** Separación entre plantas (m) en la vista de conjunto con las plantas separadas. */
 export const FLOOR_GAP = 1.1;
@@ -188,7 +192,7 @@ export const Building3D: React.FC<Props> = ({
       : mode === 'roof'
         ? { top: insets.top + 30, right: insets.right + 16, bottom: insets.bottom + 12, left: insets.left + 16 }
         : {
-            top: insets.top + (interior ? 22 : 12),
+            top: insets.top + (interior && size.h >= 260 ? 22 : 4),
             right: insets.right + 16,
             bottom: insets.bottom + 4,
             left: insets.left + 16,
@@ -201,36 +205,26 @@ export const Building3D: React.FC<Props> = ({
   const ink = theme.colors.text.primary;
   const ink2 = theme.colors.text.secondary;
   const surface = theme.colors.background.primary;
-  // losas y muros claros sobre el fondo oscuro (y al revés en el tema claro) para que cada planta se recorte
-  const slabColor = dark ? '#596069' : '#b9bdc4';
-  const slabEdge = dark ? '#8d949e' : '#8a9099';
-  const wallBase = dark ? '#646b75' : '#eceae4';
-  const glass = dark ? '#6d8fb8' : '#9fc1e6';
+  const M = materials(dark);
   const FULL = { x: 0, y: 0, w: BUILDING.width, d: BUILDING.depth };
-  const palette: ScenePalette = {
-    dark,
+  const chipColors = {
+    surface,
+    border: theme.colors.border.medium,
     ink,
     ink2,
-    wall: wallBase,
-    glass,
-    wood: dark ? '#7d6650' : '#c9a57a',
-    metal: dark ? '#7a7f88' : '#b8bcc4',
-    rack: dark ? '#202226' : '#3a3d44',
-    plant: '#3f9b4f',
-    shirts: dark ? ['#9db8d9', '#d9b48f', '#c7c6be', '#a8d0b0'] : ['#3b5f8a', '#8a5a3b', '#4b4a46', '#3f7a52'],
-    skin: ['#e0b08a', '#c58c62', '#8d5a3b'],
-    surface,
+    accent: theme.colors.primary.main,
   };
 
   const hour = localParts(snapshot.time || 0).hour;
   const sky = skyColors(hour, dark);
+  const night = sky.night >= 0.6;
   const outage = snapshot.meter?.gridOk === false;
 
   const levels = visible.map((floor) => {
     const z0 = mode === 'building' ? placement(floor.level, cfg).z : 0;
     const dy = 0;
     // en la vista de conjunto la losa sobresale un poco: marca el canto de cada planta
-    const slab = prism(FULL, z0, SLAB, cfg, mode === 'building' ? -0.25 : 0, dy);
+    const slab = prism(FULL, z0, SLAB, cfg, mode === 'building' ? -0.25 : -0.15, dy);
     const zones = ZONES.filter((z) => z.floor === floor.level)
       .map((zone) => ({
         zone,
@@ -240,31 +234,10 @@ export const Building3D: React.FC<Props> = ({
       .sort((a, b) => b.p.depth - a.p.depth);
     const extras = floor.extras.map((e) => ({
       label: e.label,
-      p: prism(e.rect, z0 + SLAB, interior ? 0.6 : WALL, cfg, 0.12, dy),
+      p: prism(e.rect, z0 + SLAB, interior ? 2.9 : WALL, cfg, 0.05, dy),
     }));
     return { floor, slab, zones, extras, z0, dy };
   });
-
-  // --- rótulos de zona (vista de planta): tamaño fijo en px y sin encimarse
-  const fullTags = fit.k >= 1.25;
-  const tagText = (zone: Zone) => {
-    const value = zoneLabel(viewMode, zone, snapshot.zones[zone.id]);
-    return fullTags
-      ? { title: `${zone.id} · ${shortZoneName(zone)}`, value }
-      : { title: '', value: `${zone.id} · ${value}` };
-  };
-  const labelOffsets: Record<string, number> = {};
-  if (interior) {
-    for (const l of levels) {
-      const boxes = l.zones.map(({ zone }) => {
-        const a = tagAnchor(zone, l.z0, l.dy, cfg);
-        const t = tagText(zone);
-        const sz = tagSize(t.title, t.value, manual.has(zone.id));
-        return { id: zone.id, x: a.x, y: a.y, w: sz.w * u, h: sz.h * u };
-      });
-      Object.assign(labelOffsets, declutter(boxes, 4 * u));
-    }
-  }
 
   const roof = (() => {
     if (mode === 'floor') {
@@ -305,86 +278,84 @@ export const Building3D: React.FC<Props> = ({
     };
   })();
 
-  const windowsOn = (face: Prism['sides'][number]) => {
-    const [b0, b1, t1, t0] = face.points;
-    const n = Math.max(2, Math.round(Math.hypot(b1.x - b0.x, b1.y - b0.y) / (cfg.scale * 2.4)));
-    const lerp = (a: Pt, b: Pt, t: number): Pt => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-    return Array.from({ length: n }, (_, i) => {
-      const u0 = (i + 0.25) / n;
-      const u1 = (i + 0.75) / n;
-      return [
-        lerp(lerp(b0, b1, u0), lerp(t0, t1, u0), 0.32),
-        lerp(lerp(b0, b1, u1), lerp(t0, t1, u1), 0.32),
-        lerp(lerp(b0, b1, u1), lerp(t0, t1, u1), 0.8),
-        lerp(lerp(b0, b1, u0), lerp(t0, t1, u0), 0.8),
-      ];
-    });
-  };
-
-  const highlightOf = (zone: Zone, status: Status) =>
-    selectedId === zone.id
-      ? theme.colors.primary.main
-      : status === 'critical' || status === 'warning'
-        ? statusColors[status]
-        : undefined;
-  /** Contorno de la zona: en la vista de estado lleva el color del estado (también "normal"). */
-  const outlineOf = (zone: Zone, status: Status, fill: string) =>
-    highlightOf(zone, status) ??
-    (viewMode === 'status' && status !== 'offline'
-      ? colorManipulator.alpha(statusColors[status], 0.85)
-      : shade(fill, dark ? 0.1 : 0.3));
-
   /** Equipo PTAC en la fachada (vista exterior): caja con rejilla en el tercio izquierdo del muro. */
-  const ptacOn = (face: Prism['sides'][number], on: boolean) => {
-    const [b0, b1, t1, t0] = face.points;
-    const lerp = (a: Pt, b: Pt, t: number): Pt => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-    const q = (uu: number, v: number) => lerp(lerp(b0, b1, uu), lerp(t0, t1, uu), v);
-    const body = [q(0.12, 0.12), q(0.3, 0.12), q(0.3, 0.32), q(0.12, 0.32)];
-    const edge = dark ? '#7a7d82' : '#9da1a8';
+  const ptacOn = (q: Pt[], on: boolean) => {
+    const body = faceQuad(q, 0.1, 0.26, 0.08, 0.3);
     return (
       <g pointerEvents="none">
-        <path d={path(body)} fill={dark ? '#c9ccd1' : '#f4f5f6'} stroke={edge} strokeWidth={0.5} />
-        <circle cx={q(0.27, 0.15).x} cy={q(0.27, 0.15).y} r={0.9} fill={on ? '#3d9df3' : '#8e8e8e'} />
+        <path d={path(body)} fill={M.casing} stroke={lit(M.casing, 0.7)} strokeWidth={0.5} />
+        <circle cx={onFace(q, 0.235, 0.12).x} cy={onFace(q, 0.235, 0.12).y} r={0.9} fill={on ? '#3d9df3' : '#8e8e8e'} />
       </g>
     );
   };
 
-  /** Vista exterior: caja sólida; la fachada de cada zona lleva el color de la vista (franjas por planta). */
+  /**
+   * Vista exterior: volumen con fachada neutra, banda de vidrio con montantes y, al pie de cada zona, una
+   * franja con el color de la capa (estado o dato). La cubierta de la planta lleva el tinte translúcido.
+   */
   const exteriorZone = (zone: Zone, p: Prism, parts: Prism[]) => {
     const s = snapshot.zones[zone.id];
     const status = statuses[zone.id] ?? 'offline';
     const fill = zoneFill(viewMode, zone, s, ctx);
-    const highlight = highlightOf(zone, status);
-    const lit = (s?.lights ?? 0) > 0.05;
+    const layer = viewMode === 'status' ? statusColors[status] : fill;
+    const mk = zoneMark(viewMode === 'status' ? 'status' : 'data', status, layer);
+    const focus = selectedId === zone.id || hoveredId === zone.id ? theme.colors.primary.main : undefined;
+    const lightsOn = (s?.lights ?? 0) > 0.05;
     const ptac = PTAC_BY_ZONE[zone.id];
-    const facade = mixHex(fill, wallBase, 0.82);
+    const bandOpacity = status === 'offline' ? 0 : viewMode === 'status' ? (status === 'ok' ? 0.55 : 1) : 0.95;
     const sides = parts.flatMap((part, k) => part.sides.map((side, i) => ({ side, key: `${k}-${i}` })));
+    const hatchId =
+      mk.hatch === 'offline'
+        ? 'offline'
+        : mk.hatch === 'alert'
+          ? status === 'critical'
+            ? 'critical'
+            : 'warning'
+          : undefined;
     return (
       <>
         {sides.map(({ side, key }) => {
-          const wall = side.facing === 'front' ? shade(facade, 0.04) : shade(facade, dark ? 0.2 : 0.14);
+          const q = side.points;
+          const wall = faceColor(M.facade, side.facing);
+          const lenPx = Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y);
+          const n = Math.max(1, Math.round(lenPx / (cfg.scale * 1.5)));
+          const glazed = zone.windows?.includes(side.edge);
+          const mull: Array<[Pt, Pt]> = [];
+          for (let i = 1; i < n; i++) {
+            mull.push([onFace(q, i / n, 0.34), onFace(q, i / n, 0.88)]);
+          }
           return (
             <g key={key}>
               <path
-                d={path(side.points)}
+                d={path(q)}
                 fill={wall}
-                stroke={highlight ?? shade(wall, 0.3)}
-                strokeWidth={highlight ? 2 : 0.6}
+                stroke={focus ?? lit(M.facade, 0.72)}
+                strokeWidth={focus ? 2 : 0.5}
                 vectorEffect="non-scaling-stroke"
               />
-              {zone.windows?.includes(side.edge) &&
-                windowsOn(side).map((w, j) => (
+              {mk.tint && mk.tintOpacity > 0 && (
+                <path d={path(q)} fill={mk.tint} fillOpacity={mk.tintOpacity * 0.35} pointerEvents="none" />
+              )}
+              {glazed && (
+                <>
                   <path
-                    key={j}
-                    d={path(w)}
-                    fill={
-                      lit
-                        ? colorManipulator.alpha('#ffe08a', side.facing === 'front' ? 0.8 : 0.65)
-                        : colorManipulator.alpha(shade(glass, side.facing === 'front' ? 0.25 : 0.4), 0.75)
-                    }
+                    d={path(faceQuad(q, 0, 1, 0.34, 0.88))}
+                    fill={`url(#${idPrefix}-${lightsOn && night ? 'glassLit' : 'glass'})`}
+                    opacity={side.facing === 'front' ? 1 : 0.88}
+                    pointerEvents="none"
                   />
-                ))}
-              {ptac && ptac.facade === side.edge && ptacOn(side, !!s?.hvacOn)}
+                  <path d={segments(mull)} stroke={M.mullion} strokeWidth={0.6} pointerEvents="none" />
+                </>
+              )}
+              {bandOpacity > 0 && (
+                <path
+                  d={path(faceQuad(q, 0, 1, 0.04, glazed ? 0.22 : 0.2))}
+                  fill={side.facing === 'front' ? layer : lit(blend(layer, '#808080', 0.9), 0.82)}
+                  opacity={bandOpacity}
+                  pointerEvents="none"
+                />
+              )}
+              {ptac && ptac.facade === side.edge && ptacOn(q, !!s?.hvacOn)}
             </g>
           );
         })}
@@ -392,45 +363,31 @@ export const Building3D: React.FC<Props> = ({
           <path
             key={`top${k}`}
             d={path(part.top)}
-            fill={fill}
-            stroke={parts.length > 1 ? fill : outlineOf(zone, status, fill)}
-            strokeWidth={highlight ? (selectedId === zone.id ? 3 : 2) : 1}
+            fill={M.slab}
+            stroke={parts.length > 1 ? M.slab : (focus ?? mk.outline ?? lit(M.slab, 0.8))}
+            strokeWidth={focus ? (selectedId === zone.id ? 3 : 2) : parts.length > 1 ? 0.5 : mk.outlineWidth}
+            strokeDasharray={focus && selectedId !== zone.id ? '5 3' : undefined}
             vectorEffect="non-scaling-stroke"
-            className={hoveredId === zone.id ? styles.hoverTop : undefined}
           />
         ))}
-        {status === 'offline' &&
+        {mk.tint &&
           parts.map((part, k) => (
-            <path key={`h${k}`} d={path(part.top)} fill={`url(#${idPrefix}-hatch)`} pointerEvents="none" />
+            <path key={`tn${k}`} d={path(part.top)} fill={mk.tint} fillOpacity={mk.tintOpacity} pointerEvents="none" />
           ))}
-        {(selectedId === zone.id || hoveredId === zone.id) &&
+        {hatchId &&
+          parts.map((part, k) => (
+            <path key={`h${k}`} d={path(part.top)} fill={`url(#${idPrefix}-hatchs-${hatchId})`} pointerEvents="none" />
+          ))}
+        {focus &&
           parts.map((part, k) => (
             <path
               key={`f${k}`}
               d={path(part.top)}
-              fill={theme.colors.primary.main}
-              fillOpacity={selectedId === zone.id ? 0.25 : 0.14}
-              stroke={theme.colors.primary.main}
-              strokeWidth={selectedId === zone.id ? 0 : 1.5}
-              strokeDasharray={selectedId === zone.id ? undefined : '5 3'}
-              vectorEffect="non-scaling-stroke"
+              fill={focus}
+              fillOpacity={selectedId === zone.id ? 0.22 : 0.12}
               pointerEvents="none"
             />
           ))}
-        {mode === 'floor' && (
-          <g
-            pointerEvents="none"
-            transform={`translate(${p.center.x.toFixed(1)},${p.center.y.toFixed(1)}) scale(${u})`}
-          >
-            <text y={-2} textAnchor="middle" className={styles.zoneId} fill={ink}>
-              {zone.id}
-              {manual.has(zone.id) ? ' · M' : ''}
-            </text>
-            <text y={13} textAnchor="middle" className={styles.zoneValue} fill={ink}>
-              {zoneLabel(viewMode, zone, s)}
-            </text>
-          </g>
-        )}
       </>
     );
   };
@@ -641,12 +598,122 @@ export const Building3D: React.FC<Props> = ({
     <path
       d={path(prism(FULL, z0 - 0.3, 0.05, cfg).top)}
       fill="#000"
-      opacity={dark ? 0.45 : 0.14}
+      opacity={M.shadowOpacity}
       filter={`url(#${idPrefix}-soft)`}
-      transform={`translate(${cfg.scale * 0.8},${cfg.scale * 1.2})`}
+      transform={`translate(${cfg.scale * 0.9},${cfg.scale * 1.3})`}
       pointerEvents="none"
     />
   );
+
+  /** Losa con canto visible: caras con la luz de la escena y filo claro en las aristas superiores. */
+  const slabEl = (slab: Prism, top: string, key: string) => (
+    <g key={key} pointerEvents="none">
+      {slab.sides.map((sd, i) => (
+        <path key={i} d={path(sd.points)} fill={faceColor(M.slabEdge, sd.facing)} />
+      ))}
+      <path d={path(slab.top)} fill={top} />
+      <path
+        d={`M${slab.top[3].x.toFixed(1)},${slab.top[3].y.toFixed(1)}L${slab.top[0].x.toFixed(1)},${slab.top[0].y.toFixed(1)}L${slab.top[1].x.toFixed(1)},${slab.top[1].y.toFixed(1)}L${slab.top[2].x.toFixed(1)},${slab.top[2].y.toFixed(1)}`}
+        fill="none"
+        stroke={lit(top, dark ? 1.25 : 1.08)}
+        strokeWidth={1}
+        vectorEffect="non-scaling-stroke"
+      />
+    </g>
+  );
+
+  /** Núcleo del elevador: caja de hormigón con hueco, puertas de acero hacia el pasillo y rótulo. */
+  const coreEl = (p: Prism, rect: { x: number; y: number; w: number; d: number }, z: number, label?: string) => {
+    const color = interior ? blend(M.wall, M.slab, 0.45) : M.facade;
+    return (
+      <>
+        {p.sides.map((sd, j) => (
+          <g key={j}>
+            <path d={path(sd.points)} fill={faceColor(color, sd.facing)} stroke={lit(color, 0.75)} strokeWidth={0.4} />
+            {interior && sd.edge === 'n' && (
+              <path
+                d={path(faceQuad(sd.points, 0.28, 0.72, 0.02, 0.74))}
+                fill={faceColor(M.metal, sd.facing)}
+                stroke={lit(M.metal, 0.7)}
+                strokeWidth={0.4}
+              />
+            )}
+          </g>
+        ))}
+        <path d={path(p.top)} fill={lit(color, 1.08)} stroke={lit(color, 0.75)} strokeWidth={0.4} />
+        {interior && (
+          <rect
+            x={rect.x + 0.25}
+            y={rect.y + 0.25}
+            width={rect.w - 0.5}
+            height={rect.d - 0.5}
+            fill={lit(color, 0.45)}
+            transform={planeMatrix(z + 0.001, cfg)}
+          />
+        )}
+        {interior && label && fit.k >= 1.2 && (
+          <text
+            transform={`translate(${p.center.x.toFixed(1)},${p.center.y.toFixed(1)}) scale(${u})`}
+            y={4}
+            textAnchor="middle"
+            fill={ink2}
+            className={styles.extraLabel}
+          >
+            {label === 'Elevador' ? 'Ascensor' : label}
+          </text>
+        )}
+      </>
+    );
+  };
+
+  // --- fichas de zona (vista de planta): tamaño fijo en px, prioridad a selección y alarmas, sin solaparse
+  const chips = (() => {
+    // escala diminuta (panel pequeño): sin fichas, el detalle queda en el paso del mouse
+    if (mode !== 'floor' || fit.k < 0.62) {
+      return [];
+    }
+    const small = fit.k < 1.05;
+    const rank = (id: string) =>
+      id === selectedId ? 0 : statuses[id] === 'critical' ? 1 : statuses[id] === 'warning' ? 2 : 3;
+    const items = levels
+      .flatMap((l) =>
+        l.zones.map(({ zone }) => {
+          const a = tagAnchor(zone, l.z0, l.dy, cfg, interior ? 0 : WALL);
+          const value = zoneLabel(viewMode, zone, snapshot.zones[zone.id]);
+          const name = small ? '' : shortZoneName(zone);
+          const sz = chipSize(zone.id, name, value, manual.has(zone.id), small);
+          return { zone, a, value, name, sz };
+        })
+      )
+      .sort((p, q) => rank(p.zone.id) - rank(q.zone.id) || p.a.y - q.a.y);
+    const lift = 12;
+    const boxes: LabelBox[] = items.map((it) => ({
+      id: it.zone.id,
+      x: it.a.x,
+      y: it.a.y - (it.sz.h / 2 + lift) * u,
+      w: it.sz.w * u,
+      h: it.sz.h * u,
+    }));
+    const obstacles: LabelBox[] = levels.flatMap(({ zones }) =>
+      zones
+        .filter(({ zone }) => snapshot.zones[zone.id]?.events?.length)
+        .map(({ zone, p }) => ({
+          id: `ev-${zone.id}`,
+          x: p.center.x,
+          y: p.center.y + WALL * cfg.scale,
+          w: 30 * u,
+          h: 30 * u,
+        }))
+    );
+    const bounds = {
+      x: box.x + insets.left * u,
+      y: box.y + insets.top * u,
+      w: box.w - (insets.left + insets.right) * u,
+      h: box.h - (insets.top + insets.bottom) * u,
+    };
+    const offs = placeLabels(boxes, { gap: 4 * u, bounds, obstacles });
+    return items.map((it, k) => ({ ...it, small, box: boxes[k], off: offs[it.zone.id] ?? { dx: 0, dy: 0 } }));
+  })();
 
   return (
     <svg
@@ -666,33 +733,15 @@ export const Building3D: React.FC<Props> = ({
             : `Edificio con las ${FLOORS.length} plantas y las ${ZONES.length} zonas del EMS`
       }
     >
-      <defs>
-        <pattern
-          id={`${idPrefix}-hatch`}
-          width={6}
-          height={6}
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(45)"
-        >
-          <line x1={0} y1={0} x2={0} y2={6} stroke={ink2} strokeWidth={1} opacity={0.5} />
-        </pattern>
-        <linearGradient id={`${idPrefix}-sky`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={sky.top} />
-          <stop offset="100%" stopColor={sky.bottom} />
-        </linearGradient>
-        <filter id={`${idPrefix}-soft`} x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation={cfg.scale * 0.9} />
-        </filter>
-        <radialGradient id={`${idPrefix}-fire`}>
-          <stop offset="0%" stopColor="#ffdd55" stopOpacity={0.95} />
-          <stop offset="45%" stopColor="#ff7a1a" stopOpacity={0.75} />
-          <stop offset="100%" stopColor="#e0301e" stopOpacity={0} />
-        </radialGradient>
-        <radialGradient id={`${idPrefix}-glow`}>
-          <stop offset="0%" stopColor="#ffe9a8" stopOpacity={0.95} />
-          <stop offset="100%" stopColor="#ffe9a8" stopOpacity={0} />
-        </radialGradient>
-      </defs>
+      <SceneDefs
+        id={idPrefix}
+        M={M}
+        statusColors={statusColors}
+        ink2={ink2}
+        sky={sky}
+        night={night}
+        blur={cfg.scale * 0.9}
+      />
 
       <rect
         x={box.x - box.w}
@@ -704,23 +753,30 @@ export const Building3D: React.FC<Props> = ({
         data-testid="ems-sky"
         data-night={sky.night >= 1 ? 'si' : 'no'}
       />
+      <rect x={box.x} y={box.y} width={box.w} height={box.h} fill={`url(#${idPrefix}-vignette)`} pointerEvents="none" />
 
       {mode === 'building' && (
         <>
           {/* terreno: plaza pavimentada alrededor del edificio */}
-          <path
-            d={path(
-              prism(
-                { x: -PLAZA, y: -PLAZA, w: BUILDING.width + 2 * PLAZA, d: BUILDING.depth + 2 * PLAZA },
-                -0.1,
-                0.05,
-                cfg
-              ).top
-            )}
-            fill={dark ? '#20242b' : '#e4e7eb'}
-            stroke={dark ? '#2e333b' : '#d0d4da'}
-            pointerEvents="none"
-          />
+          <g transform={planeMatrix(-0.05, cfg)} pointerEvents="none">
+            <rect
+              x={-PLAZA}
+              y={-PLAZA}
+              width={BUILDING.width + 2 * PLAZA}
+              height={BUILDING.depth + 2 * PLAZA}
+              fill={M.ground}
+              stroke={M.groundEdge}
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+            />
+            <rect
+              x={-PLAZA}
+              y={-PLAZA}
+              width={BUILDING.width + 2 * PLAZA}
+              height={BUILDING.depth + 2 * PLAZA}
+              fill={`url(#${idPrefix}-fl-stone)`}
+            />
+          </g>
           {shadowFor(0)}
         </>
       )}
@@ -731,10 +787,10 @@ export const Building3D: React.FC<Props> = ({
           <path
             d={riser.d}
             fill="none"
-            stroke={shade('#eda100', 0.35)}
+            stroke={lit('#b07800', dark ? 1 : 1.1)}
             strokeWidth={4}
             strokeLinejoin="round"
-            opacity={0.5}
+            opacity={0.45}
             vectorEffect="non-scaling-stroke"
           />
           <path
@@ -761,86 +817,63 @@ export const Building3D: React.FC<Props> = ({
 
       {levels.map(({ floor, slab, zones, extras, z0, dy }) => (
         <g key={floor.level} data-testid={`ems-floor-${floor.short}`}>
-          {slab.sides.map((sd, i) => (
-            <path
-              key={i}
-              d={path(sd.points)}
-              fill={mode === 'building' ? shade(slabEdge, i ? 0.22 : 0.06) : shade(slabColor, i ? 0.25 : 0.12)}
-            />
-          ))}
-          <path
-            d={path(slab.top)}
-            fill={slabColor}
-            stroke={mode === 'building' ? slabEdge : shade(slabColor, 0.2)}
-            strokeWidth={0.8}
-            vectorEffect="non-scaling-stroke"
-          />
-          {extras.map(({ p, label }, i) => (
-            <g key={`x${i}`} pointerEvents="none" data-testid={`ems-extra-${floor.short}-${i}`}>
-              {p.sides.map((sd, j) => (
-                <path key={j} d={path(sd.points)} fill={shade(slabColor, 0.15 + j * 0.1)} />
-              ))}
-              <path d={path(p.top)} fill={shade(slabColor, 0.05)} stroke={shade(slabColor, 0.3)} strokeWidth={0.5} />
-              {interior && label && fit.k >= 1.2 && (
-                <text
-                  transform={`translate(${p.center.x.toFixed(1)},${p.center.y.toFixed(1)}) scale(${u})`}
-                  y={4}
-                  textAnchor="middle"
-                  fill={ink2}
-                  className={styles.extraLabel}
+          {slabEl(slab, M.slab, 'slab')}
+          {[
+            ...extras.map((e, i) => ({ kind: 'extra' as const, depth: e.p.depth, e, i })),
+            ...zones.map((z) => ({ kind: 'zone' as const, depth: z.p.depth, z })),
+          ]
+            .sort((a, b) => b.depth - a.depth)
+            .map((it) => {
+              if (it.kind === 'extra') {
+                const { p, label } = it.e;
+                return (
+                  <g key={`x${it.i}`} pointerEvents="none" data-testid={`ems-extra-${floor.short}-${it.i}`}>
+                    {coreEl(p, floor.extras[it.i].rect, z0 + SLAB + (interior ? 2.9 : WALL), label)}
+                  </g>
+                );
+              }
+              const { zone, p, parts } = it.z;
+              const status = statuses[zone.id] ?? 'offline';
+              const s = snapshot.zones[zone.id];
+              const blinking = status === 'critical' && unacknowledged.has(zone.id);
+              const fill = zoneFill(viewMode, zone, s, ctx);
+              const layer = viewMode === 'status' ? statusColors[status] : fill;
+              return (
+                <g
+                  key={zone.id}
+                  className={cx(styles.zone, blinking && styles.blink)}
+                  data-testid={`ems-zone-${zone.id}`}
+                  data-status={status}
+                  onMouseMove={(e) => onHover(zone, e)}
+                  onMouseLeave={onLeave}
+                  onClick={() => onSelect(zone)}
                 >
-                  {label}
-                </text>
-              )}
-            </g>
-          ))}
-          {zones.map(({ zone, p, parts }) => {
-            const status = statuses[zone.id] ?? 'offline';
-            const s = snapshot.zones[zone.id];
-            const blinking = status === 'critical' && unacknowledged.has(zone.id);
-            const fill = zoneFill(viewMode, zone, s, ctx);
-            const t = tagText(zone);
-            return (
-              <g
-                key={zone.id}
-                className={cx(styles.zone, blinking && styles.blink)}
-                data-testid={`ems-zone-${zone.id}`}
-                data-status={status}
-                onMouseMove={(e) => onHover(zone, e)}
-                onMouseLeave={onLeave}
-                onClick={() => onSelect(zone)}
-              >
-                {interior ? (
-                  <ZoneInterior
-                    idPrefix={idPrefix}
-                    zone={zone}
-                    state={s}
-                    fill={fill}
-                    highlight={highlightOf(zone, status)}
-                    outline={outlineOf(zone, status, fill)}
-                    selected={selectedId === zone.id}
-                    offline={status === 'offline'}
-                    z0={z0}
-                    dy={dy}
-                    iso={cfg}
-                    animate={animate}
-                    palette={palette}
-                    title={t.title}
-                    label={t.value}
-                    manual={manual.has(zone.id)}
-                    statusColor={statusColors[status]}
-                    labelScale={u}
-                    labelOffset={labelOffsets[zone.id] ?? 0}
-                    detail={fit.k >= 1.6 ? 0.8 : 0.5}
-                    hovered={hoveredId === zone.id}
-                    accent={theme.colors.primary.main}
-                  />
-                ) : (
-                  exteriorZone(zone, p, parts)
-                )}
-              </g>
-            );
-          })}
+                  {interior ? (
+                    <ZoneInterior
+                      idPrefix={idPrefix}
+                      zone={zone}
+                      state={s}
+                      status={status}
+                      mark={zoneMark(viewMode === 'status' ? 'status' : 'data', status, layer)}
+                      finish={floorFinish(zone.type, dark)}
+                      selected={selectedId === zone.id}
+                      hovered={hoveredId === zone.id}
+                      z0={z0}
+                      dy={dy}
+                      iso={cfg}
+                      animate={animate}
+                      M={M}
+                      detail={fit.k >= 1.1 ? 1 : 0.85}
+                      simple={fit.k < 1.1}
+                      accent={theme.colors.primary.main}
+                      night={night}
+                    />
+                  ) : (
+                    exteriorZone(zone, p, parts)
+                  )}
+                </g>
+              );
+            })}
         </g>
       ))}
 
@@ -850,9 +883,9 @@ export const Building3D: React.FC<Props> = ({
           transform={`translate(${riser.base.x.toFixed(1)},${riser.base.y.toFixed(1)}) scale(${u})`}
           data-testid="ems-riser-kw"
         >
-          <rect x={-38} y={8} width={76} height={20} rx={10} fill={surface} stroke="#eda100" />
-          <Glyph name="bolt" x={-32} y={11} size={14} color="#eda100" />
-          <text x={8} y={22} textAnchor="middle" className={styles.chipText} fill={ink}>
+          <rect x={-38} y={8} width={76} height={22} rx={4} fill={surface} stroke={theme.colors.border.medium} />
+          <Glyph name="bolt" x={-31} y={12} size={14} color="#eda100" />
+          <text x={8} y={23} textAnchor="middle" className={styles.chipText} fill={ink}>
             {riser.kw.toFixed(0)} kW
           </text>
         </g>
@@ -860,21 +893,9 @@ export const Building3D: React.FC<Props> = ({
 
       {roof && (
         <g data-testid="ems-roof">
-          {roof.slab.sides.map((sd, i) => (
-            <path
-              key={i}
-              d={path(sd.points)}
-              fill={mode === 'building' ? shade(slabEdge, i ? 0.22 : 0.06) : shade(slabColor, i ? 0.25 : 0.12)}
-            />
-          ))}
-          <path
-            d={path(roof.slab.top)}
-            fill={dark ? '#4a5058' : '#cfd2d7'}
-            stroke={mode === 'building' ? slabEdge : shade(slabColor, 0.2)}
-            strokeWidth={0.8}
-            vectorEffect="non-scaling-stroke"
-          />
+          {slabEl(roof.slab, M.membrane, 'roofslab')}
           <Rooftop
+            idPrefix={idPrefix}
             units={VRF_UNITS}
             pv={pv}
             z={roof.z + ROOF_DECK}
@@ -883,9 +904,12 @@ export const Building3D: React.FC<Props> = ({
             iso={cfg}
             snapshot={snapshot}
             animate={animate}
-            dark={dark}
+            M={M}
             labelColor={ink}
+            labelColor2={ink2}
             surface={surface}
+            border={theme.colors.border.medium}
+            accent={theme.colors.primary.main}
             compact={mode !== 'roof'}
             showLabels={mode === 'roof'}
             labelScale={u}
@@ -903,6 +927,64 @@ export const Building3D: React.FC<Props> = ({
             .filter(({ zone }) => snapshot.zones[zone.id]?.events?.length)
             .map(({ zone, p }) => eventMarker(zone, p.center))
         )}
+
+      {/* fichas de zona con línea guía cuando se apartan de su ancla */}
+      {chips.map(({ zone, a, value, name, small, box: b, off }) => {
+        const status = statuses[zone.id] ?? 'offline';
+        const cxp = b.x + off.dx;
+        const cyp = b.y + off.dy;
+        const moved = Math.abs(off.dx) > 1e-6 || Math.abs(off.dy) > 1e-6;
+        // punto de la ficha más cercano al ancla
+        const ex = Math.min(Math.max(a.x, cxp - b.w / 2), cxp + b.w / 2);
+        const ey = Math.min(Math.max(a.y, cyp - b.h / 2), cyp + b.h / 2);
+        return (
+          <g
+            key={`chip-${zone.id}`}
+            className={styles.chip}
+            data-testid={`ems-tag-${zone.id}`}
+            onMouseMove={(e) => onHover(zone, e)}
+            onMouseLeave={onLeave}
+            onClick={() => onSelect(zone)}
+          >
+            <line
+              x1={a.x}
+              y1={a.y}
+              x2={moved ? ex : a.x}
+              y2={moved ? ey : cyp + b.h / 2}
+              stroke={ink2}
+              strokeWidth={1}
+              opacity={0.65}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+            <circle
+              cx={a.x}
+              cy={a.y}
+              r={2.4 * u}
+              fill={surface}
+              stroke={ink2}
+              strokeWidth={1.2}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+            <g transform={`translate(${cxp.toFixed(2)},${cyp.toFixed(2)}) scale(${u.toFixed(4)})`}>
+              <ZoneChip
+                id={zone.id}
+                name={name}
+                value={value}
+                status={status}
+                statusColor={statusColors[status]}
+                manual={manual.has(zone.id)}
+                small={small}
+                selected={selectedId === zone.id}
+                hovered={hoveredId === zone.id}
+                colors={chipColors}
+                swatch={viewMode === 'status' ? undefined : zoneFill(viewMode, zone, snapshot.zones[zone.id], ctx)}
+              />
+            </g>
+          </g>
+        );
+      })}
 
       {sideLabels.map(sideLabel)}
 
@@ -937,6 +1019,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   zone: css`
     cursor: pointer;
   `,
+  chip: css`
+    cursor: pointer;
+  `,
   hoverTop: css`
     filter: brightness(1.12);
   `,
@@ -961,6 +1046,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     stroke-width: 3px;
   `,
   extraLabel: css`
+    paint-order: stroke;
+    stroke: ${colorManipulator.alpha(theme.colors.background.primary, 0.8)};
+    stroke-width: 3px;
     font-size: 11px;
     font-weight: ${theme.typography.fontWeightMedium};
     letter-spacing: 0.04em;

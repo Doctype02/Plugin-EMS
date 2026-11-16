@@ -163,7 +163,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
   `,
   all: css`
     position: relative;
-    overflow: hidden;
+    overflow: visible;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -224,16 +224,21 @@ const getStyles = (theme: GrafanaTheme2) => ({
     height: 3px;
     background: ${theme.colors.primary.main};
     opacity: 0.85;
+    border-bottom-left-radius: ${theme.shape.radius.default};
   `,
   allCount: css`
-    margin-left: auto;
-    min-width: 18px;
-    padding: 0 5px;
-    border-radius: 9px;
+    position: absolute;
+    top: -7px;
+    right: -6px;
+    z-index: 1;
+    min-width: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
     background: ${theme.colors.error.main};
     color: ${theme.colors.error.contrastText};
-    font-size: 11px;
-    line-height: 18px;
+    font-size: 10px;
+    font-weight: ${theme.typography.fontWeightBold};
+    line-height: 16px;
   `,
   stack: css`
     display: flex;
@@ -250,9 +255,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: ${theme.spacing(1)};
     flex: 1 1 0;
     min-height: 30px;
-    max-height: 84px;
+    max-height: 104px;
     padding: 0 ${theme.spacing(1)} 0 0;
-    border-radius: 3px;
+    border-radius: ${theme.shape.radius.default};
     border: 1px solid ${theme.colors.border.medium};
     background: ${theme.colors.background.secondary};
     color: ${theme.colors.text.primary};

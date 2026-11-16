@@ -5,6 +5,7 @@ import { useStyles2 } from '@grafana/ui';
 import { STATUS_LABELS, Status } from 'building/telemetry';
 import { LegendSpec } from 'building/views';
 import { useStatusColors } from './useStatusColors';
+import { StatusMark } from './IsoPrimitives';
 
 interface Props {
   spec: LegendSpec;
@@ -44,7 +45,9 @@ export const Legend: React.FC<Props> = ({
               data-testid={`ems-count-${s}`}
               title={STATUS_LABELS[s]}
             >
-              <span className={styles.swatch} style={{ background: colors[s] }} />
+              <svg width={10} height={10} viewBox="-5 -5 10 10" aria-hidden className={styles.mark}>
+                <StatusMark status={s} color={colors[s]} size={9} />
+              </svg>
               {compact ? '' : `${STATUS_LABELS[s]} `}
               <strong>{counts[s]}</strong>
             </button>
@@ -122,6 +125,10 @@ const getStyles = (theme: GrafanaTheme2) => ({
   active: css`
     border-color: ${theme.colors.border.strong};
     background: ${theme.colors.action.selected};
+  `,
+  mark: css`
+    flex-shrink: 0;
+    overflow: visible;
   `,
   swatch: css`
     width: 10px;
