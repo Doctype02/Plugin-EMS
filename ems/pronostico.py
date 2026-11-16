@@ -2,7 +2,7 @@
 
 Modelos:
 - `persistencia`: mismo día de la semana anterior (referencia ingenua).
-- `regresion`: mínimos cuadrados con hora×tipo de día (laborable/sábado/domingo), temperatura e
+- `regresion`: mínimos cuadrados con regularización ridge (λ = 10) y hora×tipo de día (laborable/sábado/domingo), temperatura e
   irradiancia pronosticadas y carga de la misma hora 24 h y 168 h antes.
 - `sarimax`: SARIMAX(1,0,1)(1,1,0,24) con temperatura e indicadores de horario exógenos (statsmodels), actualizado cada día
   sin reestimar parámetros.
@@ -53,6 +53,9 @@ def _diseno(df: pd.DataFrame, rng: np.random.Generator, ruido_t: float = 0.7) ->
     return np.column_stack(cols)
 
 
+RIDGE_LAMBDA = 10.0
+
+
 def regresion(h: pd.DataFrame, dias_prueba: int, semilla: int = 5) -> tuple[pd.Series, np.ndarray]:
     rng = np.random.default_rng(semilla)
     df = h.copy()
@@ -62,7 +65,8 @@ def regresion(h: pd.DataFrame, dias_prueba: int, semilla: int = 5) -> tuple[pd.S
     corte = df.index[-1].normalize() - pd.Timedelta(days=dias_prueba - 1)
     tr, te = df[df.index < corte], df[df.index >= corte]
     X, y = _diseno(tr, rng), tr["p_total_kw"].values
-    beta, *_ = np.linalg.lstsq(X, y, rcond=None)
+    # ridge: 77 regresores con pocas semanas de historia; λ = 10 evita el sobreajuste de los indicadores horarios
+    beta = np.linalg.solve(X.T @ X + RIDGE_LAMBDA * np.eye(X.shape[1]), X.T @ y)
     # lag24 del día pronosticado = carga del día anterior (disponible a las 00:00)
     pred = _diseno(te, rng) @ beta
     return pd.Series(pred, index=te.index, name="regresion"), beta

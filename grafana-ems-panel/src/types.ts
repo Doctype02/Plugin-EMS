@@ -20,4 +20,11 @@ export interface EmsOptions {
   /** Endpoint HTTP de Node-RED que recibe los comandos en modo en vivo. */
   controlUrl: string;
   animations: boolean;
+  /**
+   * Fotovoltaica en la azotea: 'auto' = en vivo si el medidor trae p_fv_kw, en demostración encendida;
+   * 'on' / 'off' la fuerzan (variante del edificio con o sin FV).
+   */
+  pvMode?: 'auto' | 'on' | 'off';
+  /** Control que simula el modo demostración: EMS por reglas con limitador o la línea base del modelo E+. */
+  demoController?: 'reglas_dr' | 'baseline';
 }

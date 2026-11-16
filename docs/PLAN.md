@@ -7,7 +7,7 @@ UTP · Producción de la Energía Eléctrica (0877) · II Semestre 2026 · entre
 ```
           ┌───────────────────────────── CÓDIGO (agente de código) ─────────────────────────────┐
           │                                                                                      │
- clima ──►│  Simulador del edificio (10 zonas)      Control EMS (Python, modo offline)            │
+ clima ──►│  Simulador del edificio (26 zonas)      Control EMS (Python, modo offline)            │
  (EPW o   │  · backend RC (por defecto)             · línea base (sin EMS)                        │
  sintét.) │  · backend EnergyPlus (pyenergyplus)    · reglas: histéresis + ocupación + luz natural│
           │  sensores ▸ actuadores ▸ cargas         · respuesta a la demanda (peak shaving)       │
@@ -37,14 +37,14 @@ Dos modos de operación:
 
 | Etapa | Trabajo | Resultado |
 |---|---|---|
-| 2 | Modelo de 10 zonas (RC térmico + cargas) y puente Python–EnergyPlus | Lectura de temperaturas |
+| 2 | Modelo de 26 zonas en 5 plantas (RC térmico + cargas) y puente Python–EnergyPlus | Lectura de temperaturas |
 | 3 | Actuadores: luces, equipos, ocupación, HVAC (setpoint/enable) | Control por zona |
 | 4 | Reglas en Python **y** `nodered/flows.json` con la misma lógica | EMS automático |
 | — | Auditoría base y clasificación crítica / no crítica | Línea base |
 | — | Pronóstico día siguiente (regresión + SARIMA) con MAE / RMSE / MAPE | Pronóstico validado |
 | 6 | Escenarios, perfiles anómalos, KPIs, ROI, sensibilidad, escalamiento Panamá | Evaluación energía y confort |
 | — | Escritor a InfluxDB según el contrato; `Dockerfile` del simulador | Datos en la BD |
-| 5 | Panel de Grafana propio `grafana-ems-panel/`: edificio inteligente en 3D (10 zonas, 6 vistas, alarmas, medidor) | Dashboard 3D |
+| 5 | Panel de Grafana propio `grafana-ems-panel/`: edificio inteligente en 3D (26 zonas, 5 plantas, 6 vistas, alarmas, medidor) | Dashboard 3D |
 
 ### Agente de infraestructura (servidor Arch Linux, servicios systemd, Grafana ya instalado)
 

@@ -206,7 +206,7 @@ curl -s -X POST http://127.0.0.1:1880/ems/control -H 'Content-Type: application/
 Una zona crítica debe responder 400:
 
 ```bash
-curl -s -X POST http://127.0.0.1:1880/ems/control -H 'Content-Type: application/json' -d '{"tipo":"override","zona":"Z09","hvac_enable":false}'
+curl -s -X POST http://127.0.0.1:1880/ems/control -H 'Content-Type: application/json' -d '{"tipo":"override","zona":"Z06","hvac_enable":false}'
 ```
 
 **Seguridad del editor de Node-RED.** El navegador de quien usa el panel debe poder llegar a
@@ -367,10 +367,10 @@ Resultados. Todos usan el datasource `ems-influx` y la variable `escenario`.
    sobre Z02. `mosquitto_sub -t 'ems/edificio1/ems/override'` muestra el comando y, en el siguiente paso,
    los `cmd` de Z02 llegan con `"hvac_enable": false`.
 2. **Volver a automático**: la insignia desaparece.
-3. Haz clic en **Z09**: aparece "Carga crítica", sin controles.
-4. En la pestaña **Control**: *Deslastre manual*. Las 8 zonas pasan a manual y el registro muestra los
+3. Haz clic en **Z06** (cuarto de servidores, PB): aparece "Carga crítica", sin controles.
+4. En la pestaña **Control**: *Deslastre manual*. Las 25 zonas no críticas pasan a manual y el registro muestra los
    comandos como enviados.
-5. Cambia el **límite de demanda** a 27 kW: `ems/estado` informa `limite_kw: 27`.
+5. Cambia el **límite de demanda** a 81 kW: `ems/estado` informa `limite_kw: 81`.
 6. Reinicia la máquina: los 4 servicios vuelven solos y el panel sigue mostrando datos.
 
 ## Problemas frecuentes

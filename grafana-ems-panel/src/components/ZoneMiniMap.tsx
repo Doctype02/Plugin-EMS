@@ -4,6 +4,7 @@ import { GrafanaTheme2 } from '@grafana/data';
 import { css, cx } from '@emotion/css';
 import { useStyles2, useTheme2 } from '@grafana/ui';
 import { BUILDING, FLOORS, ZONES } from 'building/model';
+import { zoneEdges } from 'building/interior';
 import { Snapshot } from 'building/telemetry';
 import { EVENTS, EventKind } from 'building/events';
 
@@ -44,7 +45,7 @@ export function tempColor(t: number, dark: boolean): string {
   return `rgba(${c[0]},${c[1]},${c[2]},${alpha})`;
 }
 
-/** Plano en planta de las dos plantas: cada zona con su temperatura; clic para elegirla. */
+/** Plano en planta de cada planta (de arriba hacia abajo): cada zona con su temperatura; clic para elegirla. */
 export const ZoneMiniMap: React.FC<Props> = ({ snapshot, manual, selected, disabled, onSelect }) => {
   const styles = useStyles2(getStyles);
   const theme = useTheme2();
@@ -58,6 +59,18 @@ export const ZoneMiniMap: React.FC<Props> = ({ snapshot, manual, selected, disab
           <div className={styles.floorLabel}>{f.name}</div>
           <svg width="100%" viewBox={`-1 -1 ${W + 2} ${D + 2}`} className={styles.svg} role="group" aria-label={f.name}>
             <rect x={0} y={0} width={W} height={D} className={styles.slab} />
+            {f.extras.map((e, i) => (
+              <g key={`x${i}`}>
+                <rect
+                  x={e.rect.x * S}
+                  y={(BUILDING.depth - e.rect.y - e.rect.d) * S}
+                  width={e.rect.w * S}
+                  height={e.rect.d * S}
+                  className={styles.extra}
+                />
+                <title>{e.label}</title>
+              </g>
+            ))}
             {ZONES.filter((z) => z.floor === f.level).map((z) => {
               const s = snapshot.zones[z.id];
               const x = z.rect.x * S;
@@ -67,6 +80,7 @@ export const ZoneMiniMap: React.FC<Props> = ({ snapshot, manual, selected, disab
               const off = disabled?.(z.id);
               const ev = s?.events?.[0] as EventKind | undefined;
               const small = w < 30 || h < 22;
+              const fill = s ? (s.fire ? 'rgba(230,60,30,0.75)' : tempColor(s.temp, theme.isDark)) : 'transparent';
               return (
                 <g
                   key={z.id}
@@ -80,14 +94,33 @@ export const ZoneMiniMap: React.FC<Props> = ({ snapshot, manual, selected, disab
                     {z.id} · {z.name}
                     {s ? ` — ${s.temp.toFixed(1)} °C, ${s.occupants} personas` : ''}
                   </title>
-                  <rect
-                    x={x + 0.6}
-                    y={y + 0.6}
-                    width={w - 1.2}
-                    height={h - 1.2}
-                    rx={2}
-                    fill={s ? (s.fire ? 'rgba(230,60,30,0.75)' : tempColor(s.temp, theme.isDark)) : 'transparent'}
-                  />
+                  {z.rects.length === 1 ? (
+                    <rect x={x + 0.6} y={y + 0.6} width={w - 1.2} height={h - 1.2} rx={2} fill={fill} />
+                  ) : (
+                    <>
+                      {z.rects.map((r, i) => (
+                        <rect
+                          key={i}
+                          x={r.x * S}
+                          y={(BUILDING.depth - r.y - r.d) * S}
+                          width={r.w * S}
+                          height={r.d * S}
+                          fill={fill}
+                          className={styles.part}
+                        />
+                      ))}
+                      {zoneEdges(z).map((e, i) => (
+                        <line
+                          key={`e${i}`}
+                          x1={e.a.x * S}
+                          y1={(BUILDING.depth - e.a.y) * S}
+                          x2={e.b.x * S}
+                          y2={(BUILDING.depth - e.b.y) * S}
+                          className={styles.edge}
+                        />
+                      ))}
+                    </>
+                  )}
                   <text x={x + w / 2} y={y + h / 2 - (small ? 0 : 3)} className={styles.id} textAnchor="middle">
                     {z.id}
                   </text>
@@ -128,8 +161,13 @@ export const ZoneMiniMap: React.FC<Props> = ({ snapshot, manual, selected, disab
 const getStyles = (theme: GrafanaTheme2) => ({
   row: css`
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: ${theme.spacing(1)};
+  `,
+  extra: css`
+    fill: ${theme.colors.border.weak};
+    stroke: ${theme.colors.border.medium};
+    stroke-width: 0.6;
   `,
   floor: css`
     min-width: 0;
@@ -157,7 +195,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
       stroke-width: 1.6;
     }
   `,
+  part: css`
+    stroke: none !important;
+  `,
+  edge: css`
+    stroke: ${theme.colors.border.medium};
+    stroke-width: 0.8;
+  `,
   sel: css`
+    line {
+      stroke: ${theme.colors.primary.main};
+      stroke-width: 2.4;
+    }
     rect {
       stroke: ${theme.colors.primary.main};
       stroke-width: 2.4;

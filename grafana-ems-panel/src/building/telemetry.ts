@@ -1,5 +1,5 @@
 import { DataFrame, FieldType } from '@grafana/data';
-import { ZONES, ZONE_BY_ID, Zone } from './model';
+import { EMS_RULES, ZONES, ZONE_BY_ID, Zone } from './model';
 
 export type Status = 'ok' | 'warning' | 'critical' | 'offline';
 export const STATUS_LABELS: Record<Status, string> = {
@@ -85,6 +85,11 @@ export interface MeterState {
   /** Carga alimentada por el UPS (kW) y autonomía restante (min). */
   upsKw?: number;
   upsMinutes?: number;
+  /** Fotovoltaica (sólo en la variante con FV): generación AC, importación neta de la red (negativa =
+   * exportación) y energía FV del día. */
+  pPv?: number;
+  pGrid?: number;
+  ePv?: number;
 }
 
 export interface EmsState {
@@ -173,6 +178,9 @@ const METER_FIELDS: Record<string, keyof MeterState> = {
   hr_pct: 'rh',
   irr_wm2: 'irr',
   precio_usd_kwh: 'price',
+  p_fv_kw: 'pPv',
+  p_red_kw: 'pGrid',
+  e_fv_kwh: 'ePv',
 };
 
 const EMS_FIELDS: Record<string, keyof EmsState> = {
@@ -389,6 +397,7 @@ function fillMeter(m: Partial<MeterState>): MeterState {
     irr: z(m.irr),
     price: z(m.price),
     updatedAt: z(m.updatedAt),
+    ...(m.pPv !== undefined ? { pPv: m.pPv, pGrid: m.pGrid ?? z(m.pTotal) - m.pPv, ePv: m.ePv } : {}),
   };
 }
 
@@ -421,7 +430,7 @@ export function sortAlarms(alarms: EmsAlarm[]): EmsAlarm[] {
 }
 
 // ------------------------------------------------------------------ estado por zona
-export const COMFORT = { min: 21, max: 26, server: 27 };
+export const COMFORT = { min: EMS_RULES.comfortMin, max: EMS_RULES.comfortMax, server: EMS_RULES.serverAlarm };
 
 export function zoneStatus(zone: Zone, s: ZoneState | undefined, alarms: EmsAlarm[]): Status {
   if (!s || !Number.isFinite(s.temp)) {

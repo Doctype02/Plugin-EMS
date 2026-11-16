@@ -3,6 +3,7 @@ import { EmsOptions } from './types';
 import { EmsPanel } from './components/EmsPanel';
 import { VIEW_LABELS, ViewMode } from './building/views';
 import { SPEEDS } from './building/clock';
+import { LIMIT_KW, LIMIT_RANGE } from './building/model';
 
 export const plugin = new PanelPlugin<EmsOptions>(EmsPanel).setPanelOptions((builder) =>
   builder
@@ -37,9 +38,23 @@ export const plugin = new PanelPlugin<EmsOptions>(EmsPanel).setPanelOptions((bui
     .addNumberInput({
       path: 'limitKw',
       name: 'Límite de demanda (kW)',
-      description: 'Límite del EMS para la respuesta a la demanda (si los datos no traen limite_kw)',
-      defaultValue: 30,
-      settings: { min: 10 },
+      description: `Límite del EMS para la respuesta a la demanda (si los datos no traen limite_kw); Node-RED acepta ${LIMIT_RANGE[0]}–${LIMIT_RANGE[1]} kW`,
+      defaultValue: LIMIT_KW,
+      settings: { min: LIMIT_RANGE[0], max: LIMIT_RANGE[1] },
+    })
+    .addRadio({
+      path: 'pvMode',
+      name: 'Fotovoltaica en la azotea',
+      description:
+        'Automático: en vivo se muestra si el medidor publica p_fv_kw; en demostración se simula el edificio con FV',
+      defaultValue: 'auto',
+      settings: {
+        options: [
+          { value: 'auto', label: 'Automático' },
+          { value: 'on', label: 'Con FV' },
+          { value: 'off', label: 'Sin FV' },
+        ],
+      },
     })
     .addBooleanSwitch({
       path: 'demoMode',
@@ -55,6 +70,19 @@ export const plugin = new PanelPlugin<EmsOptions>(EmsPanel).setPanelOptions((bui
       defaultValue: 60,
       settings: {
         options: SPEEDS.map((s) => ({ value: s.value, label: s.label, description: s.hint })),
+      },
+      showIf: (c) => c.demoMode,
+    })
+    .addRadio({
+      path: 'demoController',
+      name: 'Control simulado',
+      description: 'EMS por reglas con limitador de demanda, o la operación del modelo EnergyPlus (línea base)',
+      defaultValue: 'reglas_dr',
+      settings: {
+        options: [
+          { value: 'reglas_dr', label: 'EMS (reglas + DR)' },
+          { value: 'baseline', label: 'Línea base E+' },
+        ],
       },
       showIf: (c) => c.demoMode,
     })

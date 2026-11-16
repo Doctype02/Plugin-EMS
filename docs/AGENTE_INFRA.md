@@ -44,7 +44,7 @@ instalado**. Todo va como servicios systemd nativos, **sin Docker**. Al terminar
 5. **InfluxDB:** `influx setup`, crear los 2 tokens y completar `/etc/ems/ems.env` y `/etc/ems/grafana.env`.
    Sin comentarios al final de línea: systemd los toma como parte del valor.
 6. **Node-RED:** servicio y prueba del endpoint (`OPTIONS` → 204 con CORS; `POST` override → 200; zona
-   Z09 → 400). Proteger el editor: `uiHost: "127.0.0.1"` si todo es local, o `adminAuth` si se accede
+   Z06 → 400). Proteger el editor: `uiHost: "127.0.0.1"` si todo es local, o `adminAuth` si se accede
    desde la LAN.
 7. **Simulador:** servicio, logs `[live] conectado; control=externo`, datos en Influx (`influx query …
    count()`) y repetir `pytest -q`, que ahora incluye la integración MQTT.
@@ -75,9 +75,9 @@ carpeta "EMS Edificio".
   - tensión, corriente, FP, kVA y energía acumulada;
   - temperatura exterior y precio;
   - estado de cargas por zona (state timeline de `hvac_on`, `luces_nivel`, `equipos_nivel`);
-  - tabla de las 10 zonas (temperatura, setpoint, ocupantes, kW);
+  - tabla de las 26 zonas (temperatura, setpoint, ocupantes, kW);
   - DR activo y latencia (medición `ems`).
-- **EMS · Zonas**: temperatura de las 10 zonas con banda de confort 21–26 °C, ocupación, lux y potencia
+- **EMS · Zonas**: temperatura de las 26 zonas (por planta) con banda de confort 21–26 °C, ocupación, lux y potencia
   por uso; panel repetido por `zona`.
 - **EMS · Alarmas**:
   - tabla de `alarma` (ts, nivel, código, zona, mensaje) coloreada por nivel;

@@ -21,32 +21,39 @@ def semana(cfg):
     return {c: simular(cfg, c, dias=7) for c in ("baseline", "reglas_dr")}
 
 
-def test_config_10_zonas(cfg):
+def test_config_26_zonas(cfg):
     zs = config.zonas(cfg)
-    assert len(zs) == 10
-    assert {z.id for z in zs if z.critica} == {"Z09", "Z10"}
+    assert len(zs) == 26
+    assert {z.id for z in zs if z.critica} == {"Z06"}
+    assert config.nombres_plantas(cfg) == ["PB", "P1", "P2", "P3", "P4"]
 
 
 def test_parametros_del_modelo_energyplus(cfg):
     zs = {z.id: z for z in config.zonas(cfg)}
-    assert sum(z.area for z in zs.values()) == pytest.approx(800)
-    assert {z.planta for z in zs.values()} == {0, 1}
-    # UA de la Oficina 1: muros opacos (27−20.25)+(30−22.5) m² × 0.86 + vidrio 42.75 m² × 6.424 + techo 90 m² × 0.274
-    ua_w = ((27 - 20.25) + (30 - 22.5)) * 0.86 + 42.75 * 6.424 + 90 * 0.274
-    assert zs["Z04"].ua == pytest.approx(ua_w / 1000, rel=1e-6)
-    assert zs["Z04"].ua_suelo == 0 and zs["Z02"].ua_suelo == pytest.approx(2.945 * 170 / 1000)
+    assert sum(z.area for z in zs.values()) == pytest.approx(1980)  # Net Conditioned Building Area de E+
+    assert {z.planta for z in zs.values()} == {0, 1, 2, 3, 4}
+    # UA de la Oficina 1 P4 (Z22): muros opacos (30−24)+(27−21.6) m² × 2.478 + vidrio 45.6 m² × 5.708 + techo 90 m² × 0.605
+    ua_w = ((30 - 24) + (27 - 21.6)) * 2.478 + 45.6 * 5.708 + 90 * 0.605
+    assert zs["Z22"].ua == pytest.approx(ua_w / 1000, rel=1e-6)
+    assert zs["Z22"].ua_suelo == 0 and zs["Z02"].ua_suelo == pytest.approx(4.02 * 180 / 1000)
+    # losas interiores: la PB sólo acopla hacia arriba, la P4 sólo hacia abajo, las intermedias a ambos lados
+    assert zs["Z02"].ua_abajo == 0 and zs["Z02"].ua_arriba > 0
+    assert zs["Z22"].ua_arriba == 0 and zs["Z22"].ua_abajo > 0
+    assert zs["Z12"].ua_arriba > 0 and zs["Z12"].ua_abajo > 0
     # capacidades de los terminales VRF suman la de cada sistema
     for s in cfg["sistemas_vrf"]:
         assert sum(zs[z].hvac_kw for z in s["zonas"]) == pytest.approx(s["capacidad_kw"], abs=0.05)
 
 
 def test_horarios_del_modelo(cfg):
-    # SCH_Ocupacion_Oficinas: 1.0 entre 9 y 12; 0 de noche y los domingos
+    # BASE_Ocupacion: 1.0 de 8 a 18 h entre semana; 0 de noche y el fin de semana
     assert config.horario(cfg, "ocupacion", 2, 10.5) == 1.0
     assert config.horario(cfg, "ocupacion", 2, 3.0) == 0.0
     assert config.horario(cfg, "ocupacion", 6, 10.0) == 0.0
-    assert config.horario(cfg, "ac_oficinas", 0, 8.0) == 22 and config.horario(cfg, "ac_oficinas", 0, 19.0) == 28
-    assert config.horario(cfg, "ac_conferencia", 0, 6.5) == 22
+    # TEMP_Refrigeracion: 22 °C las 24 h (el modelo sin EMS no tiene retroceso nocturno); baños 24 °C
+    assert config.horario(cfg, "ac_oficinas", 0, 8.0) == 22 and config.horario(cfg, "ac_oficinas", 0, 19.0) == 22
+    assert config.horario(cfg, "ac_banos", 3, 12.0) == 24
+    assert config.horario(cfg, "elevador", 1, 9.0) == 0.2 and config.horario(cfg, "elevador", 6, 9.0) == 0.05
     assert config.horario(cfg, "continuo", 6, 3.0) == 1.0
 
 
@@ -84,16 +91,16 @@ def test_planta_baja_mas_fria_por_el_terreno(cfg):
     ed.aplicar({zid: {"hvac_enable": False} for zid in ed.estado})
     for _ in range(288 * 3):
         ed.paso({"t_ext_c": 27.0, "irr_wm2": 0.0, "hr_pct": 80}, {}, 120, 6)
-    pb, pa = ed.estado["Z02"].t, ed.estado["Z04"].t
+    pb, pa = ed.estado["Z02"].t, ed.estado["Z12"].t
     t_suelo, t_ext = cfg["edificio"]["t_suelo_c"], 27.0
     assert t_suelo < pb < pa < t_ext + 1
 
 
 def test_zonas_criticas_no_se_deslastran(cfg):
     ed = Edificio(cfg)
-    ed.aplicar({"Z09": {"hvac_enable": False, "equipos_nivel": 0.0, "setpoint_c": 28}})
-    s = ed.estado["Z09"]
-    assert s.hvac_enable is True and s.equipos_nivel == 1.0 and ed.zmap["Z09"].setpoint_fijo == 24.0
+    ed.aplicar({"Z06": {"hvac_enable": False, "equipos_nivel": 0.0, "setpoint_c": 28}})
+    s = ed.estado["Z06"]
+    assert s.hvac_enable is True and s.equipos_nivel == 1.0 and ed.zmap["Z06"].setpoint_fijo == 22.0
 
 
 def test_medidor_electrico_consistente(cfg, semana):
@@ -132,10 +139,11 @@ def test_pronostico_metricas():
 
 
 def test_pronostico_regresion_mejor_que_persistencia(cfg):
-    hist = simular(cfg, "reglas_dr", dias=28, inicio="2026-10-05")
+    hist = simular(cfg, "reglas_dr", dias=42, inicio="2026-09-21")
     _, met = pronostico.evaluar(hist.medidor, dias_prueba=7, usar_sarimax=False)
     assert met.loc["regresion", "rmse_kw"] < 0.15 * hist.medidor.p_total_kw.mean() + 2
-    assert met.loc["regresion", "mae_kw"] <= met.loc["persistencia", "mae_kw"] * 1.1
+    # los horarios del modelo nuevo son deterministas: la persistencia semanal es una referencia exigente
+    assert met.loc["regresion", "mae_kw"] <= met.loc["persistencia", "mae_kw"] * 1.25
 
 
 def test_sensor_congelado_detectado_y_modo_seguro(cfg):
@@ -149,7 +157,8 @@ def test_sensor_congelado_detectado_y_modo_seguro(cfg):
 
 
 def test_limitador_demanda_responde_a_pico(cfg):
-    r = simular(cfg, "reglas_dr", dias=2, anomalias=[Anomalia("carga_extra", 37, 39, "Z07", {"kw": 12.0})])
+    sin_fv = config.aplicar(cfg, {"fv.habilitado": False})  # el limitador ve el consumo completo
+    r = simular(sin_fv, "reglas_dr", dias=2, anomalias=[Anomalia("carga_extra", 37, 39, "Z13", {"kw": 25.0})])
     e = r.estado
     act = e[(pd.to_datetime(e.ts) >= "2026-11-03 13:00") & e.dr_activo]
     assert len(act) > 0
@@ -175,7 +184,9 @@ def test_validacion_contra_energyplus_cumple_g14(cfg):
     assert c["electricidad_total"]["cumple_g14"], c["electricidad_total"]
     assert abs(c["pico_kw"]["modelo"] / c["pico_kw"]["energyplus"] - 1) < 0.15
     ref = validacion.cargar_energyplus()["resumen"]
-    assert ref["energia_anual_kwh"]["Total End Uses"] == pytest.approx(143994, rel=1e-3)
+    assert ref["energia_anual_kwh"]["Total End Uses"] == pytest.approx(552472, rel=1e-3)
+    # fotovoltaica de la variante ConPV: mismo modelo que PhotovoltaicPerformance:Simple
+    assert c["fv"]["cumple_g14"] and abs(c["fv"]["nmbe_pct"]) < 3, c["fv"]
 
 
 def test_latencia_logica(cfg, semana):

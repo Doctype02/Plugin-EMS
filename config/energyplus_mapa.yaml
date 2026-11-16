@@ -1,16 +1,33 @@
-# Mapa zonas EMS ⇄ objetos del IDF del modelo del proyecto (data/energyplus/modelo/in.idf).
+# Mapa zonas EMS ⇄ zonas térmicas del IDF del modelo de 5 plantas (data/energyplus/modelo/in.idf).
 # Uso: python -m ems energyplus --idf data/energyplus/modelo/in.idf \
 #        --epw data/clima/PAN_PO_Panama-Albrook.Gelabert.Intl.AP.783842_TMYx.2011-2025.epw
-# var_enfriamiento: variable de carga de enfriamiento por zona (terminales VRF).
+# Las luces y equipos del modelo se definen por tipo de espacio (no por zona): sin actuadores "luces"/"equipos"
+# el puente sólo actúa sobre el setpoint de enfriamiento. var_enfriamiento: carga del terminal VRF/PTAC.
 anio: 2006
 zonas:
-  Z01: {zona_ep: ZT Recepcion, luces: Lights 9, equipos: Electric Equipment 7, personas: People 6}
-  Z02: {zona_ep: Zt cubiculos, luces: Lights 6, equipos: Electric Equipment 1, personas: People 1}
-  Z03: {zona_ep: ZT Sala de conferencia, luces: Lights 10, equipos: Electric Equipment 8, personas: People 7}
-  Z04: {zona_ep: ZT office 1, luces: Lights 1, equipos: Electric Equipment 3, personas: People 10}
-  Z05: {zona_ep: ZT OFFICE 2, luces: Lights 2, equipos: Electric Equipment 4, personas: People 2}
-  Z06: {zona_ep: ZT OFFICE 3, luces: Lights 3, equipos: Electric Equipment 5, personas: People 3}
-  Z07: {zona_ep: ZT OFFICE 4, luces: Lights 4, equipos: Electric Equipment 6, personas: People 4}
-  Z08: {zona_ep: ZT PASILLO, luces: Lights 8, personas: People 5}
-  Z09: {zona_ep: ZT servo, luces: Lights 11, equipos: Electric Equipment 9, personas: People 8}
-  Z10: {zona_ep: Cuarto electrico 1, luces: Lights 7, equipos: Electric Equipment 2, personas: People 9}
+  Z01: {zona_ep: ZT_RECEPCION PB, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z02: {zona_ep: ZT_CUBICULOS PB, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z03: {zona_ep: ZT_CONFERENCIAS PB, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z04: {zona_ep: ZT_PASILLO PB, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z05: {zona_ep: ZT_BANO_PB, var_enfriamiento: Zone Packaged Terminal Air Conditioner Total Cooling Rate}
+  Z06: {zona_ep: ZT_SERVIDORES PB, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z07: {zona_ep: ZT_OFICINA1_P1, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z08: {zona_ep: ZT_OFICINA2_P1, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z09: {zona_ep: ZT_OFICINAGRANDE_P1, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z10: {zona_ep: ZT_PASILLO P1, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z11: {zona_ep: ZT_BANO_P1, var_enfriamiento: Zone Packaged Terminal Air Conditioner Total Cooling Rate}
+  Z12: {zona_ep: ZT_OFICINA1_P2, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z13: {zona_ep: ZT_OFICINA2_P2, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z14: {zona_ep: ZT_OFICINAGRANDE_P2, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z15: {zona_ep: ZT_PASILLO P2, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z16: {zona_ep: ZT_BANO_P2, var_enfriamiento: Zone Packaged Terminal Air Conditioner Total Cooling Rate}
+  Z17: {zona_ep: ZT_OFICINA1_P3, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z18: {zona_ep: ZT_OFICINA2_P3, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z19: {zona_ep: ZT_OFICINAGRANDE_P3, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z20: {zona_ep: ZT_PASILLO P3, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z21: {zona_ep: ZT_BANO_P3, var_enfriamiento: Zone Packaged Terminal Air Conditioner Total Cooling Rate}
+  Z22: {zona_ep: ZT_OFICINA1_P4, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z23: {zona_ep: ZT_OFICINA2_P4, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z24: {zona_ep: ZT_OFICINAGRANDE_P4, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z25: {zona_ep: ZT_PASILLO P4, var_enfriamiento: Zone VRF Air Terminal Total Cooling Rate}
+  Z26: {zona_ep: ZT_BANO_P4, var_enfriamiento: Zone Packaged Terminal Air Conditioner Total Cooling Rate}

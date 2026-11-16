@@ -1,0 +1,1315 @@
+{
+ "zonas": [
+  {
+   "id": "Z01",
+   "nombre": "Recepción",
+   "tipo": "recepcion",
+   "planta": 0,
+   "zona_ep": "ZT_RECEPCION PB",
+   "rects": [
+    [
+     0.0,
+     14.0,
+     9.0,
+     6.0
+    ]
+   ],
+   "area": 54.0,
+   "ocupantes": 4,
+   "lpd": 7.78,
+   "epd": 11.3,
+   "equipos_w": 610.0,
+   "terminal": "VRF ZONE TERMINAL 3",
+   "sistema": "VRF-PB",
+   "hvac_kw": 9.11,
+   "fan_w": 275.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "N": 21.6,
+    "W": 14.4
+   },
+   "muros": {
+    "N": 27.0,
+    "W": 18.0
+   },
+   "techo": 0.0,
+   "suelo": 54.0
+  },
+  {
+   "id": "Z02",
+   "nombre": "Cubículos",
+   "tipo": "cubiculos",
+   "planta": 0,
+   "zona_ep": "ZT_CUBICULOS PB",
+   "rects": [
+    [
+     11.0,
+     0.0,
+     9.0,
+     20.0
+    ]
+   ],
+   "area": 180.0,
+   "ocupantes": 20,
+   "lpd": 10.0,
+   "epd": 14.61,
+   "equipos_w": 2630.0,
+   "terminal": "VRF ZONE TERMINAL 1",
+   "sistema": "VRF-PB",
+   "hvac_kw": 26.48,
+   "fan_w": 672.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "E": 48.0,
+    "N": 21.6,
+    "S": 21.6
+   },
+   "muros": {
+    "E": 60.0,
+    "N": 27.0,
+    "S": 27.0
+   },
+   "techo": 0.0,
+   "suelo": 180.0
+  },
+  {
+   "id": "Z03",
+   "nombre": "Sala de conferencias",
+   "tipo": "conferencia",
+   "planta": 0,
+   "zona_ep": "ZT_CONFERENCIAS PB",
+   "rects": [
+    [
+     0.0,
+     4.0,
+     6.0,
+     10.0
+    ],
+    [
+     6.0,
+     8.0,
+     3.0,
+     6.0
+    ]
+   ],
+   "area": 78.0,
+   "ocupantes": 22,
+   "lpd": 8.62,
+   "epd": 6.67,
+   "equipos_w": 520.0,
+   "terminal": "VRF ZONE TERMINAL",
+   "sistema": "VRF-PB",
+   "hvac_kw": 17.06,
+   "fan_w": 344.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "W": 24.0
+   },
+   "muros": {
+    "W": 30.0
+   },
+   "techo": 0.0,
+   "suelo": 78.0
+  },
+  {
+   "id": "Z04",
+   "nombre": "Pasillo PB",
+   "tipo": "pasillo",
+   "planta": 0,
+   "zona_ep": "ZT_PASILLO PB",
+   "rects": [
+    [
+     9.0,
+     2.0,
+     2.0,
+     18.0
+    ]
+   ],
+   "area": 36.0,
+   "ocupantes": 2,
+   "lpd": 5.0,
+   "epd": 0.0,
+   "equipos_w": 0.0,
+   "terminal": "VRF ZONE TERMINAL 2",
+   "sistema": "VRF-PB",
+   "hvac_kw": 1.53,
+   "fan_w": 42.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "N": 4.8
+   },
+   "muros": {
+    "N": 6.0
+   },
+   "techo": 0.0,
+   "suelo": 36.0
+  },
+  {
+   "id": "Z05",
+   "nombre": "Baños PB",
+   "tipo": "bano",
+   "planta": 0,
+   "zona_ep": "ZT_BANO_PB",
+   "rects": [
+    [
+     0.0,
+     0.0,
+     9.0,
+     4.0
+    ]
+   ],
+   "area": 36.0,
+   "ocupantes": 2,
+   "lpd": 2.78,
+   "epd": 0.0,
+   "equipos_w": 0.0,
+   "terminal": "CYCLING PTAC DX CLG ELEC HTG 4",
+   "sistema": "PTAC-PB",
+   "hvac_kw": 1.53,
+   "fan_w": 26.0,
+   "extractor_w": 15.0,
+   "ventanas": {},
+   "muros": {
+    "S": 27.0,
+    "W": 12.0
+   },
+   "techo": 0.0,
+   "suelo": 36.0
+  },
+  {
+   "id": "Z06",
+   "nombre": "Cuarto de servidores",
+   "tipo": "servidores",
+   "planta": 0,
+   "zona_ep": "ZT_SERVIDORES PB",
+   "rects": [
+    [
+     6.0,
+     4.0,
+     3.0,
+     4.0
+    ]
+   ],
+   "area": 12.0,
+   "ocupantes": 0,
+   "lpd": 5.0,
+   "epd": 150.0,
+   "equipos_w": 1800.0,
+   "terminal": "VRF ZONE TERMINAL 20",
+   "sistema": "VRF-SRV",
+   "hvac_kw": 3.87,
+   "fan_w": 117.0,
+   "extractor_w": 0,
+   "ventanas": {},
+   "muros": {},
+   "techo": 0.0,
+   "suelo": 12.0
+  },
+  {
+   "id": "Z07",
+   "nombre": "Oficina 1 P1",
+   "tipo": "oficina",
+   "planta": 1,
+   "zona_ep": "ZT_OFICINA1_P1",
+   "rects": [
+    [
+     11.0,
+     10.0,
+     9.0,
+     10.0
+    ]
+   ],
+   "area": 90.0,
+   "ocupantes": 9,
+   "lpd": 10.0,
+   "epd": 13.56,
+   "equipos_w": 1220.0,
+   "terminal": "VRF ZONE TERMINAL 4",
+   "sistema": "VRF-P1",
+   "hvac_kw": 15.77,
+   "fan_w": 459.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "E": 24.0,
+    "N": 21.6
+   },
+   "muros": {
+    "E": 30.0,
+    "N": 27.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z08",
+   "nombre": "Oficina 2 P1",
+   "tipo": "oficina",
+   "planta": 1,
+   "zona_ep": "ZT_OFICINA2_P1",
+   "rects": [
+    [
+     11.0,
+     0.0,
+     9.0,
+     10.0
+    ]
+   ],
+   "area": 90.0,
+   "ocupantes": 9,
+   "lpd": 10.0,
+   "epd": 13.56,
+   "equipos_w": 1220.0,
+   "terminal": "VRF ZONE TERMINAL 5",
+   "sistema": "VRF-P1",
+   "hvac_kw": 14.45,
+   "fan_w": 405.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "E": 24.0,
+    "S": 21.6
+   },
+   "muros": {
+    "E": 30.0,
+    "S": 27.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z09",
+   "nombre": "Oficina abierta P1",
+   "tipo": "oficina_abierta",
+   "planta": 1,
+   "zona_ep": "ZT_OFICINAGRANDE_P1",
+   "rects": [
+    [
+     0.0,
+     5.0,
+     9.0,
+     15.0
+    ]
+   ],
+   "area": 135.0,
+   "ocupantes": 15,
+   "lpd": 8.15,
+   "epd": 11.11,
+   "equipos_w": 1500.0,
+   "terminal": "VRF ZONE TERMINAL 6",
+   "sistema": "VRF-P1",
+   "hvac_kw": 25.39,
+   "fan_w": 717.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "N": 21.6,
+    "W": 36.0
+   },
+   "muros": {
+    "N": 27.0,
+    "W": 45.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z10",
+   "nombre": "Pasillo P1",
+   "tipo": "pasillo",
+   "planta": 1,
+   "zona_ep": "ZT_PASILLO P1",
+   "rects": [
+    [
+     9.0,
+     2.0,
+     2.0,
+     18.0
+    ]
+   ],
+   "area": 36.0,
+   "ocupantes": 2,
+   "lpd": 5.0,
+   "epd": 0.0,
+   "equipos_w": 0.0,
+   "terminal": "VRF ZONE TERMINAL 7",
+   "sistema": "VRF-P1",
+   "hvac_kw": 2.57,
+   "fan_w": 78.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "N": 4.8
+   },
+   "muros": {
+    "N": 6.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z11",
+   "nombre": "Baños P1",
+   "tipo": "bano",
+   "planta": 1,
+   "zona_ep": "ZT_BANO_P1",
+   "rects": [
+    [
+     0.0,
+     0.0,
+     9.0,
+     5.0
+    ]
+   ],
+   "area": 45.0,
+   "ocupantes": 2,
+   "lpd": 2.22,
+   "epd": 0.0,
+   "equipos_w": 0.0,
+   "terminal": "CYCLING PTAC DX CLG ELEC HTG",
+   "sistema": "PTAC-P1",
+   "hvac_kw": 2.09,
+   "fan_w": 43.0,
+   "extractor_w": 15.0,
+   "ventanas": {},
+   "muros": {
+    "S": 27.0,
+    "W": 15.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z12",
+   "nombre": "Oficina 1 P2",
+   "tipo": "oficina",
+   "planta": 2,
+   "zona_ep": "ZT_OFICINA1_P2",
+   "rects": [
+    [
+     11.0,
+     10.0,
+     9.0,
+     10.0
+    ]
+   ],
+   "area": 90.0,
+   "ocupantes": 9,
+   "lpd": 10.0,
+   "epd": 13.56,
+   "equipos_w": 1220.0,
+   "terminal": "VRF ZONE TERMINAL 8",
+   "sistema": "VRF-P2",
+   "hvac_kw": 16.34,
+   "fan_w": 483.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "E": 24.0,
+    "N": 21.6
+   },
+   "muros": {
+    "E": 30.0,
+    "N": 27.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z13",
+   "nombre": "Oficina 2 P2",
+   "tipo": "oficina",
+   "planta": 2,
+   "zona_ep": "ZT_OFICINA2_P2",
+   "rects": [
+    [
+     11.0,
+     0.0,
+     9.0,
+     10.0
+    ]
+   ],
+   "area": 90.0,
+   "ocupantes": 9,
+   "lpd": 10.0,
+   "epd": 13.56,
+   "equipos_w": 1220.0,
+   "terminal": "VRF ZONE TERMINAL 9",
+   "sistema": "VRF-P2",
+   "hvac_kw": 14.89,
+   "fan_w": 423.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "E": 24.0,
+    "S": 21.6
+   },
+   "muros": {
+    "E": 30.0,
+    "S": 27.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z14",
+   "nombre": "Oficina abierta P2",
+   "tipo": "oficina_abierta",
+   "planta": 2,
+   "zona_ep": "ZT_OFICINAGRANDE_P2",
+   "rects": [
+    [
+     0.0,
+     5.0,
+     9.0,
+     15.0
+    ]
+   ],
+   "area": 135.0,
+   "ocupantes": 15,
+   "lpd": 8.15,
+   "epd": 11.11,
+   "equipos_w": 1500.0,
+   "terminal": "VRF ZONE TERMINAL 10",
+   "sistema": "VRF-P2",
+   "hvac_kw": 26.25,
+   "fan_w": 753.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "N": 21.6,
+    "W": 36.0
+   },
+   "muros": {
+    "N": 27.0,
+    "W": 45.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z15",
+   "nombre": "Pasillo P2",
+   "tipo": "pasillo",
+   "planta": 2,
+   "zona_ep": "ZT_PASILLO P2",
+   "rects": [
+    [
+     9.0,
+     2.0,
+     2.0,
+     18.0
+    ]
+   ],
+   "area": 36.0,
+   "ocupantes": 2,
+   "lpd": 5.0,
+   "epd": 0.0,
+   "equipos_w": 0.0,
+   "terminal": "VRF ZONE TERMINAL 11",
+   "sistema": "VRF-P2",
+   "hvac_kw": 2.83,
+   "fan_w": 86.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "N": 4.8
+   },
+   "muros": {
+    "N": 6.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z16",
+   "nombre": "Baños P2",
+   "tipo": "bano",
+   "planta": 2,
+   "zona_ep": "ZT_BANO_P2",
+   "rects": [
+    [
+     0.0,
+     0.0,
+     9.0,
+     5.0
+    ]
+   ],
+   "area": 45.0,
+   "ocupantes": 2,
+   "lpd": 2.22,
+   "epd": 0.0,
+   "equipos_w": 0.0,
+   "terminal": "CYCLING PTAC DX CLG ELEC HTG 1",
+   "sistema": "PTAC-P2",
+   "hvac_kw": 2.27,
+   "fan_w": 48.0,
+   "extractor_w": 15.0,
+   "ventanas": {},
+   "muros": {
+    "S": 27.0,
+    "W": 15.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z17",
+   "nombre": "Oficina 1 P3",
+   "tipo": "oficina",
+   "planta": 3,
+   "zona_ep": "ZT_OFICINA1_P3",
+   "rects": [
+    [
+     11.0,
+     10.0,
+     9.0,
+     10.0
+    ]
+   ],
+   "area": 90.0,
+   "ocupantes": 9,
+   "lpd": 10.0,
+   "epd": 13.56,
+   "equipos_w": 1220.0,
+   "terminal": "VRF ZONE TERMINAL 12",
+   "sistema": "VRF-P3",
+   "hvac_kw": 16.49,
+   "fan_w": 489.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "E": 24.0,
+    "N": 21.6
+   },
+   "muros": {
+    "E": 30.0,
+    "N": 27.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z18",
+   "nombre": "Oficina 2 P3",
+   "tipo": "oficina",
+   "planta": 3,
+   "zona_ep": "ZT_OFICINA2_P3",
+   "rects": [
+    [
+     11.0,
+     0.0,
+     9.0,
+     10.0
+    ]
+   ],
+   "area": 90.0,
+   "ocupantes": 9,
+   "lpd": 10.0,
+   "epd": 13.56,
+   "equipos_w": 1220.0,
+   "terminal": "VRF ZONE TERMINAL 13",
+   "sistema": "VRF-P3",
+   "hvac_kw": 15.04,
+   "fan_w": 430.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "E": 24.0,
+    "S": 21.6
+   },
+   "muros": {
+    "E": 30.0,
+    "S": 27.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z19",
+   "nombre": "Oficina abierta P3",
+   "tipo": "oficina_abierta",
+   "planta": 3,
+   "zona_ep": "ZT_OFICINAGRANDE_P3",
+   "rects": [
+    [
+     0.0,
+     5.0,
+     9.0,
+     15.0
+    ]
+   ],
+   "area": 135.0,
+   "ocupantes": 15,
+   "lpd": 8.15,
+   "epd": 11.11,
+   "equipos_w": 1500.0,
+   "terminal": "VRF ZONE TERMINAL 14",
+   "sistema": "VRF-P3",
+   "hvac_kw": 26.49,
+   "fan_w": 763.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "N": 21.6,
+    "W": 36.0
+   },
+   "muros": {
+    "N": 27.0,
+    "W": 45.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z20",
+   "nombre": "Pasillo P3",
+   "tipo": "pasillo",
+   "planta": 3,
+   "zona_ep": "ZT_PASILLO P3",
+   "rects": [
+    [
+     9.0,
+     2.0,
+     2.0,
+     18.0
+    ]
+   ],
+   "area": 36.0,
+   "ocupantes": 2,
+   "lpd": 5.0,
+   "epd": 0.0,
+   "equipos_w": 0.0,
+   "terminal": "VRF ZONE TERMINAL 15",
+   "sistema": "VRF-P3",
+   "hvac_kw": 2.93,
+   "fan_w": 88.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "N": 4.8
+   },
+   "muros": {
+    "N": 6.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z21",
+   "nombre": "Baños P3",
+   "tipo": "bano",
+   "planta": 3,
+   "zona_ep": "ZT_BANO_P3",
+   "rects": [
+    [
+     0.0,
+     0.0,
+     9.0,
+     5.0
+    ]
+   ],
+   "area": 45.0,
+   "ocupantes": 2,
+   "lpd": 2.22,
+   "epd": 0.0,
+   "equipos_w": 0.0,
+   "terminal": "CYCLING PTAC DX CLG ELEC HTG 2",
+   "sistema": "PTAC-P3",
+   "hvac_kw": 2.34,
+   "fan_w": 50.0,
+   "extractor_w": 15.0,
+   "ventanas": {},
+   "muros": {
+    "S": 27.0,
+    "W": 15.0
+   },
+   "techo": 0.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z22",
+   "nombre": "Oficina 1 P4",
+   "tipo": "oficina",
+   "planta": 4,
+   "zona_ep": "ZT_OFICINA1_P4",
+   "rects": [
+    [
+     11.0,
+     10.0,
+     9.0,
+     10.0
+    ]
+   ],
+   "area": 90.0,
+   "ocupantes": 9,
+   "lpd": 10.0,
+   "epd": 13.56,
+   "equipos_w": 1220.0,
+   "terminal": "VRF ZONE TERMINAL 16",
+   "sistema": "VRF-P4",
+   "hvac_kw": 16.62,
+   "fan_w": 496.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "E": 24.0,
+    "N": 21.6
+   },
+   "muros": {
+    "E": 30.0,
+    "N": 27.0
+   },
+   "techo": 90.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z23",
+   "nombre": "Oficina 2 P4",
+   "tipo": "oficina",
+   "planta": 4,
+   "zona_ep": "ZT_OFICINA2_P4",
+   "rects": [
+    [
+     11.0,
+     0.0,
+     9.0,
+     10.0
+    ]
+   ],
+   "area": 90.0,
+   "ocupantes": 9,
+   "lpd": 10.0,
+   "epd": 13.56,
+   "equipos_w": 1220.0,
+   "terminal": "VRF ZONE TERMINAL 17",
+   "sistema": "VRF-P4",
+   "hvac_kw": 15.25,
+   "fan_w": 439.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "E": 24.0,
+    "S": 21.6
+   },
+   "muros": {
+    "E": 30.0,
+    "S": 27.0
+   },
+   "techo": 90.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z24",
+   "nombre": "Oficina abierta P4",
+   "tipo": "oficina_abierta",
+   "planta": 4,
+   "zona_ep": "ZT_OFICINAGRANDE_P4",
+   "rects": [
+    [
+     0.0,
+     5.0,
+     9.0,
+     15.0
+    ]
+   ],
+   "area": 135.0,
+   "ocupantes": 15,
+   "lpd": 8.15,
+   "epd": 11.11,
+   "equipos_w": 1500.0,
+   "terminal": "VRF ZONE TERMINAL 18",
+   "sistema": "VRF-P4",
+   "hvac_kw": 27.18,
+   "fan_w": 791.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "N": 21.6,
+    "W": 36.0
+   },
+   "muros": {
+    "N": 27.0,
+    "W": 45.0
+   },
+   "techo": 135.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z25",
+   "nombre": "Pasillo P4",
+   "tipo": "pasillo",
+   "planta": 4,
+   "zona_ep": "ZT_PASILLO P4",
+   "rects": [
+    [
+     9.0,
+     2.0,
+     2.0,
+     18.0
+    ]
+   ],
+   "area": 36.0,
+   "ocupantes": 2,
+   "lpd": 5.0,
+   "epd": 0.0,
+   "equipos_w": 0.0,
+   "terminal": "VRF ZONE TERMINAL 19",
+   "sistema": "VRF-P4",
+   "hvac_kw": 3.43,
+   "fan_w": 103.0,
+   "extractor_w": 0,
+   "ventanas": {
+    "N": 4.8
+   },
+   "muros": {
+    "N": 6.0
+   },
+   "techo": 36.0,
+   "suelo": 0.0
+  },
+  {
+   "id": "Z26",
+   "nombre": "Baños P4",
+   "tipo": "bano",
+   "planta": 4,
+   "zona_ep": "ZT_BANO_P4",
+   "rects": [
+    [
+     0.0,
+     0.0,
+     9.0,
+     5.0
+    ]
+   ],
+   "area": 45.0,
+   "ocupantes": 2,
+   "lpd": 2.22,
+   "epd": 0.0,
+   "equipos_w": 0.0,
+   "terminal": "CYCLING PTAC DX CLG ELEC HTG 3",
+   "sistema": "PTAC-P4",
+   "hvac_kw": 2.68,
+   "fan_w": 61.0,
+   "extractor_w": 15.0,
+   "ventanas": {},
+   "muros": {
+    "S": 27.0,
+    "W": 15.0
+   },
+   "techo": 45.0,
+   "suelo": 0.0
+  }
+ ],
+ "sistemas_vrf": [
+  {
+   "id": "VRF-P1",
+   "nombre_ep": "VRF P1",
+   "capacidad_kw": 58.18,
+   "zonas": [
+    "Z07",
+    "Z08",
+    "Z09",
+    "Z10"
+   ]
+  },
+  {
+   "id": "VRF-P2",
+   "nombre_ep": "VRF P2",
+   "capacidad_kw": 60.31,
+   "zonas": [
+    "Z12",
+    "Z13",
+    "Z14",
+    "Z15"
+   ]
+  },
+  {
+   "id": "VRF-P3",
+   "nombre_ep": "VRF P3",
+   "capacidad_kw": 60.95,
+   "zonas": [
+    "Z17",
+    "Z18",
+    "Z19",
+    "Z20"
+   ]
+  },
+  {
+   "id": "VRF-P4",
+   "nombre_ep": "VRF P4",
+   "capacidad_kw": 62.47,
+   "zonas": [
+    "Z22",
+    "Z23",
+    "Z24",
+    "Z25"
+   ]
+  },
+  {
+   "id": "VRF-PB",
+   "nombre_ep": "VRF PB",
+   "capacidad_kw": 54.18,
+   "zonas": [
+    "Z01",
+    "Z02",
+    "Z03",
+    "Z04"
+   ]
+  },
+  {
+   "id": "VRF-SRV",
+   "nombre_ep": "VRF_SERVIDORES",
+   "capacidad_kw": 3.87,
+   "zonas": [
+    "Z06"
+   ]
+  }
+ ],
+ "ptac": [
+  {
+   "id": "PTAC-PB",
+   "zona": "Z05",
+   "capacidad_kw": 1.53
+  },
+  {
+   "id": "PTAC-P1",
+   "zona": "Z11",
+   "capacidad_kw": 2.09
+  },
+  {
+   "id": "PTAC-P2",
+   "zona": "Z16",
+   "capacidad_kw": 2.27
+  },
+  {
+   "id": "PTAC-P3",
+   "zona": "Z21",
+   "capacidad_kw": 2.34
+  },
+  {
+   "id": "PTAC-P4",
+   "zona": "Z26",
+   "capacidad_kw": 2.68
+  }
+ ],
+ "fv": [
+  {
+   "nombre": "Rooftop PV - Face 257",
+   "superficie": "PV - Face 257",
+   "area_m2": 45.0,
+   "fraccion_activa": 0.6,
+   "eficiencia": 0.24,
+   "altura_m": 15.3
+  },
+  {
+   "nombre": "Rooftop PV - Face 233",
+   "superficie": "PV - Face 233",
+   "area_m2": 4.0,
+   "fraccion_activa": 0.6,
+   "eficiencia": 0.24,
+   "altura_m": 15.3
+  },
+  {
+   "nombre": "Rooftop PV - Face 222",
+   "superficie": "PV - Face 222",
+   "area_m2": 36.0,
+   "fraccion_activa": 0.6,
+   "eficiencia": 0.24,
+   "altura_m": 15.3
+  },
+  {
+   "nombre": "Rooftop PV - Face 265",
+   "superficie": "PV - Face 265",
+   "area_m2": 135.0,
+   "fraccion_activa": 0.6,
+   "eficiencia": 0.24,
+   "altura_m": 15.3
+  },
+  {
+   "nombre": "Rooftop PV - Face 240",
+   "superficie": "PV - Face 240",
+   "area_m2": 90.0,
+   "fraccion_activa": 0.6,
+   "eficiencia": 0.24,
+   "altura_m": 15.3
+  },
+  {
+   "nombre": "Rooftop PV - Face 248",
+   "superficie": "PV - Face 248",
+   "area_m2": 90.0,
+   "fraccion_activa": 0.6,
+   "eficiencia": 0.24,
+   "altura_m": 15.3
+  }
+ ],
+ "inversor_eficiencia": 0.96,
+ "nucleo_elevador": {
+  "Planta Baja": [
+   9.0,
+   0.0,
+   2.0,
+   2.0
+  ],
+  "Planta 1": [
+   9.0,
+   0.0,
+   2.0,
+   2.0
+  ],
+  "Planta 2": [
+   9.0,
+   0.0,
+   2.0,
+   2.0
+  ],
+  "Planta 3": [
+   9.0,
+   0.0,
+   2.0,
+   2.0
+  ],
+  "Planta 4": [
+   9.0,
+   0.0,
+   2.0,
+   2.0
+  ]
+ },
+ "elevadores_w": {
+  "ZT_ELEVADOR P1": 50.0,
+  "ZT_ELEVADOR P2": 50.0,
+  "ZT_ELEVADOR P3": 50.0,
+  "ZT_ELEVADOR P4": 50.0,
+  "ZT_ELEVADOR PB": 14660.0
+ },
+ "horarios": {
+  "BASE_Iluminacion Week Rule - Jan1-Dec31": [
+   "Lunes-Viernes  1",
+   "Lunes-Viernes  2",
+   "Lunes-Viernes  2",
+   "Lunes-Viernes  2",
+   "Lunes-Viernes  2",
+   "Lunes-Viernes  2",
+   "Lunes-Viernes  1",
+   "Lunes-Viernes  2",
+   "Lunes-Viernes  2",
+   "Lunes-Viernes  2",
+   "Lunes-Viernes  2",
+   "Lunes-Viernes  2"
+  ],
+  "BASE_Iluminacion": [
+   "Fractional",
+   "BASE_Iluminacion Week Rule - Jan1-Dec31",
+   "1",
+   "1",
+   "12",
+   "31"
+  ],
+  "BASE_Ocupacion Bano Week Rule - Jan1-Dec31": [
+   "Lunes-Viernes 5",
+   "Lunes-Viernes 4",
+   "Lunes-Viernes 4",
+   "Lunes-Viernes 4",
+   "Lunes-Viernes 4",
+   "Lunes-Viernes 4",
+   "Lunes-Viernes 5",
+   "Lunes-Viernes 4",
+   "Lunes-Viernes 4",
+   "Lunes-Viernes 4",
+   "Lunes-Viernes 4",
+   "Lunes-Viernes 4"
+  ],
+  "BASE_Ocupacion Bano": [
+   "Fractional",
+   "BASE_Ocupacion Bano Week Rule - Jan1-Dec31",
+   "1",
+   "1",
+   "12",
+   "31"
+  ],
+  "BASE_Actividad_Personas Week Rule - Jan1-Dec31": [
+   "Schedule Day 1",
+   "Schedule Day 1",
+   "Schedule Day 1",
+   "Schedule Day 1",
+   "Schedule Day 1",
+   "Schedule Day 1",
+   "Schedule Day 1",
+   "Schedule Day 1",
+   "Schedule Day 1",
+   "Schedule Day 1",
+   "Schedule Day 1",
+   "Schedule Day 1"
+  ],
+  "BASE_Actividad_Personas": [
+   "ActivityLevel",
+   "BASE_Actividad_Personas Week Rule - Jan1-Dec31",
+   "1",
+   "1",
+   "12",
+   "31"
+  ],
+  "TEMP_Calefaccion Week Rule - Jan1-Dec31": [
+   "Schedule Day 4",
+   "Schedule Day 4",
+   "Schedule Day 4",
+   "Schedule Day 4",
+   "Schedule Day 4",
+   "Schedule Day 4",
+   "Schedule Day 4",
+   "Schedule Day 4",
+   "Schedule Day 4",
+   "Schedule Day 4",
+   "Schedule Day 4",
+   "Schedule Day 4"
+  ],
+  "TEMP_Calefaccion": [
+   "Temperature",
+   "TEMP_Calefaccion Week Rule - Jan1-Dec31",
+   "1",
+   "1",
+   "12",
+   "31"
+  ],
+  "TEMP_HVAC BANO Week Rule - Jan1-Dec31": [
+   "Schedule Day 5",
+   "Schedule Day 5",
+   "Schedule Day 5",
+   "Schedule Day 5",
+   "Schedule Day 5",
+   "Schedule Day 5",
+   "Schedule Day 5",
+   "Schedule Day 5",
+   "Schedule Day 5",
+   "Schedule Day 5",
+   "Schedule Day 5",
+   "Schedule Day 5"
+  ],
+  "TEMP_HVAC BANO": [
+   "Temperature",
+   "TEMP_HVAC BANO Week Rule - Jan1-Dec31",
+   "1",
+   "1",
+   "12",
+   "31"
+  ],
+  "BASE_HVAC Week Rule - Jan1-Dec31": [
+   "Sabado-domingos",
+   "Lunes-Viernes  6",
+   "Lunes-Viernes  6",
+   "Lunes-Viernes  6",
+   "Lunes-Viernes  6",
+   "Lunes-Viernes  6",
+   "Sabado-domingos",
+   "Lunes-Viernes  6",
+   "Lunes-Viernes  6",
+   "Lunes-Viernes  6",
+   "Lunes-Viernes  6",
+   "Lunes-Viernes  6"
+  ],
+  "BASE_HVAC": [
+   "Fractional",
+   "BASE_HVAC Week Rule - Jan1-Dec31",
+   "1",
+   "1",
+   "12",
+   "31"
+  ],
+  "BASE_Ocupacion Week Rule - Jan1-Dec31": [
+   "Lunes-Viernes 2",
+   "Lunes-Viernes",
+   "Lunes-Viernes",
+   "Lunes-Viernes",
+   "Lunes-Viernes",
+   "Lunes-Viernes",
+   "Lunes-Viernes 2",
+   "Lunes-Viernes",
+   "Lunes-Viernes",
+   "Lunes-Viernes",
+   "Lunes-Viernes",
+   "Lunes-Viernes"
+  ],
+  "BASE_Ocupacion": [
+   "Fractional",
+   "BASE_Ocupacion Week Rule - Jan1-Dec31",
+   "1",
+   "1",
+   "12",
+   "31"
+  ],
+  "BASE_Equipos Week Rule - Jan1-Dec31": [
+   "Lunes-Viernes  4",
+   "Lunes-Viernes 3",
+   "Lunes-Viernes 3",
+   "Lunes-Viernes 3",
+   "Lunes-Viernes 3",
+   "Lunes-Viernes 3",
+   "Lunes-Viernes  4",
+   "Lunes-Viernes 3",
+   "Lunes-Viernes 3",
+   "Lunes-Viernes 3",
+   "Lunes-Viernes 3",
+   "Lunes-Viernes 3"
+  ],
+  "BASE_Equipos": [
+   "Fractional",
+   "BASE_Equipos Week Rule - Jan1-Dec31",
+   "1",
+   "1",
+   "12",
+   "31"
+  ],
+  "TEMP_Refrigeracion Week Rule - Jan1-Dec31": [
+   "Schedule Day 3",
+   "Schedule Day 3",
+   "Schedule Day 3",
+   "Schedule Day 3",
+   "Schedule Day 3",
+   "Schedule Day 3",
+   "Schedule Day 3",
+   "Schedule Day 3",
+   "Schedule Day 3",
+   "Schedule Day 3",
+   "Schedule Day 3",
+   "Schedule Day 3"
+  ],
+  "TEMP_Refrigeracion": [
+   "Temperature",
+   "TEMP_Refrigeracion Week Rule - Jan1-Dec31",
+   "1",
+   "1",
+   "12",
+   "31"
+  ],
+  "BASE_Elevador Week Rule - Jan1-Dec31": [
+   "Lunes-Viernes  7",
+   "Lunes-Viernes   2",
+   "Lunes-Viernes   2",
+   "Lunes-Viernes   2",
+   "Lunes-Viernes   2",
+   "Lunes-Viernes   2",
+   "Lunes-Viernes  7",
+   "Lunes-Viernes   2",
+   "Lunes-Viernes   2",
+   "Lunes-Viernes   2",
+   "Lunes-Viernes   2",
+   "Lunes-Viernes   2"
+  ],
+  "BASE_Elevador": [
+   "Fractional",
+   "BASE_Elevador Week Rule - Jan1-Dec31",
+   "1",
+   "1",
+   "12",
+   "31"
+  ],
+  "BASE_Servidores Week Rule - Jan1-Dec31": [
+   "Lunes-Viernes   1",
+   "Lunes-Viernes   1",
+   "Lunes-Viernes   1",
+   "Lunes-Viernes   1",
+   "Lunes-Viernes   1",
+   "Lunes-Viernes   1",
+   "Lunes-Viernes   1",
+   "Lunes-Viernes   1",
+   "Lunes-Viernes   1",
+   "Lunes-Viernes   1",
+   "Lunes-Viernes   1",
+   "Lunes-Viernes   1"
+  ],
+  "BASE_Servidores": [
+   "Fractional",
+   "BASE_Servidores Week Rule - Jan1-Dec31",
+   "1",
+   "1",
+   "12",
+   "31"
+  ]
+ }
+}

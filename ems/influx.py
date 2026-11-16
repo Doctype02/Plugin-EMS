@@ -9,7 +9,7 @@ CAMPOS_ZONA = ["temp_c", "setpoint_c", "ocupantes", "ocupado", "lux", "luces_niv
                "hvac_on", "hvac_enable", "p_luces_kw", "p_equipos_kw", "p_hvac_kw", "p_total_kw"]
 CAMPOS_MEDIDOR = ["p_total_kw", "p_critica_kw", "p_no_critica_kw", "p_hvac_kw", "p_luces_kw", "p_equipos_kw",
                   "p_fija_kw", "q_kvar", "s_kva", "fp", "v_ll", "i_a", "e_kwh", "demanda_15min_kw", "t_ext_c",
-                  "hr_pct", "irr_wm2", "precio_usd_kwh"]
+                  "hr_pct", "irr_wm2", "precio_usd_kwh", "p_fv_kw", "p_red_kw", "e_fv_kwh", "red_ok", "ups_kw", "ups_min"]
 
 
 def _num(v):

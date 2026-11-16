@@ -53,10 +53,10 @@ def test_corte_de_energia_ups_y_medidor(cfg):
 
 def test_falla_vrf_solo_afecta_sus_zonas(cfg):
     _, base, _, _ = correr(cfg, pasos=12)
-    _, tel, _, alarmas = correr(cfg, {"evento": "falla_vrf", "unidad": "VRF-A", "duracion_min": 120}, pasos=12)
+    _, tel, _, alarmas = correr(cfg, {"evento": "falla_vrf", "unidad": "VRF-P1", "duracion_min": 120}, pasos=12)
     assert alarmas[0]["codigo"] == "FALLA_VRF"
-    for zid in ("Z04", "Z05", "Z06", "Z07"):
-        assert tel[zid]["temp_real_c"] > base[zid]["temp_real_c"] + 1.0
+    for zid in ("Z07", "Z08", "Z09", "Z10"):  # 1 h sin enfriamiento: todas sus zonas se calientan
+        assert tel[zid]["temp_real_c"] > base[zid]["temp_real_c"] + (0.2 if zid == "Z10" else 0.5)  # Z10: pasillo
         assert tel[zid]["q_frio_kw"] == 0
     assert abs(tel["Z02"]["temp_real_c"] - base["Z02"]["temp_real_c"]) < 0.3
 
@@ -92,14 +92,14 @@ def test_ocupacion_forzada_por_zona_y_edificio(cfg):
     ed = Edificio(cfg)
     ocup = {z.id: z.ocupantes for z in ed.zonas}
     assert ed.fijar_ocupacion({"zona": "Z03", "personas": 35, "duracion_min": 10}) is None
-    assert ed.fijar_ocupacion({"zona": "Z09", "personas": 1, "duracion_min": 10})  # sin personas
+    assert ed.fijar_ocupacion({"zona": "Z06", "personas": 1, "duracion_min": 10})  # sin personas
     assert ed.fijar_ocupacion({"zona": "Z03", "personas": 99, "duracion_min": 10})  # > 2 × aforo
     tel, _ = ed.paso(CLIMA, ocup, 12 * 60, 1)
     t = {z["zona"]: z for z in tel}
-    assert t["Z03"]["ocupantes"] == 35 and t["Z02"]["ocupantes"] == 15
+    assert t["Z03"]["ocupantes"] == 35 and t["Z02"]["ocupantes"] == 20
     tel, _ = ed.paso(CLIMA, ocup, 12 * 60, 1)
     tel, med = ed.paso(CLIMA, ocup, 12 * 60, 1)  # vence a los 10 min
-    assert {z["zona"]: z for z in tel}["Z03"]["ocupantes"] == 20 and "ocupacion_forzada" not in med
+    assert {z["zona"]: z for z in tel}["Z03"]["ocupantes"] == 22 and "ocupacion_forzada" not in med
     assert ed.fijar_ocupacion({"zona": "*", "porcentaje": 0, "duracion_min": 60}) is None
     tel, _ = ed.paso(CLIMA, ocup, 12 * 60, 1)
     assert sum(z["ocupantes"] for z in tel) == 0

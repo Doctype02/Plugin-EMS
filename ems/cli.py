@@ -109,7 +109,8 @@ def cmd_validar(args, cfg=None):
     for ini, dias in validacion.SEMANAS_CALIBRACION:
         c = validacion.comparar(cfg, ini, dias, ref)
         semanas.append({"periodo": c["periodo"], **{f"total_{k}": v for k, v in c["electricidad_total"].items()},
-                        **{f"vrf_{k}": v for k, v in c["compresores_vrf"].items() if k != "n"},
+                        **{f"equipos_{k}": v for k, v in c["equipos"].items() if k != "n"},
+                        **{f"fv_{k}": v for k, v in c.get("fv", {}).items() if k not in ("n", "energia_kwh")},
                         "pico_energyplus_kw": c["pico_kw"]["energyplus"], "pico_modelo_kw": c["pico_kw"]["modelo"],
                         **{f"rmse_t_{z}": v for z, v in c["rmse_temp_ocupado_c"].items()}})
         if ini == validacion.SEMANAS_CALIBRACION[-1][0]:
@@ -267,6 +268,15 @@ def cmd_exportar(args):
         print(f"exportando {n} …")
         exportar_resultado(esc, r, n)
         esc.kpi(r.medidor.index[-1], n, tabla.loc[n].to_dict())
+        if f"{n}_fv" in tabla.index:
+            # variante con paneles: sólo el medidor (las zonas son las mismas) con la FV y la red neta
+            m = r.medidor.copy()
+            m["p_fv_kw"] = kpi.serie_fv(m, cfg)
+            m["p_red_kw"] = m["p_total_kw"] - m["p_fv_kw"]
+            for ts, fila in m.iterrows():
+                esc.medidor(ts, fila.to_dict(), f"{n}_fv")
+                esc.flush()
+            esc.kpi(r.medidor.index[-1], f"{n}_fv", tabla.loc[f"{n}_fv"].to_dict())
     esc.flush(forzar=True)
     hist = simular(cfg, "reglas_dr", dias=42, inicio="2026-09-28 00:00")
     serie, _ = pronostico.evaluar(hist.medidor, 7, usar_sarimax=False)

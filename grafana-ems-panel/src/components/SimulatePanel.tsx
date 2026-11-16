@@ -3,7 +3,7 @@ import { Glyph } from './Glyph';
 import { GrafanaTheme2, colorManipulator } from '@grafana/data';
 import { css, cx } from '@emotion/css';
 import { Button, Icon, RadioButtonGroup, Switch, useStyles2, useTheme2 } from '@grafana/ui';
-import { VRF_UNITS, ZONE_BY_ID } from 'building/model';
+import { HVAC_SYSTEMS, ZONE_BY_ID } from 'building/model';
 import { Command, durationLabel } from 'building/control';
 import { EVENTS, EventKind, SimEvent, describeEvent, isActive, newEvent } from 'building/events';
 import { ASSUMPTIONS, Consequence, freeFloatCurve, projectHeatwave, projectZone } from 'building/projection';
@@ -73,7 +73,7 @@ const EventsSection: React.FC<Props> = ({
   const styles = useStyles2(getStyles);
   const [kind, setKind] = useState<EventKind>();
   const [zone, setZone] = useState<string>();
-  const [unit, setUnit] = useState<string>(VRF_UNITS[0].id);
+  const [unit, setUnit] = useState<string>(HVAC_SYSTEMS[0].id);
   const [minutes, setMinutes] = useState(30);
   const [intensity, setIntensity] = useState<number>();
   const def = kind ? EVENTS[kind] : undefined;
@@ -140,16 +140,30 @@ const EventsSection: React.FC<Props> = ({
             </>
           )}
           {def.target === 'unidad' && (
-            <RadioButtonGroup
-              size="sm"
-              value={unit}
-              onChange={setUnit}
-              options={VRF_UNITS.map((u) => ({
-                value: u.id,
-                label: u.id,
-                description: `${u.capacityKw.toFixed(1)} kW · ${u.zones.join(', ')}`,
-              }))}
-            />
+            <>
+              <div className={styles.units}>
+                {HVAC_SYSTEMS.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    className={cx(styles.kind, unit === u.id && styles.kindOn)}
+                    onClick={() => setUnit(u.id)}
+                    title={`${u.kind === 'ptac' ? 'PTAC de pared' : 'Unidad exterior VRF'} · ${u.capacityKw.toFixed(1)} kW · ${u.zones.join(', ')}`}
+                    data-testid={`ems-unit-${u.id}`}
+                  >
+                    {u.id}
+                  </button>
+                ))}
+              </div>
+              <div className={styles.muted}>
+                {(() => {
+                  const u = HVAC_SYSTEMS.find((x) => x.id === unit);
+                  return u
+                    ? `${u.kind === 'ptac' ? 'PTAC de pared' : 'VRF'} · ${u.capacityKw.toFixed(1)} kW · zonas ${u.zones.join(', ')}`
+                    : '';
+                })()}
+              </div>
+            </>
           )}
           {def.target === 'edificio' && <div className={styles.muted}>Afecta a todo el edificio.</div>}
           {def.intensity && intensity !== undefined && (
@@ -259,7 +273,7 @@ const WhatIfSection: React.FC<Props> = ({ now, snapshot, sim, canControl, onComm
   const styles = useStyles2(getStyles);
   const theme = useTheme2();
   const [mode, setMode] = useState<WhatIf>('hold');
-  const [zone, setZone] = useState('Z04');
+  const [zone, setZone] = useState('Z09');
   const [temp, setTemp] = useState(28);
   const [hours, setHours] = useState(8);
   const [days, setDays] = useState(3);
@@ -578,6 +592,11 @@ const getStyles = (theme: GrafanaTheme2) => {
     kinds: css`
       display: grid;
       grid-template-columns: 1fr 1fr;
+      gap: ${theme.spacing(0.5)};
+    `,
+    units: css`
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
       gap: ${theme.spacing(0.5)};
     `,
     kind: css`

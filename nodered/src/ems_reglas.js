@@ -132,7 +132,7 @@ for (const zid of Object.keys(cmds)) {
     const pide = z.temp_c > c.setpoint_c + P.banda || (z.hvac_on && z.temp_c > c.setpoint_c - P.banda);
     if (pide) sol.push({ zid, urg: z.temp_c - c.setpoint_c, kw: fraccionCarga(z.temp_c, c.setpoint_c) * cap / cop, emerg: z.temp_c > P.confort_max - P.dr_margen_confort });
 }
-let presupuesto = P.limite_kw - 3 - (med.p_total_kw - pCompActual) - reservado;
+let presupuesto = P.limite_kw - 3 - ((med.p_red_kw ?? med.p_total_kw) - pCompActual) - reservado;
 let forzadas = 0;
 sol.sort((a, b) => (a.emerg === b.emerg ? b.urg - a.urg : (a.emerg ? -1 : 1)));
 for (const s of sol) {

@@ -208,7 +208,7 @@ class Controlador:
             if pide > 0:
                 solicitudes.append((z["temp_c"] - sp, zid, pide * p.hvac_kw / max(cop, 1.0), p.hvac_kw / max(cop, 1.0),
                                     z["temp_c"] > self.e["confort_max_c"] - self.e["dr_margen_confort_c"]))
-        presupuesto = self.limite_kw - 3.0 - (med["p_total_kw"] - p_comp_actual)
+        presupuesto = self.limite_kw - 3.0 - (med.get("p_red_kw", med["p_total_kw"]) - p_comp_actual)
         forzadas = 0
         for urg, zid, kw, kw_max, emergencia in sorted(solicitudes, key=lambda x: (not x[4], -x[0])):
             c = cmds[zid]

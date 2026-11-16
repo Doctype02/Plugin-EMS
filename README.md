@@ -3,8 +3,9 @@
 UTP · Facultad de Ingeniería Eléctrica · Producción de la Energía Eléctrica (0877) · II Semestre 2026
 
 Sistema de Gestión de Energía (EMS) para el edificio de oficinas del proyecto en **Ciudad de Panamá**
-(2 plantas, 800 m², 10 zonas, 3 sistemas VRF), con los parámetros del modelo **OpenStudio/EnergyPlus**
-del equipo (`data/energyplus/`, clima EPW Panamá-Albrook TMYx 2011–2025): gemelo digital calibrado y
+(5 plantas, 2000 m², 26 zonas acondicionadas, 6 sistemas VRF y 5 PTAC; variante con 55 kWp fotovoltaicos),
+con los parámetros del modelo **OpenStudio/EnergyPlus** del equipo (`Edificio_Sin_EMS` y `Edificio_Sin_EMS_ConPV`,
+importados en `data/energyplus/`, clima EPW Panamá-Albrook TMYx 2011–2025): gemelo digital calibrado y
 validado contra EnergyPlus (ASHRAE Guideline 14), sensores, ocupación, actuadores, cargas y medidor, control por reglas con histéresis,
 respuesta a la demanda, MPC simplificado, pronóstico del día siguiente, alarmas, KPIs técnico-económicos
 y plataforma IoT (MQTT + Node-RED + InfluxDB + Grafana).
@@ -37,8 +38,8 @@ ocupac.├─► gemelo digital ──MQTT┤
 | `ems/energyplus_bridge.py` | Puente Python–EnergyPlus (pyenergyplus) con el mismo controlador |
 | `nodered/src/*.js` → `flows.json` | Las mismas reglas en Node-RED; `ems/nodered.py` verifica paridad exacta con Python |
 | `ems/validacion.py` | Validación y calibración contra EnergyPlus: usos finales, pico, NMBE y CV(RMSE) horarios (ASHRAE G14) |
-| `tools/importar_energyplus.py` | Importa los resultados del modelo E+ (eplusout.sql, EPW) a `data/` |
-| `grafana-ems-panel/` | Panel de Grafana propio: edificio inteligente en 3D (2 plantas, 10 zonas, azotea con 3 unidades VRF) con interiores animados, 6 vistas, barra de tiempo (hora, día, velocidad), alarmas, medidor, **control del edificio**, **simulación de alarmas y accidentes** y **«¿qué pasaría si…?»** (confort ISO 7730, rendimiento, riesgo de servidores); modo demostración o datos de InfluxDB |
+| `tools/importar_energyplus.py` | Importa el modelo E+ (in.idf, eplusout.sql, floorplan.json, EPW; con y sin FV) a `data/`: series de validación y parámetros de zonas, envolvente, VRF/PTAC y FV (`modelo_parametros.json`) |
+| `grafana-ems-panel/` | Panel de Grafana propio: edificio inteligente en 3D (5 plantas, 26 zonas, azotea con 6 unidades VRF y paneles FV) con interiores animados, 6 vistas, barra de tiempo (hora, día, velocidad), alarmas, medidor, **control del edificio**, **simulación de alarmas y accidentes** y **«¿qué pasaría si…?»** (confort ISO 7730, rendimiento, riesgo de servidores); modo demostración o datos de InfluxDB |
 | `nodered/src/override.js`, `http_control.js` | Control manual: overrides con prioridad sobre las reglas y endpoint `POST /ems/control` con CORS |
 | `ems/eventos.py` | Eventos simulados en el gemelo (incendio, corte de energía con UPS, falla VRF/terminal, puerta abierta, sensor, ola de calor, sobreocupación, pico de carga) |
 

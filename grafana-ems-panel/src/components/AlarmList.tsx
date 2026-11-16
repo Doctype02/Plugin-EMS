@@ -2,7 +2,7 @@ import React from 'react';
 import { GrafanaTheme2 } from '@grafana/data';
 import { css } from '@emotion/css';
 import { Button, Icon, useStyles2 } from '@grafana/ui';
-import { ZONE_BY_ID } from 'building/model';
+import { HVAC_BY_ID, ZONE_BY_ID } from 'building/model';
 import { AlarmLevel, EmsAlarm, Status } from 'building/telemetry';
 import { StatusBadge } from './StatusBadge';
 
@@ -68,7 +68,7 @@ export const AlarmList: React.FC<Props> = ({ alarms, acknowledged, onSelectZone,
                   {zone.id} · {zone.name}
                 </Button>
               ) : (
-                <span className={styles.time}>Edificio</span>
+                <span className={styles.time}>{HVAC_BY_ID[a.zone] ? `Unidad ${a.zone}` : 'Edificio'}</span>
               )}
               {a.level !== 'info' &&
                 (acked ? (

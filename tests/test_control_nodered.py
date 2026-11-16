@@ -80,10 +80,10 @@ def test_override_setpoint_y_liberar(h, paso):
 
 def test_zonas_criticas_no_admiten_override(h, paso):
     t, zonas, med = paso
-    out = h("override", {"zona": "Z09", "hvac_enable": False})
+    out = h("override", {"zona": "Z06", "hvac_enable": False})
     assert out["overrides"] is None
     r = _enviar_paso(h, t, zonas, med)
-    assert "Z09" not in r["estado"]["manual"]
+    assert "Z06" not in r["estado"]["manual"]
 
 
 def test_override_valores_acotados(h):
@@ -98,7 +98,8 @@ def test_endpoint_http_valida_y_publica(h):
     assert ok["status"] == 200 and ok["cors"] == "*"
     assert ok["mqtt"]["topic"] == "ems/edificio1/ems/override"
     assert ok["mqtt"]["payload"] == {"zona": "Z03", "setpoint_c": 25, "duracion_min": 30, "usuario": "ana"}
-    assert h("http", {"tipo": "override", "zona": "Z10", "hvac_enable": False})["status"] == 400
+    assert h("http", {"tipo": "override", "zona": "Z06", "hvac_enable": False})["status"] == 400
+    assert h("http", {"tipo": "override", "zona": "Z27", "hvac_enable": False})["status"] == 400
     assert h("http", {"tipo": "override", "zona": "Z03"})["status"] == 400
     par = h("http", {"tipo": "parametros", "limite_kw": 32, "sp_ocupado": 24.5})
     assert par["status"] == 200 and par["parametros"]["payload"] == {"limite_kw": 32, "sp_ocupado": 24.5}
@@ -136,7 +137,7 @@ def test_endpoint_http_ocupacion(h):
     assert r["mqtt"]["payload"] == {"accion": "ocupacion", "zona": "Z03", "usuario": "", "duracion_min": 60, "personas": 30}
     r = h("http", {"tipo": "ocupacion", "zona": "*", "porcentaje": 50, "duracion_min": 240})
     assert r["status"] == 200 and r["mqtt"]["payload"]["porcentaje"] == 50
-    assert h("http", {"tipo": "ocupacion", "zona": "Z09", "personas": 2, "duracion_min": 5})["status"] == 400
+    assert h("http", {"tipo": "ocupacion", "zona": "Z06", "personas": 2, "duracion_min": 5})["status"] == 400
     assert h("http", {"tipo": "ocupacion", "zona": "*", "porcentaje": 300, "duracion_min": 5})["status"] == 400
     lib = h("http", {"tipo": "ocupacion", "zona": "Z03", "liberar": True})
     assert lib["status"] == 200 and lib["mqtt"]["payload"]["liberar"] is True

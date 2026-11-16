@@ -2,7 +2,7 @@ import React from 'react';
 import { GrafanaTheme2 } from '@grafana/data';
 import { css } from '@emotion/css';
 import { IconButton, useStyles2, useTheme2 } from '@grafana/ui';
-import { FLOORS, ZONE_TYPE_LABELS, Zone } from 'building/model';
+import { FLOOR_BY_LEVEL, ZONE_TYPE_LABELS, Zone, systemLabel } from 'building/model';
 import { EmsAlarm, History, STATUS_LABELS, Status, ZoneState } from 'building/telemetry';
 import { Sparkline } from './Sparkline';
 import { StatusBadge } from './StatusBadge';
@@ -59,8 +59,11 @@ export const ZoneDetail: React.FC<Props> = ({ zone, state, status, history, alar
             {zone.id} · {zone.name}
           </div>
           <div className={styles.sub}>
-            {FLOORS[zone.floor].name} · {ZONE_TYPE_LABELS[zone.type]} · {zone.area} m² ·{' '}
+            {FLOOR_BY_LEVEL[zone.floor]?.name} · {ZONE_TYPE_LABELS[zone.type]} · {zone.area} m² ·{' '}
             {zone.critical ? 'carga crítica' : 'carga gestionable'}
+          </div>
+          <div className={styles.sub} data-testid="ems-detail-system">
+            Climatización: {systemLabel(zone)}
           </div>
         </div>
         <IconButton name="times" tooltip="Cerrar" onClick={onClose} />

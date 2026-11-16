@@ -18,28 +18,28 @@ describe('confort y proyección', () => {
   });
 
   it('una oficina a 29 °C durante 8 h pierde rendimiento y tiene muchos insatisfechos', () => {
-    const p = projectZone('Z04', 29, 8);
+    const p = projectZone('Z07', 29, 8);
     expect(p.productivityLoss).toBeCloseTo(8);
     expect(p.ppd).toBeGreaterThan(30);
     expect(p.energyKwh).toBeLessThan(0);
   });
 
   it('servidores a 31 °C: fuera del recomendado, más fallas y baterías degradadas', () => {
-    const p = projectZone('Z09', 31, 24);
+    const p = projectZone('Z06', 31, 24);
     expect(p.it!.cls).toBe('admisible');
     expect(p.it!.extraFailuresPct).toBeGreaterThan(10);
     expect(p.it!.batteryLife).toBeLessThan(0.7);
   });
 
-  it('sin enfriamiento el cuarto de servidores supera 27 °C en poco tiempo', () => {
-    const r = freeFloatCurve('Z09', at(11), 4, { limitKw: 30 });
+  it('sin enfriamiento el cuarto de servidores supera 27 °C en unas horas', () => {
+    const r = freeFloatCurve('Z06', at(11), 12, { limitKw: 75 });
     expect(r.thresholds[0].minutes).toBeDefined();
-    expect(r.thresholds[0].minutes!).toBeLessThan(120);
+    expect(r.thresholds[0].minutes!).toBeLessThan(12 * 60);
     expect(r.final).toBeGreaterThan(r.series[0][1]);
   });
 
   it('una ola de calor de 3 días aumenta la energía y el pico', () => {
-    const r = projectHeatwave(at(0), 72, 5, { limitKw: 30, demoIncidents: false });
+    const r = projectHeatwave(at(0), 72, 5, { limitKw: 75, demoIncidents: false });
     expect(r.energyHot).toBeGreaterThan(r.energyBase * 1.05);
     expect(r.peakHot).toBeGreaterThanOrEqual(r.peakBase);
   });

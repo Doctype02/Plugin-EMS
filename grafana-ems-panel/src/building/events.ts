@@ -5,11 +5,11 @@
  * real emitiría. Efectos basados en práctica habitual:
  * - Incendio: la alarma apaga la climatización de todo el edificio para no propagar humo (NFPA 90A /
  *   control de humo) y se evacua; la zona afectada sube de temperatura rápidamente.
- * - Corte de energía: se pierde la red; las cargas críticas (servidores, cuarto eléctrico) siguen con el
- *   UPS durante su autonomía, pero sin climatización (el UPS no alimenta el VRF).
- * - Falla de una unidad exterior VRF: todas las zonas que atiende quedan sin enfriamiento.
+ * - Corte de energía: se pierde la red; la carga crítica (cuarto de servidores) sigue con el UPS durante
+ *   su autonomía, pero sin climatización (el UPS no alimenta el VRF). La FV se desconecta (anti-isla).
+ * - Falla de una unidad exterior VRF o de un PTAC: todas las zonas que atiende quedan sin enfriamiento.
  */
-import { VRF_UNITS, ZONE_BY_ID } from './model';
+import { HVAC_BY_ID, ZONE_BY_ID } from './model';
 import { AlarmLevel } from './telemetry';
 import type { GlyphName } from '../components/Glyph';
 
@@ -68,17 +68,16 @@ export const EVENTS: Record<EventKind, EventDef> = {
     glyph: 'bolt',
     level: 'crit',
     target: 'edificio',
-    description:
-      'Se pierde la red. Servidores y cuarto eléctrico siguen con el UPS durante su autonomía, sin climatización.',
+    description: 'Se pierde la red. El cuarto de servidores sigue con el UPS durante su autonomía, sin climatización.',
     defaultMinutes: 60,
     intensity: { label: 'Autonomía del UPS', min: 5, max: 120, step: 5, value: 30, unit: 'min' },
   },
   falla_vrf: {
-    label: 'Falla de unidad VRF',
+    label: 'Falla de unidad VRF / PTAC',
     glyph: 'fan',
     level: 'crit',
     target: 'unidad',
-    description: 'La unidad exterior deja de enfriar: todas las zonas que atiende se calientan.',
+    description: 'La unidad exterior VRF (o el PTAC de un baño) deja de enfriar: las zonas que atiende se calientan.',
     defaultMinutes: 120,
   },
   falla_terminal: {
@@ -152,7 +151,7 @@ export function affectsZone(e: SimEvent, zoneId: string): boolean {
     return true;
   }
   if (e.unit) {
-    return VRF_UNITS.find((u) => u.id === e.unit)?.zones.includes(zoneId) ?? false;
+    return HVAC_BY_ID[e.unit]?.zones.includes(zoneId) ?? false;
   }
   return e.zone === zoneId;
 }

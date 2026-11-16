@@ -6,7 +6,7 @@ la misma telemetría del contrato, se llama al mismo controlador EMS y se escrib
 (setpoint de enfriamiento, potencia de luces y equipos). Con `INFLUX_URL`/`MQTT_HOST` definidos
 publica igual que el modo live.
 
-El mapa entre las zonas Z01…Z10 y los objetos del IDF está en `config/energyplus_mapa.yaml`.
+El mapa entre las zonas Z01…Z26 y los objetos del IDF está en `config/energyplus_mapa.yaml`.
 Requisitos del IDF: `Output:Variable` no hace falta (se solicitan por API); los objetos Lights,
 ElectricEquipment y People deben existir por zona y la zona debe tener un termostato
 (ThermostatSetpoint:DualSetpoint o SingleCooling) para que el actuador "Zone Temperature Control"

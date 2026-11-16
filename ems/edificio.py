@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import eventos as m_ev
-from .config import RHO_CP, Zona, horario, zonas
+from .config import RHO_CP, Zona, fv_habilitada, horario, potencia_fv_kw, zonas
 from .eventos import Evento
 
 Q_PERSONA_KW = 0.075        # calor sensible por persona (actividad 120 W, schedule "Cargas" de E+)
@@ -93,9 +93,11 @@ class Edificio:
         self.ocupacion_forzada: dict[str, dict] = {}
         self._fin_eventos: list[Evento] = []
         self.unidades = {u["id"]: list(u["zonas"]) for u in cfg.get("sistemas_vrf", [])}
+        self.fv = fv_habilitada(cfg)
         self.e_kwh = 0.0
+        self.e_fv_kwh = 0.0
         self._hist_p: list[float] = []
-        self._vt = 0.252  # transmitancia visible del vidrio del modelo
+        self._vt = self.e.get("vt", 0.252)  # transmitancia visible del vidrio del modelo
         self.reset()
 
     # ------------------------------------------------------------------ estado
@@ -105,6 +107,7 @@ class Edificio:
             t = z.setpoint_fijo if z.setpoint_fijo else t0
             self.estado[z.id] = EstadoZona(t=t, setpoint_c=z.setpoint_fijo or 24.0, t_medida=t)
         self.e_kwh = 0.0
+        self.e_fv_kwh = 0.0
         self._hist_p = []
 
     def aplicar(self, comandos: dict[str, dict]):
@@ -257,10 +260,9 @@ class Edificio:
         t_eq = t_ext - self.e.get("delta_t_cielo_c", 0.0)
         # temperatura media (por área) de cada planta en el paso anterior, para el acople por el entrepiso
         t_planta = {}
-        for pl in (0, 1):
+        for pl in sorted({z.planta for z in self.zonas}):
             zs = [z for z in self.zonas if z.planta == pl]
-            if zs:
-                t_planta[pl] = sum(self.estado[z.id].t * z.area for z in zs) / sum(z.area for z in zs)
+            t_planta[pl] = sum(self.estado[z.id].t * z.area for z in zs) / sum(z.area for z in zs)
         edificio_ocupado = any(self._ocupantes(z, int(ocupantes.get(z.id, 0))) > 0 for z in no_crit)
 
         tel = []
@@ -331,14 +333,15 @@ class Edificio:
             q_lat = n * Q_PERSONA_LAT_KW + 1.2 * caudal_ext * H_FG * dw
 
             # --- integración térmica (subpasos de 1 min, Euler explícito)
-            t_otra = t_planta.get(1 - z.planta, s.t)
+            t_arriba = t_planta.get(z.planta + 1, s.t)
+            t_abajo = t_planta.get(z.planta - 1, s.t)
             q_hvac_sens = mod * cap
             sub = max(int(self.e["paso_min"]), 1)
             dt = self.paso_h / sub
             t = s.t
             for _ in range(sub):
                 dTdt = (z.ua * (t_eq - t) + (z.g_inf + g_vent + g_puerta) * (t_ext - t) + z.ua_suelo * (t_suelo - t)
-                        + z.ua_entrepiso * (t_otra - t) + q_int - q_hvac_sens) / z.c
+                        + z.ua_arriba * (t_arriba - t) + z.ua_abajo * (t_abajo - t) + q_int - q_hvac_sens) / z.c
                 t += dTdt * dt
             s.t = t
             # el VRF no controla humedad (en E+ la HR interior llega a 90 %+): sólo retira el latente que
@@ -374,7 +377,11 @@ class Edificio:
         p_fija = 0.0
         for cf in self.cfg.get("cargas_fijas") or []:
             f_edif = sum(ocupantes.get(z.id, 0) for z in no_crit) / max(sum(z.ocupantes for z in no_crit), 1)
-            if "kw_noche" in cf:
+            if "horario" in cf:
+                p = cf["kw"] * horario(self.cfg, cf["horario"], dia_semana, hora)
+                if corte is not None and not (cf.get("critica") and ups_ok):
+                    p = 0.0
+            elif "kw_noche" in cf:
                 p = cf["kw_noche"] if ghi < 5 else 0.0
             else:
                 p = cf["kw_desocupado"] + (cf["kw_ocupado"] - cf["kw_desocupado"]) * min(f_edif * 1.5, 1.0)
@@ -386,11 +393,16 @@ class Edificio:
         p_edificio = sum(tot.values()) + p_fija
         # durante un corte el medidor de la acometida lee cero; el UPS alimenta las cargas críticas
         p_total = 0.0 if corte is not None else p_edificio
+        # fotovoltaica (variante ConPV): el inversor se desconecta sin red (anti-isla)
+        p_fv = 0.0 if (corte is not None or not self.fv) else potencia_fv_kw(self.cfg, irr["H"])
+        p_red = p_total - p_fv
         if corte is not None:
             q_kvar = 0.0
         s_kva = math.hypot(p_total, q_kvar)
         self.e_kwh += p_total * self.paso_h
-        self._hist_p.append(p_total)
+        self.e_fv_kwh += p_fv * self.paso_h
+        # la demanda facturable es la que ve el medidor de la acometida (importación neta)
+        self._hist_p.append(max(p_red, 0.0))
         n15 = max(int(round(15 / self.e["paso_min"])), 1)
         dem15 = float(np.mean(self._hist_p[-n15:]))
         if len(self._hist_p) > 50:
@@ -408,6 +420,8 @@ class Edificio:
             **{f"irr_{o}": round(v, 1) for o, v in irr.items() if o != "H"},
             "red_ok": corte is None,
         }
+        if self.fv:
+            medidor.update({"p_fv_kw": round(p_fv, 3), "p_red_kw": round(p_red, 3), "e_fv_kwh": round(self.e_fv_kwh, 3)})
         if corte is not None:
             medidor["ups_kw"] = round(p_edificio, 3)
             medidor["ups_min"] = round(max(0.0, (corte.intensidad or 30) - corte.transcurrido), 1)

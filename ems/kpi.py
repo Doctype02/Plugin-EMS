@@ -7,11 +7,32 @@ import pandas as pd
 SEMANAS_ANIO = 365 / 7
 
 
-def energeticos(res, cfg: dict) -> dict:
+def serie_fv(m: pd.DataFrame, cfg: dict) -> pd.Series:
+    """Generación FV (kW AC): la del medidor si la simulación tenía la FV habilitada; si no, la que habría
+    dado la instalación de la variante ConPV con la misma irradiancia (no afecta al consumo del edificio)."""
+    if "p_fv_kw" in m:
+        return m["p_fv_kw"]
+    from .config import potencia_fv_kw
+
+    ok = m["red_ok"].astype(float) if "red_ok" in m else 1.0
+    return m["irr_wm2"].map(lambda g: potencia_fv_kw(cfg, g)) * ok
+
+
+def energeticos(res, cfg: dict, fv: bool | None = None) -> dict:
+    """KPIs de una simulación. fv=True: variante con paneles; la energía, el costo y la demanda son los de
+    la acometida (importación neta) y la energía inyectada se valora a precio_excedente_usd_kwh."""
     m, z = res.medidor, res.zonas
+    if fv is None:  # por defecto, la variante con la que se simuló
+        fv = "p_fv_kw" in m
     paso_h = cfg["edificio"]["paso_min"] / 60
-    e = float(m["p_total_kw"].sum() * paso_h)
-    costo_e = float((m["p_total_kw"] * m["precio_usd_kwh"]).sum() * paso_h)
+    p_fv = serie_fv(m, cfg) if fv and cfg.get("fv") else pd.Series(0.0, index=m.index)
+    red = m["p_total_kw"] - p_fv
+    imp, exp_ = red.clip(lower=0), (-red).clip(lower=0)
+    n15 = max(int(round(15 / cfg["edificio"]["paso_min"])), 1)
+    dem15 = imp.rolling(n15, min_periods=1).mean()
+    e = float(imp.sum() * paso_h)
+    costo_e = float((imp * m["precio_usd_kwh"]).sum() * paso_h
+                    - exp_.sum() * paso_h * cfg["tarifa"].get("precio_excedente_usd_kwh", 0.0))
     dias = len(m) * paso_h / 24
     occ = z[z["ocupado"] & ~z["critica"]]
     t = occ["temp_real_c"]
@@ -24,10 +45,13 @@ def energeticos(res, cfg: dict) -> dict:
         "dias": dias,
         "energia_kwh": e,
         "energia_dia_kwh": e / dias,
-        "pico_kw": float(m["p_total_kw"].max()),
-        "demanda_max_15min_kw": float(m["demanda_15min_kw"].max()),
-        "p_media_kw": float(m["p_total_kw"].mean()),
-        "factor_carga": float(m["p_total_kw"].mean() / m["demanda_15min_kw"].max()),
+        "consumo_kwh": float(m["p_total_kw"].sum() * paso_h),
+        "e_fv_kwh": float(p_fv.sum() * paso_h),
+        "e_inyectada_kwh": float(exp_.sum() * paso_h),
+        "pico_kw": float(imp.max()),
+        "demanda_max_15min_kw": float(dem15.max()),
+        "p_media_kw": float(imp.mean()),
+        "factor_carga": float(imp.mean() / max(dem15.max(), 1e-6)),
         "fp_medio": float(m["fp"].mean()),
         "e_hvac_kwh": float(m["p_hvac_kw"].sum() * paso_h),
         "e_luces_kwh": float(m["p_luces_kw"].sum() * paso_h),

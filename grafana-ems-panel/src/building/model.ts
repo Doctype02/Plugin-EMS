@@ -1,10 +1,35 @@
 /**
- * Edificio de oficinas de 2 plantas en Ciudad de Panamá (800 m², 10 zonas), según el modelo
- * OpenStudio/EnergyPlus del proyecto (config/edificio.yaml del EMS).
+ * Edificio de oficinas de 5 plantas en Ciudad de Panamá (2000 m², 26 zonas acondicionadas), según el
+ * modelo OpenStudio/EnergyPlus del proyecto (config/edificio.yaml del EMS).
  * Coordenadas en metros: x hacia el este, y hacia el norte, origen en la esquina suroeste.
+ *
+ * Los datos salen de modelData.ts, que genera tools/generar_modelo_panel.py desde el YAML; aquí van los
+ * tipos y las funciones derivadas (parámetros térmicos iguales a ems/config.py::zonas).
  */
+import { BUILDING, ENVELOPE, FLOORS, HVAC_SYSTEMS, PTAC_UNITS, PV, SURFACES, VRF_UNITS, ZONE_DATA } from './modelData';
 
-export type ZoneType = 'recepcion' | 'cubiculos' | 'oficina' | 'conferencia' | 'pasillo' | 'servidores' | 'electrico';
+export {
+  BUILDING,
+  CRITICAL_ZONES,
+  EMS_RULES,
+  ENVELOPE,
+  FIXED_LOADS,
+  FLOORS,
+  HVAC_SYSTEMS,
+  LIMIT_KW,
+  LIMIT_RANGE,
+  PTAC_UNITS,
+  PV,
+  SCHEDULES,
+  SURFACES,
+  TARIFF,
+  VRF_UNITS,
+} from './modelData';
+
+export type ZoneType =
+  'recepcion' | 'cubiculos' | 'conferencia' | 'pasillo' | 'bano' | 'servidores' | 'oficina' | 'oficina_abierta';
+
+export type Facade = 'n' | 's' | 'e' | 'w';
 
 export interface Rect {
   x: number;
@@ -13,323 +38,205 @@ export interface Rect {
   d: number;
 }
 
-export interface Zone {
+export interface ZoneData {
   id: string;
   name: string;
   type: ZoneType;
   critical: boolean;
   floor: number;
+  /** Parte principal de la huella (rótulos, interiores). */
   rect: Rect;
+  /** Todas las partes de la huella (una sola si la zona es rectangular). */
+  rects: Rect[];
   /** Parámetros del modelo E+ (iguales al gemelo digital en Python). */
   area: number;
   occupants: number;
   lpd: number;
   epd: number;
-  /** Capacidad total del terminal VRF (kW térmicos). */
+  /** Capacidad total del terminal VRF o del PTAC (kW térmicos). */
   hvacKw: number;
-  /** COP estacional del sistema VRF que atiende la zona (calibrado con E+). */
+  /** COP estacional del sistema que atiende la zona (calibrado con E+, incluye factor_cop). */
   cop: number;
   fanKw: number;
   system: string;
+  systemKind: 'vrf' | 'ptac';
   itKw?: number;
   fixedSetpoint?: number;
   /** Área de vidrio por fachada (m²). */
-  glazing: Partial<Record<'n' | 's' | 'e' | 'w', number>>;
+  glazing: Partial<Record<Facade, number>>;
+  /** Horarios del modelo E+ que usa la zona (claves de SCHEDULES). */
+  schedules: { occupancy: string; lights: string; equipment: string; ac: string };
+  fanMode: string;
+}
+
+export interface Zone extends ZoneData {
   /** Fachadas con ventanas (para el dibujo). */
-  windows?: Array<'s' | 'n' | 'e' | 'w'>;
+  windows: Facade[];
 }
 
 export interface Floor {
   level: number;
   name: string;
   short: string;
-  /** Losas que no son zonas. */
+  /** Losas que no son zonas (núcleo del elevador). */
   extras: Array<{ rect: Rect; label?: string }>;
 }
 
-export const BUILDING = {
-  name: 'Edificio de oficinas — Ciudad de Panamá',
-  width: 20,
-  depth: 20,
-  floorHeight: 3.0,
-};
+/** Sistema de climatización: unidad exterior VRF (azotea) o PTAC de pared (baños). */
+export interface HvacSystem {
+  id: string;
+  kind: 'vrf' | 'ptac';
+  capacityKw: number;
+  cop: number;
+  zones: string[];
+}
 
-export const FLOORS: Floor[] = [
-  { level: 0, name: 'Planta baja', short: 'PB', extras: [] },
-  { level: 1, name: 'Planta alta', short: 'PA', extras: [] },
-];
+export interface VrfUnit extends HvacSystem {
+  rect: Rect;
+}
 
-const z = (d: Omit<Zone, 'windows'>): Zone => ({
+export interface PtacUnit extends HvacSystem {
+  zone: string;
+  floor: number;
+  facade: Facade;
+}
+
+export interface PvField {
+  id: string;
+  areaM2: number;
+  /** Zona de la última planta (o 'elevador') sobre cuya losa está el campo. */
+  over: string;
+  rect: Rect;
+}
+
+export interface PvSpec {
+  enabledDefault: boolean;
+  fractionActive: number;
+  efficiency: number;
+  inverter: number;
+  areaM2: number;
+  peakKw: number;
+  fields: PvField[];
+}
+
+export interface SurfaceSpec {
+  walls: Partial<Record<Facade, number>>;
+  roof: number;
+  ground: number;
+}
+
+export type Profile = Array<[number, number]>;
+export interface Schedule {
+  weekday: Profile;
+  saturday: Profile;
+  sunday: Profile;
+}
+
+export interface FixedLoad {
+  name: string;
+  kw: number;
+  schedule: string;
+  pf: number;
+  critical: boolean;
+}
+
+const withWindows = (d: ZoneData): Zone => ({
   ...d,
-  windows: (Object.keys(d.glazing) as Array<'n' | 's' | 'e' | 'w'>).filter((k) => (d.glazing[k] ?? 0) > 0),
+  windows: (Object.keys(d.glazing) as Facade[]).filter((k) => (d.glazing[k] ?? 0) > 0),
 });
 
-export const ZONES: Zone[] = [
-  z({
-    id: 'Z01',
-    name: 'Recepción',
-    type: 'recepcion',
-    critical: false,
-    floor: 0,
-    rect: { x: 10, y: 0, w: 10, d: 8 },
-    area: 80,
-    occupants: 4,
-    lpd: 5.5,
-    epd: 6.0,
-    hvacKw: 5.76,
-    cop: 1.72,
-    fanKw: 0.147,
-    system: 'VRF-B',
-    glazing: { e: 18, s: 22.5 },
-  }),
-  z({
-    id: 'Z02',
-    name: 'Cubículos',
-    type: 'cubiculos',
-    critical: false,
-    floor: 0,
-    rect: { x: 0, y: 3, w: 10, d: 17 },
-    area: 170,
-    occupants: 15,
-    lpd: 8.72,
-    epd: 10.59,
-    hvacKw: 19.41,
-    cop: 1.72,
-    fanKw: 0.435,
-    system: 'VRF-B',
-    glazing: { n: 22.5, w: 38.25 },
-  }),
-  z({
-    id: 'Z03',
-    name: 'Sala de conferencias',
-    type: 'conferencia',
-    critical: false,
-    floor: 0,
-    rect: { x: 10, y: 8, w: 10, d: 12 },
-    area: 120,
-    occupants: 20,
-    lpd: 9.0,
-    epd: 2.08,
-    hvacKw: 13.36,
-    cop: 1.72,
-    fanKw: 0.269,
-    system: 'VRF-B',
-    glazing: { e: 27, n: 22.5 },
-  }),
-  z({
-    id: 'Z09',
-    name: 'Cuarto de servidores',
-    type: 'servidores',
-    critical: true,
-    floor: 0,
-    rect: { x: 4, y: 0, w: 6, d: 3 },
-    area: 18,
-    occupants: 0,
-    lpd: 4.44,
-    epd: 0,
-    itKw: 2.0,
-    hvacKw: 2.89,
-    cop: 3.08,
-    fanKw: 0.086,
-    system: 'VRF-C',
-    fixedSetpoint: 24,
-    glazing: {},
-  }),
-  z({
-    id: 'Z10',
-    name: 'Cuarto eléctrico',
-    type: 'electrico',
-    critical: true,
-    floor: 0,
-    rect: { x: 0, y: 0, w: 4, d: 3 },
-    area: 12,
-    occupants: 0,
-    lpd: 5.0,
-    epd: 12.5,
-    hvacKw: 0.16,
-    cop: 1.72,
-    fanKw: 0.003,
-    system: 'VRF-B',
-    fixedSetpoint: 27,
-    glazing: {},
-  }),
-  z({
-    id: 'Z04',
-    name: 'Oficina 1',
-    type: 'oficina',
-    critical: false,
-    floor: 1,
-    rect: { x: 0, y: 10, w: 9, d: 10 },
-    area: 90,
-    occupants: 9,
-    lpd: 8.89,
-    epd: 12,
-    hvacKw: 17.04,
-    cop: 2.08,
-    fanKw: 0.433,
-    system: 'VRF-A',
-    glazing: { n: 20.25, w: 22.5 },
-  }),
-  z({
-    id: 'Z05',
-    name: 'Oficina 2',
-    type: 'oficina',
-    critical: false,
-    floor: 1,
-    rect: { x: 0, y: 0, w: 9, d: 10 },
-    area: 90,
-    occupants: 9,
-    lpd: 8.89,
-    epd: 12,
-    hvacKw: 16.13,
-    cop: 2.08,
-    fanKw: 0.397,
-    system: 'VRF-A',
-    glazing: { s: 20.25, w: 22.5 },
-  }),
-  z({
-    id: 'Z06',
-    name: 'Oficina 3',
-    type: 'oficina',
-    critical: false,
-    floor: 1,
-    rect: { x: 11, y: 10, w: 9, d: 10 },
-    area: 90,
-    occupants: 9,
-    lpd: 8.89,
-    epd: 12,
-    hvacKw: 15.31,
-    cop: 2.08,
-    fanKw: 0.37,
-    system: 'VRF-A',
-    glazing: { n: 20.25, e: 22.5 },
-  }),
-  z({
-    id: 'Z07',
-    name: 'Oficina 4',
-    type: 'oficina',
-    critical: false,
-    floor: 1,
-    rect: { x: 11, y: 0, w: 9, d: 10 },
-    area: 90,
-    occupants: 9,
-    lpd: 8.89,
-    epd: 12,
-    hvacKw: 14.54,
-    cop: 2.08,
-    fanKw: 0.341,
-    system: 'VRF-A',
-    glazing: { s: 20.25, e: 22.5 },
-  }),
-  z({
-    id: 'Z08',
-    name: 'Pasillo',
-    type: 'pasillo',
-    critical: false,
-    floor: 1,
-    rect: { x: 9, y: 0, w: 2, d: 20 },
-    area: 40,
-    occupants: 0,
-    lpd: 2.0,
-    epd: 0,
-    hvacKw: 3.55,
-    cop: 2.08,
-    fanKw: 0.099,
-    system: 'VRF-A',
-    glazing: { n: 4.5, s: 4.5 },
-  }),
-];
+export const ZONES: Zone[] = ZONE_DATA.map(withWindows);
 
 export const ZONE_BY_ID: Record<string, Zone> = Object.fromEntries(ZONES.map((x) => [x.id, x]));
+
+export const FLOOR_BY_LEVEL: Record<number, Floor> = Object.fromEntries(FLOORS.map((f) => [f.level, f]));
+
+/** Última planta (la azotea está sobre ella). */
+export const TOP_LEVEL = FLOORS[FLOORS.length - 1].level;
 
 export const ZONE_TYPE_LABELS: Record<ZoneType, string> = {
   recepcion: 'Recepción',
   cubiculos: 'Cubículos',
-  oficina: 'Oficina',
   conferencia: 'Conferencias',
   pasillo: 'Circulación',
+  bano: 'Baños',
   servidores: 'Servidores',
-  electrico: 'Cuarto eléctrico',
+  oficina: 'Oficina',
+  oficina_abierta: 'Oficina abierta',
 };
 
-/** Unidades exteriores VRF en la azotea (capacidad autodimensionada por E+) y zonas que atienden. */
-export interface VrfUnit {
-  id: string;
-  capacityKw: number;
-  zones: string[];
-  rect: Rect;
+export const HVAC_BY_ID: Record<string, HvacSystem> = Object.fromEntries(HVAC_SYSTEMS.map((s) => [s.id, s]));
+export const VRF_BY_ID: Record<string, VrfUnit> = Object.fromEntries(VRF_UNITS.map((s) => [s.id, s]));
+export const PTAC_BY_ZONE: Record<string, PtacUnit> = Object.fromEntries(PTAC_UNITS.map((s) => [s.zone, s]));
+
+/** Texto del equipo que climatiza la zona. */
+export function systemLabel(zone: Zone): string {
+  const s = HVAC_BY_ID[zone.system];
+  if (zone.systemKind === 'ptac') {
+    return `${zone.system} (PTAC de pared${s ? `, ${s.capacityKw.toFixed(1)} kW` : ''})`;
+  }
+  return `${zone.system} (VRF${s ? `, ${s.capacityKw.toFixed(0)} kW` : ''})`;
 }
 
-export const VRF_UNITS: VrfUnit[] = [
-  { id: 'VRF-A', capacityKw: 66.57, zones: ['Z04', 'Z05', 'Z06', 'Z07', 'Z08'], rect: { x: 3, y: 12, w: 6, d: 4 } },
-  { id: 'VRF-B', capacityKw: 38.69, zones: ['Z01', 'Z02', 'Z03', 'Z10'], rect: { x: 12, y: 12.5, w: 4.5, d: 3.2 } },
-  { id: 'VRF-C', capacityKw: 2.89, zones: ['Z09'], rect: { x: 14, y: 5, w: 1.6, d: 1.4 } },
-];
-
-/** En la vista exterior las unidades van junto al borde norte para no tapar las etiquetas. */
-export const VRF_UNITS_STACKED: VrfUnit[] = [
-  { ...VRF_UNITS[0], rect: { x: 1.0, y: 16.8, w: 5.5, d: 2.6 } },
-  { ...VRF_UNITS[1], rect: { x: 7.5, y: 17.2, w: 4.2, d: 2.2 } },
-  { ...VRF_UNITS[2], rect: { x: 12.8, y: 17.8, w: 1.5, d: 1.2 } },
-];
+/** Potencia AC de la fotovoltaica (ems/config.py::potencia_fv_kw) con irradiancia horizontal en W/m². */
+export function pvPowerKw(irrWm2: number): number {
+  return (Math.max(irrWm2, 0) * PV.areaM2 * PV.fractionActive * PV.efficiency * PV.inverter) / 1000;
+}
 
 // ---------------------------------------------------------------------------------------------
-// Envolvente y parámetros térmicos (mismos valores y fórmulas que ems/config.py, calibrados contra E+)
-
-/** Constantes del modelo E+ y de la calibración del gemelo (config/edificio.yaml). */
-export const ENVELOPE = {
-  uWall: 0.86,
-  uRoof: 0.274,
-  uGround: 2.945,
-  uGlass: 6.424,
-  shgc: 0.252,
-  infiltration: 0.00030226, // m³/s por m² de superficie exterior
-  rhoCp: 1.2 * 1.006,
-  tGround: 18,
-  capacitancePerM2: 0.03, // kWh/K·m²
-  solarFactor: 0.5,
-  skyDeltaT: 6,
-};
-
-/** Muros exteriores brutos por fachada (m²), techo exterior y losa sobre terreno (E+ Surfaces). */
-export const SURFACES: Record<
-  string,
-  { walls: Partial<Record<'n' | 's' | 'e' | 'w', number>>; roof: number; ground: number }
-> = {
-  Z01: { walls: { e: 24, s: 30 }, roof: 0, ground: 80 },
-  Z02: { walls: { n: 30, w: 51 }, roof: 0, ground: 170 },
-  Z03: { walls: { e: 36, n: 30 }, roof: 0, ground: 120 },
-  Z04: { walls: { n: 27, w: 30 }, roof: 90, ground: 0 },
-  Z05: { walls: { s: 27, w: 30 }, roof: 90, ground: 0 },
-  Z06: { walls: { n: 27, e: 30 }, roof: 90, ground: 0 },
-  Z07: { walls: { s: 27, e: 30 }, roof: 90, ground: 0 },
-  Z08: { walls: { n: 6, s: 6 }, roof: 40, ground: 0 },
-  Z09: { walls: { s: 18 }, roof: 0, ground: 18 },
-  Z10: { walls: { s: 12, w: 9 }, roof: 0, ground: 12 },
-};
+// Parámetros térmicos (mismas fórmulas que ems/config.py::zonas, calibradas contra E+)
 
 export interface Thermal {
-  /** Conducción por la envolvente (kW/K). */
+  /** Conducción por la envolvente: muros opacos, vidrio y techo (kW/K). */
   ua: number;
   /** Infiltración (kW/K). */
   gInf: number;
   /** Acople con el terreno (kW/K). */
   uaGround: number;
+  /** Acople con la planta superior / inferior a través de las losas entre plantas (kW/K). */
+  uaUp: number;
+  uaDown: number;
   /** Capacitancia térmica efectiva (kWh/K). */
   c: number;
   glass: number;
-  /** Constante de tiempo (h) con el HVAC apagado. */
+  /** Ganancia solar por los opacos (kW por W/m² de irradiancia) por orientación y techo ('h'). */
+  solarOpaque: Partial<Record<Facade | 'h', number>>;
+  /** Constante de tiempo (h) con el HVAC apagado (plantas vecinas a temperatura constante). */
   tau: number;
 }
 
+const ALPHA_HO = 0.7 / 17; // absortancia / coef. película exterior → aire-sol
+
 export function thermal(zone: Zone): Thermal {
   const s = SURFACES[zone.id] ?? { walls: {}, roof: 0, ground: 0 };
-  const glass = Object.values(zone.glazing).reduce((a, v) => a + (v ?? 0), 0);
-  const wallsGross = Object.values(s.walls).reduce((a, v) => a + (v ?? 0), 0);
-  const opaque = Math.max(wallsGross - glass, 0);
-  const ua = (ENVELOPE.uWall * opaque + ENVELOPE.uGlass * glass + ENVELOPE.uRoof * s.roof) / 1000;
+  const facades: Facade[] = ['n', 'e', 's', 'w'];
+  const glass = facades.reduce((a, o) => a + (zone.glazing[o] ?? 0), 0);
+  const opaque = Object.fromEntries(
+    facades.map((o) => [o, Math.max((s.walls[o] ?? 0) - (zone.glazing[o] ?? 0), 0)])
+  ) as Record<Facade, number>;
+  const wallsGross = facades.reduce((a, o) => a + (s.walls[o] ?? 0), 0);
+  const opaqueSum = facades.reduce((a, o) => a + opaque[o], 0);
+  const ua = (ENVELOPE.uWall * opaqueSum + ENVELOPE.uGlass * glass + ENVELOPE.uRoof * s.roof) / 1000;
   const gInf = ENVELOPE.infiltration * (wallsGross + s.roof) * ENVELOPE.rhoCp;
+  const slab = (ENVELOPE.uInterfloor * zone.area) / 1000;
+  const uaUp = zone.floor < BUILDING.floors - 1 && !s.roof ? slab : 0;
+  const uaDown = zone.floor > 0 && !s.ground ? slab : 0;
   const uaGround = (ENVELOPE.uGround * s.ground) / 1000;
   const c = ENVELOPE.capacitancePerM2 * zone.area;
-  return { ua, gInf, uaGround, c, glass, tau: c / Math.max(ua + gInf + uaGround, 1e-6) };
+  const solarOpaque: Thermal['solarOpaque'] = {};
+  for (const o of facades) {
+    if (opaque[o]) {
+      solarOpaque[o] = (ENVELOPE.uWall * opaque[o] * ALPHA_HO) / 1000;
+    }
+  }
+  if (s.roof) {
+    solarOpaque.h = (ENVELOPE.uRoof * s.roof * ALPHA_HO) / 1000;
+  }
+  const g = ua + gInf + uaGround + uaUp + uaDown;
+  return { ua, gInf, uaGround, uaUp, uaDown, c, glass, solarOpaque, tau: c / Math.max(g, 1e-6) };
+}
+
+/** Conductancia total hacia el exterior, el terreno y las plantas vecinas (kW/K). */
+export function totalConductance(th: Thermal): number {
+  return th.ua + th.gInf + th.uaGround + th.uaUp + th.uaDown;
 }

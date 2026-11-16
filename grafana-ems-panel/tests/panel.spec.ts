@@ -1,15 +1,23 @@
 import { test, expect } from '@grafana/plugin-e2e';
 
-test('muestra el edificio con las 10 zonas', async ({ gotoPanelEditPage, readProvisionedDashboard }) => {
+const ZONAS = Array.from({ length: 26 }, (_, i) => `Z${String(i + 1).padStart(2, '0')}`);
+
+test('muestra el edificio con las 26 zonas', async ({ gotoPanelEditPage, readProvisionedDashboard }) => {
   const dashboard = await readProvisionedDashboard({ fileName: 'dashboard.json' });
   const panelEditPage = await gotoPanelEditPage({ dashboard, id: '1' });
   const panel = panelEditPage.panel.locator;
 
   await expect(panel.getByTestId('ems-building')).toBeVisible();
-  for (const zona of ['Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z09', 'Z10']) {
+  for (const zona of ZONAS) {
     await expect(panel.getByTestId(`ems-zone-${zona}`)).toHaveCount(1);
   }
+  for (const planta of ['PB', 'P1', 'P2', 'P3', 'P4']) {
+    await expect(panel.getByTestId(`ems-floor-${planta}`)).toHaveCount(1);
+  }
   await expect(panel.getByTestId('ems-roof')).toBeVisible();
+  await expect(panel.getByTestId('ems-roof-VRF-P4')).toHaveCount(1);
+  // modo demostración con FV automática: campos fotovoltaicos en la azotea
+  await expect(panel.getByTestId('ems-pv-FV-1')).toHaveCount(1);
 });
 
 test('abre el detalle de la zona al hacer clic', async ({ gotoPanelEditPage, readProvisionedDashboard }) => {
@@ -17,7 +25,7 @@ test('abre el detalle de la zona al hacer clic', async ({ gotoPanelEditPage, rea
   const panelEditPage = await gotoPanelEditPage({ dashboard, id: '1' });
   const panel = panelEditPage.panel.locator;
 
-  await panel.getByTestId('ems-zone-Z09').click();
+  await panel.getByTestId('ems-zone-Z06').click();
   await expect(panel.getByTestId('ems-detail')).toContainText('Cuarto de servidores');
   await expect(panel.getByTestId('ems-detail')).toContainText('carga crítica');
 });
@@ -40,7 +48,7 @@ test('sin datos de demostración todas las zonas quedan sin datos', async ({
   const options = panelEditPage.getCustomOptions('EMS Edificio');
 
   await options.getSwitch('Datos de demostración').uncheck();
-  await expect(panelEditPage.panel.locator.getByTestId('ems-count-offline')).toContainText('10');
+  await expect(panelEditPage.panel.locator.getByTestId('ems-count-offline')).toContainText('26');
 });
 
 test('la vista exterior apila los pisos', async ({ gotoPanelEditPage, readProvisionedDashboard }) => {
@@ -49,7 +57,7 @@ test('la vista exterior apila los pisos', async ({ gotoPanelEditPage, readProvis
   const panel = panelEditPage.panel.locator;
 
   await panel.getByTestId('ems-explode').click();
-  await expect(panel.getByTestId('ems-floor-PA')).toBeVisible();
+  await expect(panel.getByTestId('ems-floor-P4')).toBeVisible();
   await expect(panel.getByText('Azotea · unidades VRF')).toHaveCount(0);
 });
 
@@ -84,6 +92,6 @@ test('las zonas críticas no se pueden controlar', async ({ gotoPanelEditPage, r
   const panelEditPage = await gotoPanelEditPage({ dashboard, id: '1' });
   const panel = panelEditPage.panel.locator;
 
-  await panel.getByTestId('ems-zone-Z09').click();
+  await panel.getByTestId('ems-zone-Z06').click();
   await expect(panel.getByTestId('ems-control-locked')).toBeVisible();
 });

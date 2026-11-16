@@ -39,12 +39,24 @@ export const MeterCard: React.FC<Props> = ({ meter, ems, limitKw, history }) => 
     ['Corriente', `${meter.i.toFixed(1)} A`],
     ['Crítica / no crítica', `${meter.pCritical.toFixed(1)} / ${meter.pNonCritical.toFixed(1)} kW`],
     ['Energía del día', `${meter.eKwh.toFixed(0)} kWh`],
+    ...(meter.pPv !== undefined
+      ? ([
+          ['Generación FV', `${meter.pPv.toFixed(1)} kW`],
+          [
+            (meter.pGrid ?? 0) < 0 ? 'Red (exportación)' : 'Red (importación neta)',
+            `${(meter.pGrid ?? meter.pTotal - meter.pPv).toFixed(1)} kW`,
+          ],
+          ['Energía FV del día', `${(meter.ePv ?? 0).toFixed(0)} kWh`],
+        ] as Array<[string, string]>)
+      : []),
     ['Precio vigente', `${meter.price.toFixed(3)} USD/kWh`],
   ];
 
   return (
     <div className={styles.card} data-testid="ems-meter">
-      <div className={styles.label}>Demanda 15 min vs límite ({limit} kW)</div>
+      <div className={styles.label}>
+        Demanda 15 min vs límite ({limit} kW){meter.pPv !== undefined ? ' · importación neta' : ''}
+      </div>
       <div className={styles.bar} role="meter" aria-valuenow={meter.demand15} aria-valuemax={limit}>
         <div
           className={styles.fill}

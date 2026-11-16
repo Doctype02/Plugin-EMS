@@ -44,6 +44,10 @@ class Puente:
                  port: int | None = None):
         import paho.mqtt.client as mqtt
 
+        fv = os.getenv("EMS_FV")
+        if fv is not None and cfg.get("fv"):
+            # variante del edificio: con (ConPV) o sin paneles fotovoltaicos
+            cfg = {**cfg, "fv": {**cfg["fv"], "habilitado": fv.strip().lower() in ("1", "si", "sí", "true", "yes")}}
         self.cfg = cfg
         self.tz = cfg["edificio"]["zona_horaria"]
         self.control = control or os.getenv("EMS_CONTROL", "externo")
@@ -225,7 +229,7 @@ class Puente:
                     self.influx.zona(t, z)
                 self._pub("medidor/general", {"ts": ts, **med})
                 self.influx.medidor(t, med)
-                self.influx.flush()
+                self.influx.flush(forzar=True)  # un paso = un lote (con velocidad 1 hay 1 paso cada 5 min)
                 espera = paso * 60 / self.velocidad - (time.time() - t_real)
                 if espera > 0:
                     time.sleep(espera)

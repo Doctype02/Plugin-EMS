@@ -1,8 +1,8 @@
 import React from 'react';
 import { colorManipulator } from '@grafana/data';
-import { Zone } from 'building/model';
+import { PTAC_BY_ZONE, Rect, ZONES, Zone } from 'building/model';
 import { IsoConfig, Pt, path, planeMatrix, pointDepth, prism, rotate, toScreen, wallQuad } from 'building/iso';
-import { Furniture, edgesOf, interiorOf } from 'building/interior';
+import { Furniture, interiorOf, zoneEdges } from 'building/interior';
 import { hash } from 'building/simulator';
 import { ZoneState } from 'building/telemetry';
 
@@ -44,6 +44,41 @@ interface Props {
   label: string;
   manual: boolean;
   statusColor: string;
+  /** Escala del rótulo flotante (crece cuando hay muchos niveles en la vista explotada). */
+  labelScale?: number;
+  /** Desplazamiento vertical del rótulo (px) para no encimarse con otros. */
+  labelOffset?: number;
+}
+
+/** Ancho del rótulo flotante (sin escalar). */
+export const tagWidth = (text: string, manual: boolean) => text.length * 6.2 + 18 + (manual ? 16 : 0);
+
+/**
+ * Punto de anclaje del rótulo: el centro de la parte principal; en los pasillos largos, el extremo más
+ * alejado de los centros de las otras zonas de la planta (para no encimarse con ellas).
+ */
+export function tagAnchor(zone: Zone, z0: number, dy: number, iso: IsoConfig): Pt {
+  const r = zone.rect;
+  let x = r.x + r.w / 2;
+  let y = r.y + r.d / 2;
+  if (zone.type === 'pasillo' && Math.max(r.w, r.d) > 3 * Math.min(r.w, r.d)) {
+    const others = ZONES.filter((o) => o.floor === zone.floor && o.id !== zone.id).map((o) => ({
+      x: o.rect.x + o.rect.w / 2,
+      y: o.rect.y + o.rect.d / 2,
+    }));
+    let best = -1;
+    for (const f of [0.25, 0.5, 0.75]) {
+      const cx = r.w > r.d ? r.x + r.w * f : x;
+      const cy = r.w > r.d ? y : r.y + r.d * f;
+      const d = Math.min(...others.map((o) => Math.hypot(o.x - cx, o.y - cy)), Infinity);
+      if (d > best + 0.01) {
+        best = d;
+        x = cx;
+        y = cy;
+      }
+    }
+  }
+  return toScreen(x, y, z0 + SLAB + WALL_FULL + 1.1, iso, dy);
 }
 
 const shade = (c: string, a: number) => colorManipulator.darken(c, a);
@@ -75,6 +110,8 @@ const FURNITURE_COLOR = (k: Furniture['kind'], p: ScenePalette) =>
     rack: p.rack,
     cabinet: p.dark ? '#4a4d55' : '#a9adb6',
     plant: p.plant,
+    stall: p.dark ? '#5d6670' : '#c9d2db',
+    sink: p.dark ? '#d5d8dc' : '#f4f6f8',
   })[k];
 
 /** Zona en corte: piso coloreado por la vista, muros (fondo completo, frente de vidrio), mobiliario,
@@ -95,21 +132,25 @@ export const ZoneInterior: React.FC<Props> = ({
   label,
   manual,
   statusColor,
+  labelScale = 1,
+  labelOffset = 0,
 }) => {
   const s = iso.scale;
   const zf = z0 + SLAB;
   const r = zone.rect;
   const inner = interiorOf(zone);
-  const center = rotate(r.x + r.w / 2, r.y + r.d / 2, iso.azimuth);
-  const floor = prism(r, z0, SLAB, iso, 0.08, dy);
+  const floors = zone.rects.map((part) => prism(part, z0, SLAB, iso, 0.08, dy));
+  const outline = zoneEdges(zone);
 
   // --- muros: los de atrás (respecto al observador) van completos; los de adelante, bajos
-  const edges = edgesOf(r).map((e) => {
+  const edges = outline.map((e, i) => {
+    const center = rotate(e.part.x + e.part.w / 2, e.part.y + e.part.d / 2, iso.azimuth);
     const mid = rotate((e.a.x + e.b.x) / 2, (e.a.y + e.b.y) / 2, iso.azimuth);
     const back = mid.y - center.y > 0.01 || mid.x - center.x < -0.01;
     const h = e.exterior ? (back ? WALL_FULL : PARAPET) : PARTITION;
     return {
       ...e,
+      key: i,
       back,
       h,
       quad: wallQuad(e.a, e.b, zf, zf + h, iso, dy),
@@ -120,7 +161,7 @@ export const ZoneInterior: React.FC<Props> = ({
   const wallFace = (e: (typeof edges)[number]) => {
     const f = e.back ? shade(P.wall, 0.08) : shade(P.wall, 0.18);
     return (
-      <g key={e.side}>
+      <g key={e.key}>
         {!e.back && e.exterior && (
           <path
             d={path(e.ghost)}
@@ -194,6 +235,44 @@ export const ZoneInterior: React.FC<Props> = ({
       ),
     });
   });
+
+  // PTAC de pared (baños): equipo bajo el techo contra la fachada, con su LED de estado
+  const ptac = PTAC_BY_ZONE[zone.id];
+  if (ptac) {
+    const w = 1.0;
+    const t = 0.35;
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.d / 2;
+    const box: Rect =
+      ptac.facade === 's'
+        ? { x: cx - w / 2, y: r.y + 0.05, w, d: t }
+        : ptac.facade === 'n'
+          ? { x: cx - w / 2, y: r.y + r.d - t - 0.05, w, d: t }
+          : ptac.facade === 'w'
+            ? { x: r.x + 0.05, y: cy - w / 2, w: t, d: w }
+            : { x: r.x + r.w - t - 0.05, y: cy - w / 2, w: t, d: w };
+    const p = prism(box, zf + 1.9, 0.5, iso, 0, dy);
+    const body = P.dark ? '#c9ccd1' : '#eef0f2';
+    const led = state?.drForced ? '#eb6834' : state?.hvacOn ? '#3987e5' : P.dark ? '#55554f' : '#9a988f';
+    objs.push({
+      depth: p.depth,
+      el: (
+        <g key="ptac" data-testid={`ems-ptac-${ptac.id}`}>
+          {p.sides.map((sd, j) => (
+            <path
+              key={j}
+              d={path(sd.points)}
+              fill={shade(body, 0.12 + j * 0.12)}
+              stroke={shade(body, 0.4)}
+              strokeWidth={0.4}
+            />
+          ))}
+          <path d={path(p.top)} fill={body} stroke={shade(body, 0.35)} strokeWidth={0.4} />
+          <circle cx={p.center.x} cy={p.center.y} r={1.6} fill={led} />
+        </g>
+      ),
+    });
+  }
 
   // personas: sentadas en su puesto; ~30 % caminan hacia el pasillo y vuelven
   const n = Math.min(state?.occupants ?? 0, inner.seats.length, MAX_PEOPLE);
@@ -321,23 +400,47 @@ export const ZoneInterior: React.FC<Props> = ({
     </g>
   ));
 
-  // --- rótulo flotante
-  const tagPt = toScreen(r.x + r.w / 2, r.y + r.d / 2, zf + WALL_FULL + 1.1, iso, dy);
+  // --- rótulo flotante (Building3D lo desplaza si se encima con el de otra zona del mismo nivel)
+  const anchor = tagAnchor(zone, z0, dy, iso);
+  const tagPt = { x: anchor.x, y: anchor.y + labelOffset };
   const text = `${zone.id} · ${label}`;
-  const tw = text.length * 6.2 + 18 + (manual ? 16 : 0);
+  const tw = tagWidth(text, manual);
 
+  const multi = floors.length > 1;
   return (
     <>
-      <path
-        d={path(floor.top)}
-        fill={fill}
-        stroke={highlight ?? shade(fill, 0.3)}
-        strokeWidth={highlight ? (selected ? 3 : 2) : 0.6}
-      />
-      {offline && <path d={path(floor.top)} fill={`url(#${idPrefix}-hatch)`} pointerEvents="none" />}
-      {floor.sides.map((sd, i) => (
-        <path key={i} d={path(sd.points)} fill={shade(fill, 0.3 + i * 0.1)} />
+      {floors.map((floor, k) => (
+        <path
+          key={`top${k}`}
+          d={path(floor.top)}
+          fill={fill}
+          stroke={multi ? fill : (highlight ?? shade(fill, 0.3))}
+          strokeWidth={multi ? 0.8 : highlight ? (selected ? 3 : 2) : 0.6}
+        />
       ))}
+      {multi &&
+        outline.map((e, k) => {
+          const a = toScreen(e.a.x, e.a.y, zf, iso, dy);
+          const b = toScreen(e.b.x, e.b.y, zf, iso, dy);
+          return (
+            <line
+              key={`ol${k}`}
+              x1={a.x}
+              y1={a.y}
+              x2={b.x}
+              y2={b.y}
+              stroke={highlight ?? shade(fill, 0.3)}
+              strokeWidth={highlight ? (selected ? 3 : 2) : 0.6}
+            />
+          );
+        })}
+      {offline &&
+        floors.map((floor, k) => (
+          <path key={`h${k}`} d={path(floor.top)} fill={`url(#${idPrefix}-hatch)`} pointerEvents="none" />
+        ))}
+      {floors.flatMap((floor, k) =>
+        floor.sides.map((sd, i) => <path key={`s${k}-${i}`} d={path(sd.points)} fill={shade(fill, 0.3 + i * 0.1)} />)
+      )}
       {glow && (
         <g transform={planeMatrix(zf + 0.01, iso, dy)} pointerEvents="none">
           {glow}
@@ -350,7 +453,10 @@ export const ZoneInterior: React.FC<Props> = ({
         {air}
       </g>
       {edges.filter((e) => !e.back).map(wallFace)}
-      <g pointerEvents="none" transform={`translate(${tagPt.x.toFixed(1)},${tagPt.y.toFixed(1)})`}>
+      <g
+        pointerEvents="none"
+        transform={`translate(${tagPt.x.toFixed(1)},${tagPt.y.toFixed(1)}) scale(${labelScale.toFixed(2)})`}
+      >
         <line x1={0} y1={0} x2={0} y2={s * 0.9} stroke={P.ink2} strokeWidth={0.8} opacity={0.6} />
         <rect
           x={-tw / 2}

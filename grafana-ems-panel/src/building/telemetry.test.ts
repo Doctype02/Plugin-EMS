@@ -61,6 +61,26 @@ describe('lectura de data frames (contrato InfluxDB)', () => {
     expect(snapshot.zones.Z06.temp).toBe(27.4);
   });
 
+  it('lee la fotovoltaica del medidor sólo si viene (variante con FV)', () => {
+    const medidor = (extra: Record<string, number>) =>
+      toDataFrame({
+        fields: [
+          { name: '_time', type: FieldType.time, values: [t0] },
+          { name: 'p_total_kw', type: FieldType.number, values: [90] },
+          { name: 'demanda_15min_kw', type: FieldType.number, values: [60] },
+          ...Object.entries(extra).map(([name, v]) => ({ name, type: FieldType.number, values: [v] })),
+        ],
+        meta: {},
+      });
+    const con = snapshotFromFrames([medidor({ p_fv_kw: 32, p_red_kw: 58, e_fv_kwh: 120 })]).snapshot.meter!;
+    expect(con.pPv).toBe(32);
+    expect(con.pGrid).toBe(58);
+    expect(con.ePv).toBe(120);
+    const sin = snapshotFromFrames([medidor({})]).snapshot.meter!;
+    expect(sin.pPv).toBeUndefined();
+    expect(sin.pGrid).toBeUndefined();
+  });
+
   it('lee alarmas y las deduplica por zona y código', () => {
     const frame = toDataFrame({
       fields: [
@@ -97,7 +117,7 @@ describe('lectura de data frames (contrato InfluxDB)', () => {
     expect(zoneStatus(ZONE_BY_ID.Z02, base, [])).toBe('ok');
     expect(zoneStatus(ZONE_BY_ID.Z02, { ...base, temp: 26.5 }, [])).toBe('warning');
     expect(zoneStatus(ZONE_BY_ID.Z02, { ...base, sensorFault: true }, [])).toBe('critical');
-    expect(zoneStatus(ZONE_BY_ID.Z09, { ...base, temp: 28 }, [])).toBe('critical');
+    expect(zoneStatus(ZONE_BY_ID.Z06, { ...base, temp: 28 }, [])).toBe('critical');
     expect(zoneStatus(ZONE_BY_ID.Z02, undefined, [])).toBe('offline');
   });
 });

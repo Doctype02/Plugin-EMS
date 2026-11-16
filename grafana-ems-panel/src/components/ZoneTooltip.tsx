@@ -2,7 +2,7 @@ import React from 'react';
 import { GrafanaTheme2 } from '@grafana/data';
 import { css } from '@emotion/css';
 import { useStyles2 } from '@grafana/ui';
-import { Zone } from 'building/model';
+import { FLOOR_BY_LEVEL, Zone, systemLabel } from 'building/model';
 import { STATUS_LABELS, Status, ZoneState } from 'building/telemetry';
 import { StatusBadge } from './StatusBadge';
 
@@ -21,7 +21,7 @@ const W = 230;
 export const ZoneTooltip: React.FC<Props> = ({ zone, state, status, x, y, containerWidth, containerHeight }) => {
   const styles = useStyles2(getStyles);
   const left = Math.max(4, x + 16 + W > containerWidth ? x - W - 16 : x + 16);
-  const top = Math.min(y + 12, containerHeight - 170);
+  const top = Math.max(4, Math.min(y + 12, containerHeight - 210));
   const rows: Array<[string, string]> =
     state && Number.isFinite(state.temp)
       ? [
@@ -41,6 +41,7 @@ export const ZoneTooltip: React.FC<Props> = ({ zone, state, status, x, y, contai
           ['Potencia', `${state.pTotal.toFixed(2)} kW`],
         ]
       : [];
+  rows.push(['Planta', FLOOR_BY_LEVEL[zone.floor]?.name ?? String(zone.floor)], ['Equipo', systemLabel(zone)]);
   return (
     <div className={styles.tooltip} style={{ left, top, width: W }} data-testid="ems-tooltip">
       <div className={styles.head}>

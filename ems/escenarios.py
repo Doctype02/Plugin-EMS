@@ -37,21 +37,25 @@ def area_total(cfg: dict) -> float:
 
 # ============================================================================ eficiencia
 def comparar(cfg: dict, dias: float = 7, controladores=ESCENARIOS_EMS, guardar_series: bool = True,
-             semanas=SEMANAS_TIPO):
+             semanas=SEMANAS_TIPO, con_fv: bool = True):
     """Ejecuta cada controlador sobre el mismo clima (EPW) y ocupación en las semanas tipo.
-    Devuelve (tabla KPI, resultados)."""
+    Con FV en la configuración agrega la variante con paneles (`<controlador>_fv`): mismo consumo, energía y
+    demanda de la acometida netas de la generación; su economía se compara contra `baseline_fv`.
+    El EMS se simula sin FV (el limitador ve el consumo); la FV se descuenta después. Devuelve (tabla, resultados)."""
+    cfg_sim = m_config.aplicar(cfg, {"fv.habilitado": False}) if cfg.get("fv") else cfg
     resultados, filas = {}, []
     for c in controladores:
-        r = simular_muestra(cfg, c, semanas=semanas, dias=dias)
-        resultados[c] = r
-    base = kpi.energeticos(resultados["baseline"], cfg)
-    for c, r in resultados.items():
-        k = kpi.energeticos(r, cfg)
-        fila = {"escenario": c, **k}
-        if c != "baseline":
-            fila.update(kpi.economia(base, k, cfg))
-            fila["energia_ahorrada_kwh"] = base["energia_kwh"] - k["energia_kwh"]
-        filas.append(fila)
+        resultados[c] = simular_muestra(cfg_sim, c, semanas=semanas, dias=dias)
+    variantes = [False, True] if (con_fv and cfg.get("fv")) else [False]
+    for fv in variantes:
+        base = kpi.energeticos(resultados["baseline"], cfg, fv=fv)
+        for c, r in resultados.items():
+            k = kpi.energeticos(r, cfg, fv=fv)
+            fila = {"escenario": f"{c}_fv" if fv else c, **k}
+            if c != "baseline":
+                fila.update(kpi.economia(base, k, cfg))
+                fila["energia_ahorrada_kwh"] = base["energia_kwh"] - k["energia_kwh"]
+            filas.append(fila)
     return pd.DataFrame(filas).set_index("escenario"), resultados
 
 
@@ -71,23 +75,23 @@ def _casos(cfg: dict) -> list[dict]:
         {"id": "P04", "nombre": "Sensor congelado en cubículos Z02 (4 h)", "dias": 3,
          "anomalias": [Anomalia("sensor", d + 9, d + 13, "Z02", {"tipo": "congelado"})],
          "esperado": ["SENSOR_CONGELADO"], "criterios": {"zona_tmax": ("Z02", d + 9, d + 13, 27.0)}},
-        {"id": "P05", "nombre": "Sensor fuera de rango en Oficina 2 Z05 (85 °C)", "dias": 3,
-         "anomalias": [Anomalia("sensor", d + 10, d + 11, "Z05", {"tipo": "fuera_rango", "valor": 85.0})],
-         "esperado": ["SENSOR_FUERA_RANGO"], "criterios": {"zona_tmax": ("Z05", d + 10, d + 11, 26.5)}},
-        {"id": "P06", "nombre": "Sensor ruidoso en Oficina 1 Z04 (σ = 2 °C)", "dias": 3,
-         "anomalias": [Anomalia("sensor", d + 8, d + 12, "Z04", {"tipo": "ruidoso", "sigma": 2.0})],
-         "esperado": ["SENSOR_FUERA_RANGO"], "criterios": {"zona_tmax": ("Z04", d + 8, d + 12, 27.0)}},
-        {"id": "P07", "nombre": "Falla del terminal VRF de la Oficina 3 Z06 (10–14 h)", "dias": 3,
-         "anomalias": [Anomalia("falla_hvac", d + 10, d + 14, "Z06")],
+        {"id": "P05", "nombre": "Sensor fuera de rango en Oficina 2 P1 Z08 (85 °C)", "dias": 3,
+         "anomalias": [Anomalia("sensor", d + 10, d + 11, "Z08", {"tipo": "fuera_rango", "valor": 85.0})],
+         "esperado": ["SENSOR_FUERA_RANGO"], "criterios": {"zona_tmax": ("Z08", d + 10, d + 11, 26.5)}},
+        {"id": "P06", "nombre": "Sensor ruidoso en Oficina 1 P1 Z07 (σ = 2 °C)", "dias": 3,
+         "anomalias": [Anomalia("sensor", d + 8, d + 12, "Z07", {"tipo": "ruidoso", "sigma": 2.0})],
+         "esperado": ["SENSOR_FUERA_RANGO"], "criterios": {"zona_tmax": ("Z07", d + 8, d + 12, 27.0)}},
+        {"id": "P07", "nombre": "Falla del terminal VRF de la Oficina 1 P2 Z12 (10–14 h)", "dias": 3,
+         "anomalias": [Anomalia("falla_hvac", d + 10, d + 14, "Z12")],
          "esperado": ["TEMP_ALTA"], "criterios": {}},
-        {"id": "P08", "nombre": "Pico de carga +12 kW en Oficina 4 Z07 (13–15 h)", "dias": 3,
-         "anomalias": [Anomalia("carga_extra", d + 13, d + 15, "Z07", {"kw": 12.0})],
+        {"id": "P08", "nombre": "Pico de carga +25 kW en Oficina 2 P2 Z13 (13–15 h)", "dias": 3,
+         "anomalias": [Anomalia("carga_extra", d + 13, d + 15, "Z13", {"kw": 25.0})],
          "esperado": ["DR_ACTIVO"], "criterios": {"respuesta_dr": (d + 13, 2)}},
         {"id": "P09", "nombre": "Pérdida del 30 % de comandos", "dias": 3,
          "anomalias": [Anomalia("perdida_comandos", d, d + 24, params={"prob": 0.3})],
          "esperado": [], "criterios": {"confort_min_pct": 93, "dem_max_kw": lim * 1.08}},
-        {"id": "P10", "nombre": "Sobrecalentamiento del cuarto de servidores (falla del VRF-C, 1 h)", "dias": 3,
-         "anomalias": [Anomalia("falla_hvac", d + 15, d + 16, "Z09")],
+        {"id": "P10", "nombre": "Sobrecalentamiento del cuarto de servidores (falla del VRF-SRV, 2 h)", "dias": 3,
+         "anomalias": [Anomalia("falla_hvac", d + 15, d + 17, "Z06")],
          "esperado": ["SERVIDOR_TEMP"], "criterios": {}},
     ]
 
@@ -99,6 +103,8 @@ def _ventana(df: pd.DataFrame, t0, h0: float, h1: float) -> pd.DataFrame:
 
 
 def pruebas(cfg: dict, controlador: str = "reglas_dr") -> tuple[pd.DataFrame, list[dict]]:
+    # sin FV: los criterios de demanda se refieren al consumo del edificio (como en comparar)
+    cfg = m_config.aplicar(cfg, {"fv.habilitado": False}) if cfg.get("fv") else cfg
     filas, detalle = [], []
     for caso in _casos(cfg):
         t_ini = time.perf_counter()

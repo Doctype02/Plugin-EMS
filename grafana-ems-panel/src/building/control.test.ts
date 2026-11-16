@@ -6,7 +6,7 @@ const at = (h: number, m = 0, day = 3) => Date.UTC(2026, 10, day, h + 5, m);
 describe('comandos del operador', () => {
   it('valida rangos y zonas críticas', () => {
     expect(validate({ zone: 'Z02', setpoint: 23, durationMin: 60 })).toBeUndefined();
-    expect(validate({ zone: 'Z09', hvac: 'off', durationMin: 60 })).toMatch(/crítica/);
+    expect(validate({ zone: 'Z06', hvac: 'off', durationMin: 60 })).toMatch(/crítica/);
     expect(validate({ zone: 'Z02', setpoint: 31, durationMin: 60 })).toMatch(/20 y 28/);
     expect(validate({ zone: 'Z02', durationMin: 60 })).toMatch(/cambios/);
     expect(validate({ zone: 'Z99', hvac: 'on', durationMin: 60 })).toMatch(/desconocida/);
@@ -48,7 +48,7 @@ describe('comandos del operador', () => {
 describe('overrides en el simulador', () => {
   const t0 = at(10, 0);
   const t = at(11, 0);
-  const base = { limitKw: 30 };
+  const base = { limitKw: 75 };
 
   it('apagar el HVAC de una zona la calienta y baja su potencia', () => {
     const auto = simulate(t, base);
@@ -64,13 +64,13 @@ describe('overrides en el simulador', () => {
       ...base,
       overrides: {
         Z03: { lights: 0, plugs: 0.1, since: t0, until: t0 + 3_600_000 * 3 },
-        Z09: { hvac: 'off', since: t0, until: t0 + 3_600_000 * 3 },
+        Z06: { hvac: 'off', since: t0, until: t0 + 3_600_000 * 3 },
       },
     });
     expect(s.zones.Z03.lights).toBe(0);
     expect(s.zones.Z03.pLights).toBe(0);
-    expect(s.zones.Z09.override).toBe(false);
-    expect(s.zones.Z09.hvacEnable).toBe(true);
+    expect(s.zones.Z06.override).toBe(false);
+    expect(s.zones.Z06.hvacEnable).toBe(true);
   });
 
   it('el override vencido ya no aplica', () => {

@@ -3,7 +3,7 @@
  * enfriamiento, con el mismo modelo RC del gemelo (model.ts → thermal) y los criterios de comfort.ts.
  */
 import { batteryLifeFactor, itClass, ItClass, pmv, pmvLabel, ppd, productivityLoss, xFactor } from './comfort';
-import { ENVELOPE, ZONE_BY_ID, thermal } from './model';
+import { EMS_RULES, ENVELOPE, TARIFF, ZONE_BY_ID, thermal, totalConductance } from './model';
 import { SimOptions, freeFloat, instant, simulate } from './simulator';
 import { newEvent } from './events';
 
@@ -14,10 +14,10 @@ const HOUR = 60 * MIN;
 export const ASSUMPTIONS = {
   /** Costo laboral por hora en oficina, Ciudad de Panamá (≈ 1 300 USD/mes con cargas sociales). */
   wageUsdH: 7.5,
-  /** Precio medio de la energía (USD/kWh, tarifa comercial BTD supuesta). */
-  priceUsdKwh: 0.21,
+  /** Precio medio de la energía (USD/kWh): promedio de punta y fuera de punta de config/edificio.yaml. */
+  priceUsdKwh: (TARIFF.peakUsdKwh + TARIFF.offPeakUsdKwh) / 2,
   /** Setpoint de referencia del EMS con ocupación. */
-  refSetpoint: 24,
+  refSetpoint: EMS_RULES.spOccupied,
   rh: 55,
 };
 
@@ -52,7 +52,7 @@ export function projectZone(zoneId: string, temp: number, hours: number, rh = AS
   const people = z.occupants;
   const productivityUsd = (people * hours * ASSUMPTIONS.wageUsdH * loss) / 100;
   // cada °C por debajo de la referencia exige retirar G·ΔT más de calor sensible (más su COP)
-  const g = th.ua + th.gInf + th.uaGround;
+  const g = totalConductance(th);
   const ref = z.fixedSetpoint ?? ASSUMPTIONS.refSetpoint;
   const energyKwh = ((g * (ref - temp)) / z.cop) * hours;
   const out: ZoneProjection = {
@@ -69,7 +69,7 @@ export function projectZone(zoneId: string, temp: number, hours: number, rh = AS
     consequences: [],
   };
   const c = out.consequences;
-  if (z.type === 'servidores' || z.type === 'electrico') {
+  if (z.type === 'servidores') {
     const x = xFactor(temp);
     const cls = itClass(temp);
     const life = batteryLifeFactor(temp);

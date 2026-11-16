@@ -3,7 +3,7 @@ import { Glyph, GlyphName } from './Glyph';
 import { GrafanaTheme2, colorManipulator } from '@grafana/data';
 import { css, cx } from '@emotion/css';
 import { Button, Icon, RadioButtonGroup, useStyles2 } from '@grafana/ui';
-import { ZONES, ZONE_BY_ID, thermal } from 'building/model';
+import { LIMIT_KW, LIMIT_RANGE, ZONES, ZONE_BY_ID, thermal } from 'building/model';
 import { Command, LogEntry, durationLabel } from 'building/control';
 import { EmsParams, OccupancyOverrides, Overrides, Snapshot } from 'building/telemetry';
 import { ZoneMiniMap } from './ZoneMiniMap';
@@ -33,7 +33,7 @@ const fmtTime = (t: number) =>
   });
 
 const OFFICES = ZONES.filter((z) => !z.critical);
-const DEFAULTS: EmsParams = { limitKw: 30, spOccupied: 24 };
+const DEFAULTS: EmsParams = { limitKw: LIMIT_KW, spOccupied: 24 };
 /** kW eléctricos por °C de setpoint en las zonas con ocupación (G/COP del modelo RC). */
 const KW_PER_DEG = OFFICES.reduce((a, z) => {
   const th = thermal(z);
@@ -172,8 +172,8 @@ export const BuildingControl: React.FC<Props> = ({
           label="Límite de demanda"
           value={limit}
           unit="kW"
-          min={20}
-          max={50}
+          min={LIMIT_RANGE[0]}
+          max={LIMIT_RANGE[1]}
           step={1}
           onChange={setLimit}
           note={

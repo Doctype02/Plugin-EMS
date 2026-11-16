@@ -42,8 +42,31 @@ def _desde_config(codigo: str) -> str:
     return codigo.replace(bloque, nuevo)
 
 
+def _listas(codigo: str) -> str:
+    """Inyecta las listas de zonas, críticas, zonas sin aforo y unidades de config/edificio.yaml."""
+    import re
+    import sys
+
+    sys.path.insert(0, str(RAIZ))
+    from ems import config as m_config
+
+    cfg = m_config.cargar()
+    zs = cfg["zonas"]
+    lim = cfg["ems"]["limite_demanda_kw"]
+    listas = {
+        "ZONAS": [z["id"] for z in zs],
+        "CRITICAS": [z["id"] for z in zs if z.get("critica")],
+        "SIN_PERSONAS": [z["id"] for z in zs if z.get("critica") or not z.get("ocupantes")],
+        "UNIDADES": [s["id"] for s in cfg.get("sistemas_vrf", [])],
+        "LIMITE_KW": [round(lim * 0.25), round(lim * 3.3)],
+    }
+    for k, v in listas.items():
+        codigo = re.sub(rf"/\*@{k}@\*/.*?/\*@FIN@\*/", f"/*@{k}@*/{json.dumps(v)}/*@FIN@*/", codigo, flags=re.S)
+    return codigo
+
+
 def fn(id_, nombre, archivo, x, y, wires, outputs=1):
-    codigo = (SRC / archivo).read_text(encoding="utf-8")
+    codigo = _listas((SRC / archivo).read_text(encoding="utf-8"))
     if archivo == "ems_reglas.js":
         codigo = _desde_config(codigo)
     return {"id": id_, "type": "function", "z": TAB, "name": nombre, "func": codigo,
@@ -61,6 +84,18 @@ def mqtt_out(id_, nombre, x, y, retain="false"):
             "respTopic": "", "contentType": "", "userProps": "", "correl": "", "expiry": "", "broker": BROKER,
             "x": x, "y": y, "wires": []}
 
+
+def _limite() -> float:
+    import sys
+
+    sys.path.insert(0, str(RAIZ))
+    from ems import config as m_config
+
+    return m_config.cargar()["ems"]["limite_demanda_kw"]
+
+
+LIM = _limite()
+LIM_BAJO = round(LIM * 0.9)
 
 flows = [
     {"id": TAB, "type": "tab", "label": "EMS Edificio (Proyecto 2)", "disabled": False,
@@ -91,11 +126,11 @@ flows = [
      "console": False, "tostatus": False, "complete": "payload", "targetType": "msg", "x": 740, "y": 340, "wires": []},
     {"id": "c_par", "type": "comment", "z": TAB, "name": "Parámetros en vivo (demo / sensibilidad)", "info": "", "x": 200, "y": 400, "wires": []},
     mqtt_in("in_par", "parámetros", "ems/+/ems/parametros", 140, 440, [["fn_par"]]),
-    {"id": "inj_lim135", "type": "inject", "z": TAB, "name": "límite 27 kW", "props": [{"p": "payload"}],
-     "repeat": "", "crontab": "", "once": False, "onceDelay": 0.1, "topic": "", "payload": "{\"limite_kw\":27}",
+    {"id": "inj_lim135", "type": "inject", "z": TAB, "name": f"límite {LIM_BAJO} kW", "props": [{"p": "payload"}],
+     "repeat": "", "crontab": "", "once": False, "onceDelay": 0.1, "topic": "", "payload": json.dumps({"limite_kw": LIM_BAJO}),
      "payloadType": "json", "x": 140, "y": 480, "wires": [["fn_par"]]},
-    {"id": "inj_lim145", "type": "inject", "z": TAB, "name": "límite 30 kW (defecto)", "props": [{"p": "payload"}],
-     "repeat": "", "crontab": "", "once": True, "onceDelay": 0.5, "topic": "", "payload": "{\"limite_kw\":30}",
+    {"id": "inj_lim145", "type": "inject", "z": TAB, "name": f"límite {LIM} kW (defecto)", "props": [{"p": "payload"}],
+     "repeat": "", "crontab": "", "once": True, "onceDelay": 0.5, "topic": "", "payload": json.dumps({"limite_kw": LIM}),
      "payloadType": "json", "x": 170, "y": 520, "wires": [["fn_par"]]},
     {"id": "inj_sp25", "type": "inject", "z": TAB, "name": "setpoint ocupado 25 °C", "props": [{"p": "payload"}],
      "repeat": "", "crontab": "", "once": False, "onceDelay": 0.1, "topic": "", "payload": "{\"sp_ocupado\":25}",

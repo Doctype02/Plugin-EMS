@@ -2,7 +2,7 @@ import { applyOccupancy, toPayload, validateOccupancy } from './control';
 import { simulate } from './simulator';
 
 const at = (h: number, m = 0, day = 3) => Date.UTC(2026, 10, day, h + 5, m);
-const base = { limitKw: 30, demoIncidents: false };
+const base = { limitKw: 75, demoIncidents: false };
 const occ = (zone: string, v: { people?: number; pct?: number }, from = at(8), until = at(18)) => ({
   [zone]: { ...v, since: from, until },
 });
@@ -31,8 +31,8 @@ describe('control de la cantidad de personas', () => {
   });
 
   it('valida, aplica y envía los comandos', () => {
-    expect(validateOccupancy({ kind: 'occupancy', zone: 'Z03', people: 41, durationMin: 30 })).toBeDefined();
-    expect(validateOccupancy({ kind: 'occupancy', zone: 'Z09', people: 1, durationMin: 30 })).toBeDefined();
+    expect(validateOccupancy({ kind: 'occupancy', zone: 'Z03', people: 45, durationMin: 30 })).toBeDefined();
+    expect(validateOccupancy({ kind: 'occupancy', zone: 'Z06', people: 1, durationMin: 30 })).toBeDefined();
     expect(validateOccupancy({ kind: 'occupancy', zone: '*', pct: 250, durationMin: 30 })).toBeDefined();
     expect(validateOccupancy({ kind: 'occupancy', zone: 'Z03', people: 25, durationMin: 30 })).toBeUndefined();
     const o = applyOccupancy({}, { kind: 'occupancy', zone: 'Z03', people: 25, durationMin: 30 }, 0);

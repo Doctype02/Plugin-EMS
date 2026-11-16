@@ -2,7 +2,7 @@ import React from 'react';
 import { GrafanaTheme2, colorManipulator } from '@grafana/data';
 import { css, cx } from '@emotion/css';
 import { useStyles2, useTheme2 } from '@grafana/ui';
-import { ZONES } from 'building/model';
+import { PV, TARIFF, ZONES } from 'building/model';
 import { Snapshot, Status } from 'building/telemetry';
 import { dayPeriod, localParts } from 'building/clock';
 import { MiniChart } from './MiniChart';
@@ -14,6 +14,8 @@ interface Props {
   limitKw: number;
   /** Curva de potencia del día (t, kW) en pasos de 15 min. */
   dayCurve: Array<[number, number]>;
+  /** Generación FV del día (t, kW), sólo en la variante con fotovoltaica. */
+  pvCurve?: Array<[number, number]>;
   now: number;
   onSelectZone: (id: string) => void;
   /** Detalle del medidor eléctrico (P, Q, S, FP, V, I). */
@@ -21,7 +23,7 @@ interface Props {
 }
 
 /** Factor de emisión del SIN de Panamá (supuesto documentado en config/edificio.yaml). */
-const CO2_KG_KWH = 0.31;
+const CO2_KG_KWH = TARIFF.co2KgKwh;
 
 const STATUS_TEXT: Record<Status, string> = {
   ok: 'Normal',
@@ -37,6 +39,7 @@ export const OverviewPanel: React.FC<Props> = ({
   statusColors,
   limitKw,
   dayCurve,
+  pvCurve,
   now,
   onSelectZone,
   meter,
@@ -56,10 +59,24 @@ export const OverviewPanel: React.FC<Props> = ({
         { k: 'HVAC', v: m.pHvac, c: theme.visualization.getColorByName('blue') },
         { k: 'Iluminación', v: m.pLights, c: theme.visualization.getColorByName('yellow') },
         { k: 'Equipos', v: m.pPlugs, c: theme.visualization.getColorByName('purple') },
+        { k: 'Fijas', v: m.pFixed, c: theme.visualization.getColorByName('orange') },
       ]
     : [];
   const total = parts.reduce((a, x) => a + x.v, 0) || 1;
   const hourFmt = (t: number) => `${Math.round((t - p.dayStart) / 3_600_000)}h`;
+  const hasPv = m?.pPv !== undefined;
+  // energía comprada a la red: consumo menos lo generado (la FV inyectada se paga a precio de excedente)
+  const eNet = m ? m.eKwh - (m.ePv ?? 0) : 0;
+  const pvShare = m && hasPv && m.pTotal > 0 ? Math.min(1, (m.pPv ?? 0) / m.pTotal) : 0;
+  const pvSeries = pvCurve?.length
+    ? [
+        {
+          name: 'FV',
+          color: theme.visualization.getColorByName('green'),
+          points: pvCurve.filter(([t]) => t <= now),
+        },
+      ]
+    : [];
 
   return (
     <div className={styles.box} data-testid="ems-overview">
@@ -96,6 +113,7 @@ export const OverviewPanel: React.FC<Props> = ({
           series={[
             { name: 'Medido', color: theme.visualization.getColorByName('blue'), points: past },
             { name: 'Previsto', color: theme.colors.text.secondary, points: future, dashed: true },
+            ...pvSeries,
           ]}
           rules={[{ y: limitKw, label: `${limitKw} kW`, color: theme.colors.warning.text }]}
           marker={{ x: now, label: 'ahora' }}
@@ -108,14 +126,45 @@ export const OverviewPanel: React.FC<Props> = ({
 
       <div className={styles.stats}>
         <Stat label="Energía hoy" value={m ? `${m.eKwh.toFixed(0)} kWh` : '—'} />
-        <Stat label="Costo hoy" value={m ? `${(m.eKwh * m.price).toFixed(0)} USD` : '—'} />
-        <Stat label="CO₂ hoy" value={m ? `${((m.eKwh * CO2_KG_KWH) / 1000).toFixed(2)} t` : '—'} />
+        <Stat label="Costo hoy" value={m ? `${(Math.max(eNet, 0) * m.price).toFixed(0)} USD` : '—'} />
+        <Stat label="CO₂ hoy" value={m ? `${((Math.max(eNet, 0) * CO2_KG_KWH) / 1000).toFixed(2)} t` : '—'} />
         <Stat
           label="Demanda 15 min"
           value={m ? `${m.demand15.toFixed(1)} kW` : '—'}
           accent={m && m.demand15 > limitKw ? statusColors.critical : undefined}
         />
       </div>
+
+      {m && hasPv && (
+        <section className={styles.card} data-testid="ems-overview-pv">
+          <div className={styles.cardHead}>
+            <span>Fotovoltaica</span>
+            <span className={styles.muted}>
+              {PV.areaM2.toFixed(0)} m² · pico ≈ {PV.peakKw.toFixed(0)} kW
+            </span>
+          </div>
+          <div className={styles.stack}>
+            <div
+              style={{ width: `${pvShare * 100}%`, background: theme.visualization.getColorByName('green') }}
+              title={`FV: ${(m.pPv ?? 0).toFixed(1)} kW`}
+            />
+            <div
+              style={{ width: `${(1 - pvShare) * 100}%`, background: theme.visualization.getColorByName('blue') }}
+              title={`Red: ${Math.max(m.pGrid ?? 0, 0).toFixed(1)} kW`}
+            />
+          </div>
+          <div className={styles.stats}>
+            <Stat label="Generación" value={`${(m.pPv ?? 0).toFixed(1)} kW`} />
+            <Stat
+              label={(m.pGrid ?? 0) < 0 ? 'Exportación' : 'Red (neta)'}
+              value={`${Math.abs(m.pGrid ?? 0).toFixed(1)} kW`}
+              accent={(m.pGrid ?? 0) < 0 ? theme.visualization.getColorByName('green') : undefined}
+            />
+            <Stat label="FV hoy" value={`${(m.ePv ?? 0).toFixed(0)} kWh`} />
+            <Stat label="Cubre" value={`${Math.round(pvShare * 100)} %`} />
+          </div>
+        </section>
+      )}
 
       {m && (
         <section className={styles.card}>

@@ -4,7 +4,7 @@ import { css, cx } from '@emotion/css';
 import { Button, IconButton, RadioButtonGroup, Tab, TabsBar, useStyles2, useTheme2 } from '@grafana/ui';
 import { config } from '@grafana/runtime';
 import { EmsOptions } from 'types';
-import { BUILDING, FLOORS, VRF_UNITS, VrfUnit, ZONES, ZONE_BY_ID, Zone } from 'building/model';
+import { BUILDING, FLOORS, LIMIT_KW, VRF_UNITS, VrfUnit, ZONES, ZONE_BY_ID, Zone } from 'building/model';
 import { Azimuth, IsoConfig } from 'building/iso';
 import { SimOptions, instant, simulate, simulateHistory } from 'building/simulator';
 import {
@@ -305,18 +305,33 @@ export const EmsPanel: React.FC<Props> = (props) => {
   const statusColors = useStatusColors();
   const [overrides, setOverrides] = useState<Overrides>({});
   const [occupancy, setOccupancy] = useState<OccupancyOverrides>({});
-  const [params, setParams] = useState<EmsParams>({ limitKw: options.limitKw, spOccupied: 24 });
+  const [params, setParams] = useState<EmsParams>({ limitKw: options.limitKw ?? LIMIT_KW, spOccupied: 24 });
   const [log, setLog] = useState<LogEntry[]>([]);
   const [busy, setBusy] = useState(false);
   const [animate, setAnimate] = useState(options.animations);
   const [events, setEvents] = useState<SimEvent[]>([]);
   const [demoIncidents, setDemoIncidents] = useState(true);
   const simClock = useSimClock(options.demoMode, options.demoSpeed);
+  const pvMode = options.pvMode ?? 'auto';
+  const controller = options.demoController ?? 'reglas_dr';
   const sim = useMemo<SimOptions>(
-    () => ({ limitKw: params.limitKw, spOccupied: params.spOccupied, overrides, events, demoIncidents, occupancy }),
-    [params, overrides, events, demoIncidents, occupancy]
+    () => ({
+      limitKw: params.limitKw,
+      spOccupied: params.spOccupied,
+      overrides,
+      events,
+      demoIncidents,
+      occupancy,
+      pv: pvMode !== 'off',
+      controller,
+    }),
+    [params, overrides, events, demoIncidents, occupancy, pvMode, controller]
   );
   const { snapshot, history, now } = useSnapshot(props, sim, simClock.now, simClock.real);
+  // variante con FV: en vivo se detecta por la presencia de p_fv_kw en el medidor
+  const pvVisible = options.demoMode
+    ? pvMode !== 'off'
+    : pvMode === 'on' || (pvMode === 'auto' && snapshot.meter?.pPv !== undefined);
   const activeOverrides = useMemo(() => prune(overrides, now), [overrides, now]);
   const activeOccupancy = useMemo(() => pruneOccupancy(occupancy, now), [occupancy, now]);
   const manual = useMemo(
@@ -465,15 +480,21 @@ export const EmsPanel: React.FC<Props> = (props) => {
   // curva de potencia del día (15 min): simulada en demostración, tendencia del medidor en vivo
   const dayStart = localParts(now).dayStart;
   const curveBucket = Math.floor(now / 900_000);
-  const dayCurve = useMemo<Array<[number, number]>>(() => {
+  const { dayCurve, pvCurve } = useMemo(() => {
     if (!options.demoMode) {
-      return (history.EDIF?.pTotal ?? []) as Array<[number, number]>;
+      return {
+        dayCurve: (history.EDIF?.pTotal ?? []) as Array<[number, number]>,
+        pvCurve: history.EDIF?.pPv as Array<[number, number]> | undefined,
+      };
     }
     const out: Array<[number, number]> = [];
+    const pvOut: Array<[number, number]> = [];
     for (let t = dayStart; t <= dayStart + 86_400_000; t += 900_000) {
-      out.push([t, instant(t, sim).pTotal]);
+      const k = instant(t, sim);
+      out.push([t, k.pTotal]);
+      pvOut.push([t, k.pPv]);
     }
-    return out;
+    return { dayCurve: out, pvCurve: sim.pv ? pvOut : undefined };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options.demoMode, dayStart, sim, curveBucket, history]);
   const activeEventCount = events.filter((e) => e.start <= now && e.end > now).length;
@@ -534,6 +555,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
           statusColors={statusColors}
           limitKw={params.limitKw}
           dayCurve={dayCurve}
+          pvCurve={pvVisible ? pvCurve : undefined}
           now={now}
           onSelectZone={selectZone}
           meter={<MeterCard meter={snapshot.meter} ems={snapshot.ems} limitKw={params.limitKw} history={history} />}
@@ -598,7 +620,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
       {options.showSummary && (
         <Header
           title={BUILDING.name}
-          subtitle={`${ZONES.length} zonas · ${FLOORS.length} plantas${options.showTimeBar === false ? ` · ${timeLabel}` : ''}${dr ? ' · DR activo' : ''}${manual.size ? ` · ${manual.size} en manual` : ''}`}
+          subtitle={`${ZONES.length} zonas · ${FLOORS.length} plantas${pvVisible ? ' · FV' : ''}${options.demoMode && controller === 'baseline' ? ' · línea base E+' : ''}${options.showTimeBar === false ? ` · ${timeLabel}` : ''}${dr ? ' · DR activo' : ''}${manual.size ? ` · ${manual.size} en manual` : ''}`}
           demoMode={options.demoMode}
           kpis={kpis}
           showKpis={panelWidth >= 560 && panelHeight >= 360}
@@ -642,6 +664,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
             hoveredUnit={unitHover?.id}
             onHoverUnit={onHoverUnit}
             onLeaveUnit={() => setUnitHover(undefined)}
+            pv={pvVisible}
           />
 
           <div className={styles.topLeft}>

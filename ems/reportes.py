@@ -182,7 +182,7 @@ def auditoria(res_base, cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
          "e_kwh": g.loc[~g.critica, "e_luces_kwh"].sum()},
         {"uso": "Enchufes y equipos (zonas no críticas)", "clasificacion": "no crítica / deslastrable",
          "e_kwh": g.loc[~g.critica, "e_equipos_kwh"].sum()},
-        {"uso": "Cuarto de servidores y cuarto eléctrico (Z09, Z10)", "clasificacion": "crítica",
+        {"uso": "Cuarto de servidores (Z06)", "clasificacion": "crítica",
          "e_kwh": g.loc[g.critica, "e_total_kwh"].sum()},
         {"uso": "Cargas fijas del edificio", "clasificacion": "crítica / mixta", "e_kwh": e_fija},
     ])

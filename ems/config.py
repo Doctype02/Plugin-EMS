@@ -41,10 +41,12 @@ class Zona:
     horario_ocupacion: str = "ocupacion"
     horario_luces: str = "iluminacion"
     min_equipos: float = 0.10
+    rects: list = field(default_factory=list)  # partes de la huella si la zona no es rectangular
     # --- derivados (se completan en zonas())
     ua: float = 0.0          # kW/K conducción por la envolvente (muros, vidrio, techo)
     g_inf: float = 0.0       # kW/K infiltración (al aire exterior)
-    ua_entrepiso: float = 0.0  # kW/K acople con la otra planta a través de la losa intermedia
+    ua_arriba: float = 0.0   # kW/K acople con la planta superior a través de la losa intermedia
+    ua_abajo: float = 0.0    # kW/K acople con la planta inferior
     ua_suelo: float = 0.0    # kW/K hacia el terreno
     c: float = 0.0           # kWh/K
     cop: float = 3.0
@@ -99,12 +101,14 @@ def zonas(cfg: dict) -> list[Zona]:
         ua_w = e["u_muro"] * sum(opaco.values()) + e["u_ventana"] * vidrio + e["u_techo"] * z.techo
         z.ua = ua_w / 1000.0
         z.g_inf = e["infiltracion_m3s_m2"] * sup_ext * RHO_CP
-        # losa entre plantas: las zonas de PB tienen techo interior y las de PA piso interior
-        area_interior = z.area if (z.planta == 1 or not z.techo) else 0.0
-        z.ua_entrepiso = e.get("u_entrepiso", 0.0) * area_interior / 1000.0
+        # losas entre plantas: techo interior si no es la última planta, piso interior si no es la PB
+        n_plantas = int(e.get("plantas", 1 + max(int(x["planta"]) for x in cfg["zonas"])))
+        u_ep = e.get("u_entrepiso", 0.0)
+        z.ua_arriba = u_ep * z.area / 1000.0 if (z.planta < n_plantas - 1 and not z.techo) else 0.0
+        z.ua_abajo = u_ep * z.area / 1000.0 if (z.planta > 0 and not z.suelo) else 0.0
         z.ua_suelo = e["u_suelo"] * z.suelo / 1000.0
         z.c = e["capacitancia_kwh_k_m2"] * z.area
-        z.cop = cop_sis.get(z.sistema, 3.0)
+        z.cop = cop_sis.get(z.sistema, 3.0) * e.get("factor_cop", 1.0)
         z.ventana = vidrio
         z.shgc = e["shgc"]
         z.sol_opaco = {o: e["u_muro"] * a * alpha_ho / 1000.0 for o, a in opaco.items() if a}
@@ -112,6 +116,30 @@ def zonas(cfg: dict) -> list[Zona]:
             z.sol_opaco["H"] = e["u_techo"] * z.techo * alpha_ho / 1000.0
         out.append(z)
     return out
+
+
+def nombres_plantas(cfg: dict) -> list[str]:
+    e = cfg["edificio"]
+    n = int(e.get("plantas", 1 + max(int(x["planta"]) for x in cfg["zonas"])))
+    return list(e.get("nombres_plantas") or [f"P{i}" for i in range(n)])
+
+
+def criticas(cfg: dict) -> list[str]:
+    return [z["id"] for z in cfg["zonas"] if z.get("critica")]
+
+
+def potencia_fv_kw(cfg: dict, irr_h_wm2: float) -> float:
+    """Potencia AC de la fotovoltaica (PhotovoltaicPerformance:Simple de E+): área × fracción activa ×
+    eficiencia × irradiancia sobre el plano horizontal × eficiencia del inversor."""
+    fv = cfg.get("fv")
+    if not fv:
+        return 0.0
+    area = sum(c["area_m2"] for c in fv["campos"]) * fv["fraccion_activa"]
+    return max(irr_h_wm2, 0.0) * area * fv["eficiencia"] * fv["inversor"] / 1000.0
+
+
+def fv_habilitada(cfg: dict) -> bool:
+    return bool(cfg.get("fv")) and bool(cfg["fv"].get("habilitado", True))
 
 
 def horario(cfg: dict, nombre: str, dia_semana: int, hora: float) -> float:

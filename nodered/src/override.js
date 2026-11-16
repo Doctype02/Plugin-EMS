@@ -1,8 +1,9 @@
 // Nodo función "Guardar override del operador" — entrada: ems/<edif>/ems/override
 // payload: {zona, setpoint_c?, hvac_enable?, luces_nivel?, equipos_nivel?, duracion_min?, usuario?}
 //          {tipo: "liberar", zona: "Z03" | "*"}
-// Las zonas críticas (Z09, Z10) no admiten control manual.
-const CRITICAS = ["Z09", "Z10"];
+// Las zonas críticas no admiten control manual (listas generadas desde config/edificio.yaml por build_flows.py).
+const ZONAS = /*@ZONAS@*/["Z01", "Z02", "Z03", "Z04", "Z05", "Z06", "Z07", "Z08", "Z09", "Z10", "Z11", "Z12", "Z13", "Z14", "Z15", "Z16", "Z17", "Z18", "Z19", "Z20", "Z21", "Z22", "Z23", "Z24", "Z25", "Z26"]/*@FIN@*/;
+const CRITICAS = /*@CRITICAS@*/["Z06"]/*@FIN@*/;
 const p = msg.payload || {};
 const ovs = flow.get("overrides") || {};
 const ahora = Date.now();
@@ -13,7 +14,7 @@ if (p.tipo === "liberar") {
         delete ovs[p.zona];
     }
 } else {
-    if (!/^Z(0[1-9]|10)$/.test(p.zona || "") || CRITICAS.includes(p.zona)) {
+    if (!ZONAS.includes(p.zona) || CRITICAS.includes(p.zona)) {
         node.warn(`override rechazado para ${p.zona}`);
         return null;
     }

@@ -15,9 +15,15 @@ const cors = {
 function responder(code, cuerpo) {
     return { req: msg.req, res: msg.res, statusCode: code, headers: cors, payload: JSON.stringify(cuerpo) };
 }
-const zonaValida = (z) => /^Z(0[1-9]|10)$/.test(z || "");
+// Listas generadas desde config/edificio.yaml por build_flows.py
+const ZONAS = /*@ZONAS@*/["Z01", "Z02", "Z03", "Z04", "Z05", "Z06", "Z07", "Z08", "Z09", "Z10", "Z11", "Z12", "Z13", "Z14", "Z15", "Z16", "Z17", "Z18", "Z19", "Z20", "Z21", "Z22", "Z23", "Z24", "Z25", "Z26"]/*@FIN@*/;
+const CRITICAS = /*@CRITICAS@*/["Z06"]/*@FIN@*/;
+const SIN_PERSONAS = /*@SIN_PERSONAS@*/["Z06"]/*@FIN@*/;
+const UNIDADES = /*@UNIDADES@*/["VRF-PB", "VRF-P1", "VRF-P2", "VRF-P3", "VRF-P4", "VRF-SRV", "PTAC-PB", "PTAC-P1", "PTAC-P2", "PTAC-P3", "PTAC-P4"]/*@FIN@*/;
+const LIMITE_KW = /*@LIMITE_KW@*/[22, 297]/*@FIN@*/;
+const zonaValida = (z) => ZONAS.includes(z);
 if (b.tipo === "override") {
-    if (!zonaValida(b.zona) || ["Z09", "Z10"].includes(b.zona)) {
+    if (!zonaValida(b.zona) || CRITICAS.includes(b.zona)) {
         return [null, null, responder(400, { ok: false, mensaje: `Zona ${b.zona} no admite control manual` })];
     }
     const campos = ["setpoint_c", "hvac_enable", "luces_nivel", "equipos_nivel"].filter((k) => b[k] !== undefined);
@@ -32,7 +38,7 @@ if (b.tipo === "liberar") {
 }
 if (b.tipo === "parametros") {
     const p = {};
-    if (typeof b.limite_kw === "number" && b.limite_kw >= 10 && b.limite_kw <= 100) p.limite_kw = b.limite_kw;
+    if (typeof b.limite_kw === "number" && b.limite_kw >= LIMITE_KW[0] && b.limite_kw <= LIMITE_KW[1]) p.limite_kw = b.limite_kw;
     if (typeof b.sp_ocupado === "number" && b.sp_ocupado >= 20 && b.sp_ocupado <= 28) p.sp_ocupado = b.sp_ocupado;
     if (!Object.keys(p).length) return [null, null, responder(400, { ok: false, mensaje: "Parámetros inválidos" })];
     return [null, { topic: `${base}/ems/parametros`, payload: p }, responder(200, { ok: true, mensaje: "parámetros publicados", parametros: p })];
@@ -40,7 +46,7 @@ if (b.tipo === "parametros") {
 if (b.tipo === "ocupacion") {
     // escenario de simulación: personas fijas en una zona o % del horario en todo el edificio ('*')
     const zona = b.zona;
-    if (zona !== "*" && (!zonaValida(zona) || ["Z08", "Z09", "Z10"].includes(zona))) {
+    if (zona !== "*" && (!zonaValida(zona) || SIN_PERSONAS.includes(zona))) {
         return [null, null, responder(400, { ok: false, mensaje: `Zona ${zona} no admite fijar personas` })];
     }
     const p = { accion: "ocupacion", zona, usuario: b.usuario || "" };
@@ -74,7 +80,7 @@ if (b.tipo === "evento") {
     }
     if (!tipos.includes(b.evento)) return [null, null, responder(400, { ok: false, mensaje: `Evento desconocido: ${b.evento}` })];
     if (b.zona !== undefined && !zonaValida(b.zona)) return [null, null, responder(400, { ok: false, mensaje: "Zona inválida" })];
-    if (b.unidad !== undefined && !/^VRF-[ABC]$/.test(b.unidad)) return [null, null, responder(400, { ok: false, mensaje: "Unidad inválida" })];
+    if (b.unidad !== undefined && !UNIDADES.includes(b.unidad)) return [null, null, responder(400, { ok: false, mensaje: "Unidad inválida" })];
     const dur = Number(b.duracion_min);
     if (!(dur > 0 && dur <= 10080)) return [null, null, responder(400, { ok: false, mensaje: "Duración inválida" })];
     const ev = { accion: "evento", operacion: "iniciar", id: String(b.id || `${b.evento}-${Date.now()}`), evento: b.evento,

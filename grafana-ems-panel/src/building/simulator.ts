@@ -7,8 +7,24 @@
  * reproduce de forma simplificada la lógica del EMS en Python (ems/control.py, clase ReglasDR):
  * setpoints por ocupación, pre-enfriamiento, terminal VRF modulante con histéresis, luz natural,
  * corte de standby y limitador de demanda. Inyecta un incidente diario para que se vean las alarmas.
+ * Con `controller: 'baseline'` reproduce la operación del modelo E+ (setpoint de horario 24 h, luces por
+ * horario, sin limitador). Incluye las cargas fijas (ascensor, extractores) y, con `pv`, la fotovoltaica
+ * de la azotea (la demanda de 15 min es la importación neta, como en ems/edificio.py).
  */
-import { ENVELOPE, ZONES, Zone, thermal } from './model';
+import {
+  BUILDING,
+  EMS_RULES,
+  ENVELOPE,
+  FIXED_LOADS,
+  SCHEDULES,
+  TARIFF,
+  ZONES,
+  ZONE_BY_ID,
+  Zone,
+  pvPowerKw,
+  thermal,
+  totalConductance,
+} from './model';
 import { EVENTS, EventKind, SimEvent, activeEvents, affectsZone } from './events';
 import {
   EmsAlarm,
@@ -23,11 +39,16 @@ import {
   ZoneState,
 } from './telemetry';
 
+export { SCHEDULES } from './model';
+
 const MIN = 60_000;
 const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 const TZ_OFFSET = -5 * HOUR; // America/Panama (sin horario de verano)
 const FIRE_KW = 150;
+
+/** Control que simula el gemelo: EMS por reglas con limitador (por defecto) o la línea base del modelo E+. */
+export type SimController = 'reglas_dr' | 'baseline';
 
 export interface SimOptions {
   limitKw: number;
@@ -40,6 +61,10 @@ export interface SimOptions {
   demoIncidents?: boolean;
   /** Cantidad de personas forzada por el operador (por zona o '*' para el edificio). */
   occupancy?: OccupancyOverrides;
+  /** Variante del edificio con fotovoltaica en la azotea (por defecto sin FV). */
+  pv?: boolean;
+  /** 'reglas_dr' (EMS) o 'baseline' (setpoints de E+ 24 h, luces por horario, sin limitador). */
+  controller?: SimController;
 }
 
 function activeOcc(key: string, t: number, opts: SimOptions): OccupancyOverride | undefined {
@@ -53,7 +78,7 @@ function plannedOccupants(z: Zone, t: number, c: Clock, opts: SimOptions): numbe
   if (fixed?.people !== undefined && z.occupants > 0) {
     return fixed.people;
   }
-  const noise = 1 + 0.1 * (hash(z.id, Math.floor(t / (5 * MIN))) - 0.5);
+  const noise = 1 + EMS_RULES.noise * (hash(z.id, Math.floor(t / (5 * MIN))) - 0.5);
   const pct = activeOcc('*', t, opts)?.pct ?? 100;
   return Math.round(occupancyFraction(z, c) * z.occupants * noise * (pct / 100));
 }
@@ -63,98 +88,23 @@ export function activeOverride(zone: Zone, t: number, opts: SimOptions): ZoneOve
   return ov && !zone.critical && t >= ov.since && t < ov.until ? ov : undefined;
 }
 
-const ENTRY = 7;
-const EXIT = 18;
-const BAND = 0.5;
-const SP_OCC = 24;
-const SP_UNOCC = 27;
-const SP_NIGHT = 29;
+const ENTRY = EMS_RULES.entry;
+const EXIT = EMS_RULES.exit;
+const PRECOOL_H = EMS_RULES.precoolMin / 60;
+const BAND = EMS_RULES.band;
+const SP_OCC = EMS_RULES.spOccupied;
+const SP_UNOCC = EMS_RULES.spUnoccupied;
+const SP_NIGHT = EMS_RULES.spNight;
 const PLR_MIN = 0.15;
-const T_GROUND = 18; // terreno del modelo E+ (valor por defecto de EnergyPlus)
-
-type Profile = Array<[number, number]>;
-interface Schedule {
-  weekday: Profile;
-  saturday: Profile;
-  sunday: Profile;
-}
-
-/** Horarios del modelo E+ (Schedule:Day:Interval): [hora de inicio, valor]. */
-export const SCHEDULES: Record<string, Schedule> = {
-  ocupacion: {
-    weekday: [
-      [0, 0],
-      [7, 0.204],
-      [8, 0.602],
-      [9, 1],
-      [12, 0.612],
-      [13, 1],
-      [17, 0.505],
-      [18, 0],
-    ],
-    saturday: [
-      [0, 0],
-      [9, 0.202],
-      [13, 0],
-    ],
-    sunday: [[0, 0]],
-  },
-  iluminacion: {
-    weekday: [
-      [0, 0],
-      [7, 0.25],
-      [8, 1],
-      [18, 0.245],
-      [19, 0],
-    ],
-    saturday: [
-      [0, 0],
-      [9, 0.527],
-      [13, 0],
-    ],
-    sunday: [[0, 0]],
-  },
-  equipos_oficina: {
-    weekday: [
-      [0, 0.05],
-      [7, 0.25],
-      [8, 0.99],
-      [18, 0.25],
-      [20, 0.05],
-    ],
-    saturday: [
-      [0, 0.05],
-      [7, 0.25],
-      [8, 0.99],
-      [13, 0.25],
-      [20, 0.05],
-    ],
-    sunday: [
-      [0, 0.05],
-      [7, 0.25],
-      [8, 0.99],
-      [13, 0.25],
-      [20, 0.05],
-    ],
-  },
-  equipos_conferencia: {
-    weekday: [
-      [0, 0.05],
-      [7, 0.25],
-      [8, 0.995],
-      [11, 0.1],
-      [15, 0.995],
-      [18, 0.25],
-      [20, 0.05],
-    ],
-    saturday: [[0, 0.05]],
-    sunday: [[0, 0.05]],
-  },
-  continuo: { weekday: [[0, 1]], saturday: [[0, 1]], sunday: [[0, 1]] },
-};
+const Q_PERSON = 0.075; // kW sensibles por persona
+/** Temperatura supuesta de las plantas vecinas (acondicionadas) para el acople por las losas. */
+const T_NEIGHBOR = 24;
 
 export function scheduleValue(name: string, dow: number, h: number): number {
   const s = SCHEDULES[name];
+  if (!s) {
+    return 0;
+  }
   const p = dow === 0 ? s.sunday : dow === 6 ? s.saturday : s.weekday;
   let v = p[0][1];
   for (const [start, value] of p) {
@@ -166,10 +116,6 @@ export function scheduleValue(name: string, dow: number, h: number): number {
   }
   return v;
 }
-
-const OCCUPANCY_SCHEDULE: Record<string, string> = { Z06: 'iluminacion' }; // como en el IDF
-const EQUIPMENT_SCHEDULE = (z: Zone) =>
-  z.critical ? 'continuo' : z.type === 'conferencia' ? 'equipos_conferencia' : 'equipos_oficina';
 
 /** Hash determinista en [0, 1). */
 export function hash(...parts: Array<string | number>): number {
@@ -199,8 +145,8 @@ function occupancyFraction(z: Zone, c: Clock): number {
   if (z.occupants === 0) {
     return 0;
   }
-  const f = scheduleValue(OCCUPANCY_SCHEDULE[z.id] ?? 'ocupacion', c.dow, c.h);
-  const absent = c.weekday ? 0.08 * hash('ausentismo', z.id, c.day) * 2 : 0;
+  const f = scheduleValue(z.schedules.occupancy, c.dow, c.h);
+  const absent = c.weekday ? EMS_RULES.absenteeism * hash('ausentismo', z.id, c.day) * 2 : 0;
   return f * (1 - absent);
 }
 
@@ -234,7 +180,7 @@ export function incident(
   }
   const kinds = [
     { zone: 'Z02', kind: 'sensor' as const, from: 10, to: 11 },
-    { zone: 'Z06', kind: 'falla_hvac' as const, from: 13, to: 14.5 },
+    { zone: 'Z12', kind: 'falla_hvac' as const, from: 13, to: 14.5 },
     { zone: 'Z03', kind: 'sobreocupacion' as const, from: 14, to: 15.5 },
   ];
   const k = kinds[c.day % kinds.length];
@@ -290,12 +236,28 @@ function zoneEvents(z: Zone, t: number, events?: SimEvent[]): ZoneEvents {
   };
 }
 
-/** Temperatura de libre flotación (modelo RC de la zona) desde t0 con las ganancias actuales. */
-export function freeFloat(z: Zone, t0Temp: number, hours: number, gainsKw: number, tExt: number, extraG = 0): number {
+/**
+ * Temperatura de libre flotación (modelo RC de la zona) desde t0 con las ganancias actuales. Las plantas
+ * vecinas se suponen a `tNeighbor` (siguen acondicionadas salvo que también pierdan el enfriamiento).
+ */
+export function freeFloat(
+  z: Zone,
+  t0Temp: number,
+  hours: number,
+  gainsKw: number,
+  tExt: number,
+  extraG = 0,
+  tNeighbor = T_NEIGHBOR
+): number {
   const th = thermal(z);
-  const g = th.ua + th.gInf + extraG + th.uaGround;
+  const g = totalConductance(th) + extraG;
   const teq =
-    (th.ua * (tExt - ENVELOPE.skyDeltaT) + (th.gInf + extraG) * tExt + th.uaGround * ENVELOPE.tGround + gainsKw) / g;
+    (th.ua * (tExt - ENVELOPE.skyDeltaT) +
+      (th.gInf + extraG) * tExt +
+      th.uaGround * ENVELOPE.tGround +
+      (th.uaUp + th.uaDown) * tNeighbor +
+      gainsKw) /
+    g;
   return teq + (t0Temp - teq) * Math.exp(-Math.max(hours, 0) / Math.max(th.c / g, 0.05));
 }
 
@@ -318,14 +280,20 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
   }
   // el pasillo no tiene aforo: se considera ocupado (tránsito) cuando hay gente en el edificio
   const occupied = occupants > 0 || (z.type === 'pasillo' && buildingOccupied);
-  const precool = c.weekday && c.h >= ENTRY - 1 && c.h < ENTRY;
+  const precool = c.weekday && c.h >= ENTRY - PRECOOL_H && c.h < ENTRY;
   const workHours = c.weekday && c.h >= ENTRY - 0.5 && c.h < EXIT + 0.5;
+  const baseline = opts.controller === 'baseline';
+  const th = thermal(z);
 
-  // ---- setpoint y habilitación (reglas EMS)
+  // ---- setpoint y habilitación (reglas EMS, o el horario de E+ en la línea base)
   let setpoint: number;
   let hvacEnable: boolean;
   if (z.fixedSetpoint !== undefined) {
     setpoint = z.fixedSetpoint;
+    hvacEnable = true;
+  } else if (baseline) {
+    // modelo E+: setpoint constante (22 °C oficinas, 24 °C baños) las 24 h
+    setpoint = scheduleValue(z.schedules.ac, c.dow, c.h);
     hvacEnable = true;
   } else if (occupied || precool) {
     setpoint = opts.spOccupied ?? SP_OCC;
@@ -350,16 +318,21 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
   }
 
   // ---- iluminación, enchufes y ganancia solar
-  const glass = Object.values(z.glazing).reduce((a, v) => a + (v ?? 0), 0);
-  const luxDay = (110 * 0.252 * 0.25 * glass * w.irr * 0.4) / Math.max(z.area, 1);
-  const autoLights = occupied ? Math.round(Math.min(1, Math.max(0.1, (500 - luxDay) / 500)) * 20) / 20 : 0;
+  const glass = th.glass;
+  const luxDay = (110 * ENVELOPE.vt * 0.25 * glass * w.irr * 0.4) / Math.max(z.area, 1);
+  const target = EMS_RULES.luxTarget;
+  const autoLights = baseline
+    ? scheduleValue(z.schedules.lights, c.dow, c.h)
+    : occupied
+      ? Math.round(Math.min(1, Math.max(0.1, (target - luxDay) / target)) * 20) / 20
+      : 0;
   let lights = ov?.lights ?? autoLights;
   if (ev.fireAnywhere && !ev.outage) {
     lights = 1; // iluminación plena para la evacuación
   }
   const sinRed = !!ev.outage;
-  const plugs = z.critical ? 1 : (ov?.plugs ?? (occupied ? 1 : 0.1));
-  const fEq = scheduleValue(EQUIPMENT_SCHEDULE(z), c.dow, c.h);
+  const plugs = z.critical || baseline ? 1 : (ov?.plugs ?? (occupied ? 1 : EMS_RULES.plugsUnoccupied));
+  const fEq = scheduleValue(z.schedules.equipment, c.dow, c.h);
   let pPlugs =
     ((z.epd * z.area) / 1000) * fEq * Math.max(plugs, 0.1) +
     (z.itKw ?? 0) * (1 + 0.02 * Math.sin((c.h / 24) * 2 * Math.PI)) +
@@ -370,12 +343,18 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     lights = z.critical && !ev.upsDepleted ? 0.3 : 0;
   }
   const pLights = ((z.lpd * z.area) / 1000) * lights;
-  const solar = (glass * 0.252 * 0.5 * w.irr * 0.4) / 1000;
+  const opaqueSolar = Object.entries(th.solarOpaque).reduce(
+    (a, [o, k]) => a + (k ?? 0) * w.irr * (o === 'h' ? 1 : 0.4),
+    0
+  );
+  const solar = (glass * ENVELOPE.shgc * ENVELOPE.solarFactor * w.irr * 0.4) / 1000 + opaqueSolar;
 
-  // ---- carga sensible relativa a la capacidad del terminal VRF → modulación
-  const envelope = ((glass * 6.424) / 1000) * (w.tExt - 6 - setpoint);
-  const ground = z.floor === 0 ? ((2.945 * z.area) / 1000) * (T_GROUND - setpoint) : 0;
-  const internal = occupants * 0.075 + pLights + pPlugs + z.fanKw;
+  // ---- carga sensible relativa a la capacidad del terminal → modulación (mismo RC que el gemelo; las
+  // plantas vecinas están acondicionadas a una temperatura parecida, el acople por las losas se desprecia)
+  const vent = occupants * ENVELOPE.ventilationPerPerson * ENVELOPE.rhoCp;
+  const envelope = th.ua * (w.tExt - ENVELOPE.skyDeltaT - setpoint) + (th.gInf + vent) * (w.tExt - setpoint);
+  const ground = th.uaGround * (ENVELOPE.tGround - setpoint);
+  const internal = occupants * Q_PERSON + pLights + pPlugs + z.fanKw;
   // puerta o ventana abierta: aire exterior caliente (sensible) — el VRF también debe retirar su humedad
   const door = ev.doorFlow * ENVELOPE.rhoCp * Math.max(w.tExt - setpoint, 0) * 1.6;
   const load = Math.max(0, internal + solar + envelope + ground + door);
@@ -391,11 +370,11 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     // sin enfriamiento (falla, incendio o corte): libre flotación desde el inicio del evento
     const hours = (t - ev.noCoolingSince) / HOUR;
     // conato de incendio: 150 kW de calor en la zona (mismo valor que ems/eventos.py)
-    const gains = occupants * 0.075 + pLights + pPlugs + solar * 2 + (ev.fire ? FIRE_KW : 0);
+    const gains = occupants * Q_PERSON + pLights + pPlugs + solar * 2 + (ev.fire ? FIRE_KW : 0);
     temp = freeFloat(z, setpoint, hours, gains, w.tExt, ev.doorFlow * ENVELOPE.rhoCp);
     if (ev.fire) {
       temp = Math.min(temp, 95);
-    } else if (ev.fireAnywhere && z.floor === ZONES.find((x) => x.id === ev.fireAnywhere!.zone)?.floor) {
+    } else if (ev.fireAnywhere && z.floor === ZONE_BY_ID[ev.fireAnywhere.zone ?? '']?.floor) {
       // humo y calor hacia las zonas vecinas del mismo piso
       temp += Math.min(4, (t - ev.fireAnywhere.start) / (6 * MIN));
     }
@@ -443,8 +422,10 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
   }
 
   const cop = z.cop * (1 - 0.012 * (w.tExt - 30));
-  const compressorKw = (mod * z.hvacKw * 1.1) / Math.max(cop, 1); // incluye ≈10 % de latente del serpentín
-  const fan = hvacEnable && !sinRed && (occupied || hvacOn) ? z.fanKw : 0;
+  // incluye el latente que condensa el serpentín (fraccion_latente_serpentin)
+  const compressorKw = (mod * z.hvacKw * (1 + ENVELOPE.latentFraction)) / Math.max(cop, 1);
+  const fanAlways = baseline && z.fanMode === 'continuo';
+  const fan = hvacEnable && !sinRed && (occupied || hvacOn || fanAlways) ? z.fanKw : 0;
   const pHvac = (hvacOn ? compressorKw : 0) + fan;
   const lux = Math.round(luxDay + 500 * lights);
   return {
@@ -474,15 +455,36 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
   };
 }
 
-/** El modelo E+ no tiene cargas fijas (ascensores, bombas, alumbrado exterior). */
-function fixedLoads() {
-  return { total: 0, critical: 0, q: 0 };
+/** Cargas sin zona (ascensor, extractores de los baños): kW × horario del modelo E+. */
+function fixedLoads(t: number, opts: SimOptions) {
+  const c = clock(t);
+  const outage = activeEvents(opts.events, t).some((e) => e.kind === 'corte_energia');
+  let total = 0;
+  let critical = 0;
+  let q = 0;
+  for (const f of FIXED_LOADS) {
+    const p = outage && !f.critical ? 0 : f.kw * scheduleValue(f.schedule, c.dow, c.h);
+    total += p;
+    critical += f.critical ? p : 0;
+    q += p * Math.tan(Math.acos(f.pf));
+  }
+  return { total, critical, q };
 }
 
 interface Core {
   zones: Record<string, ZoneCore>;
   pTotal: number;
+  /** Generación fotovoltaica (kW AC; 0 sin FV, de noche o sin red por anti-isla). */
+  pPv: number;
   forced: number;
+}
+
+/** Fotovoltaica del instante: área × fracción activa × eficiencia × G horizontal × inversor. */
+export function pvKw(t: number, opts: SimOptions): number {
+  if (!opts.pv || activeEvents(opts.events, t).some((e) => e.kind === 'corte_energia')) {
+    return 0;
+  }
+  return pvPowerKw(weather(t, opts.events).irr);
 }
 
 /** Potencias del instante t aplicando el limitador de demanda (sin demanda de 15 min). */
@@ -494,16 +496,21 @@ function core(t: number, opts: SimOptions): Core {
     zones[z.id] = zoneCore(z, t, opts, buildingOccupied);
   }
   const occ = ZONES.filter((z) => !z.critical);
-  const fixed = fixedLoads();
+  const fixed = fixedLoads(t, opts);
   let total = fixed.total + Object.values(zones).reduce((a, s) => a + s.pTotal, 0);
+  const pPv = pvKw(t, opts);
   let forced = 0;
-  if (total > opts.limitKw - 3) {
+  // el limitador mira la importación neta de la red (lo que factura el medidor de la acometida)
+  if (opts.controller !== 'baseline' && total - pPv > opts.limitKw - 3) {
     const candidates = occ
       .map((z) => zones[z.id])
-      .filter((s) => s.hvacOn && !s.sensorFault && !s.override && !s.events && s.temp < 26 - 0.75)
+      .filter(
+        (s) =>
+          s.hvacOn && !s.sensorFault && !s.override && !s.events && s.temp < EMS_RULES.comfortMax - EMS_RULES.drMarginC
+      )
       .sort((a, b) => a.urgency - b.urgency);
     for (const s of candidates) {
-      if (total <= opts.limitKw - 3) {
+      if (total - pPv <= opts.limitKw - 3) {
         break;
       }
       s.hvacOn = false;
@@ -514,14 +521,19 @@ function core(t: number, opts: SimOptions): Core {
       forced++;
     }
   }
-  return { zones, pTotal: total, forced };
+  return { zones, pTotal: total, pPv, forced };
 }
 
 /** Potencia total y estado térmico del instante (versión liviana de simulate, sin demanda ni alarmas). */
 export function instant(
   t: number,
   opts: SimOptions
-): { pTotal: number; pHvac: number; zones: Record<string, { temp: number; pHvac: number }> } {
+): {
+  pTotal: number;
+  pHvac: number;
+  pPv: number;
+  zones: Record<string, { temp: number; pHvac: number }>;
+} {
   const c = core(t, opts);
   const zones: Record<string, { temp: number; pHvac: number }> = {};
   let pHvac = 0;
@@ -529,7 +541,7 @@ export function instant(
     zones[id] = { temp: z.temp, pHvac: z.pHvac };
     pHvac += z.pHvac;
   }
-  return { pTotal: c.pTotal, pHvac, zones };
+  return { pTotal: c.pTotal, pHvac, pPv: c.pPv, zones };
 }
 
 const PF = { hvac: 0.9, lights: 0.95, plugs: 0.92 };
@@ -538,10 +550,11 @@ const tanPhi = (pf: number) => Math.tan(Math.acos(pf));
 /** `lite` omite la energía acumulada del día (para series históricas). */
 export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
   const now = core(t, opts);
-  const demand15 = (now.pTotal + core(t - 5 * MIN, opts).pTotal + core(t - 10 * MIN, opts).pTotal) / 3;
+  const grid = (k: Core) => Math.max(k.pTotal - k.pPv, 0);
+  const demand15 = (grid(now) + grid(core(t - 5 * MIN, opts)) + grid(core(t - 10 * MIN, opts))) / 3;
   const w = weather(t, opts.events);
   const c = clock(t);
-  const fixed = fixedLoads();
+  const fixed = fixedLoads(t, opts);
   const act = activeEvents(opts.events, t);
   const outage = act.find((e) => e.kind === 'corte_energia');
   const fire = act.find((e) => e.kind === 'incendio');
@@ -570,8 +583,8 @@ export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
     q = 0;
   }
   const s = Math.hypot(pTotal, q);
-  const vll = outage ? 0 : 208 * (1 - 0.0004 * pTotal) + 0.8 * Math.sin(t / (7 * MIN));
-  const punta = c.weekday && c.h >= 9 && c.h < 17;
+  const vll = outage ? 0 : BUILDING.vll * (1 - 0.0002 * pTotal) + 1.5 * Math.sin(t / (7 * MIN));
+  const punta = c.weekday && c.h >= TARIFF.peakHours[0] && c.h < TARIFF.peakHours[1];
   const dayStart = Math.floor((t + TZ_OFFSET) / DAY) * DAY - TZ_OFFSET;
 
   const meter: MeterState = {
@@ -592,18 +605,26 @@ export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
     tExt: w.tExt,
     rh: w.rh,
     irr: w.irr,
-    price: punta ? 0.245 : 0.185,
+    price: punta ? TARIFF.peakUsdKwh : TARIFF.offPeakUsdKwh,
+    ...(opts.pv
+      ? {
+          pPv: now.pPv,
+          pGrid: pTotal - now.pPv,
+          ePv: lite ? 0 : energySince(dayStart, t, opts, (k) => k.pPv),
+        }
+      : {}),
     updatedAt: t,
     gridOk: !outage,
     upsKw: outage ? upsKw : undefined,
     upsMinutes: outage ? Math.max(0, (outage.intensity ?? 30) - (t - outage.start) / MIN) : undefined,
   };
-  const drActive = now.forced > 0 || demand15 > opts.limitKw;
+  // la línea base no tiene limitador: sólo el supervisor avisa del pico (PICO_DEMANDA)
+  const drActive = opts.controller !== 'baseline' && (now.forced > 0 || demand15 > opts.limitKw);
   const alarms = demoAlarms(t, zones, meter, opts, drActive);
   const ems: EmsState = {
-    mode: 'reglas_dr',
+    mode: opts.controller ?? 'reglas_dr',
     drActive,
-    drStage: demand15 > opts.limitKw ? 2 : drActive ? 1 : 0,
+    drStage: !drActive ? 0 : demand15 > opts.limitKw ? 2 : 1,
     limitKw: opts.limitKw,
     nAlarms: alarms.length,
     safeMode: Object.entries(zones)
@@ -617,11 +638,11 @@ export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
 }
 
 /** Energía acumulada del día (integración cada 15 min, suficiente para el indicador). */
-function energySince(from: number, to: number, opts: SimOptions): number {
+function energySince(from: number, to: number, opts: SimOptions, pick = (k: Core) => k.pTotal): number {
   let e = 0;
   const step = 15 * MIN;
   for (let t = from; t < to; t += step) {
-    e += core(Math.min(t + step / 2, to), opts).pTotal * (Math.min(step, to - t) / HOUR);
+    e += pick(core(Math.min(t + step / 2, to), opts)) * (Math.min(step, to - t) / HOUR);
   }
   return e;
 }
@@ -729,7 +750,7 @@ function eventAlarms(t: number, zones: Record<string, ZoneState>, meter: MeterSt
           ts: e.start,
           level: left > 0 ? 'warn' : 'crit',
           code: left > 0 ? 'EN_UPS' : 'UPS_AGOTADO',
-          zone: 'Z09',
+          zone: 'EDIF',
           message:
             left > 0
               ? `Cargas críticas en UPS (${(meter.upsKw ?? 0).toFixed(1)} kW), autonomía ≈ ${left.toFixed(0)} min`
@@ -795,7 +816,7 @@ function eventAlarms(t: number, zones: Record<string, ZoneState>, meter: MeterSt
           level: 'warn',
           code: 'SOBREOCUPACION',
           zone: e.zone!,
-          message: `${zones[e.zone!]?.occupants ?? '?'} personas (aforo ${ZONES.find((z) => z.id === e.zone)?.occupants})`,
+          message: `${zones[e.zone!]?.occupants ?? '?'} personas (aforo ${ZONE_BY_ID[e.zone ?? '']?.occupants})`,
           value: zones[e.zone!]?.occupants,
         });
         break;
@@ -815,8 +836,8 @@ function eventAlarms(t: number, zones: Record<string, ZoneState>, meter: MeterSt
     if (!z.events || z.sensorFault) {
       continue;
     }
-    const zone = ZONES.find((x) => x.id === id)!;
-    const limit = zone.type === 'servidores' ? 27 : zone.critical ? 32 : 26;
+    const zone = ZONE_BY_ID[id];
+    const limit = zone.type === 'servidores' ? EMS_RULES.serverAlarm : zone.critical ? 32 : EMS_RULES.comfortMax;
     if (z.temp > limit && !z.fire) {
       out.push({
         ts: t,
@@ -825,7 +846,7 @@ function eventAlarms(t: number, zones: Record<string, ZoneState>, meter: MeterSt
         zone: id,
         message:
           zone.type === 'servidores'
-            ? `${z.temp.toFixed(1)} °C > 27 °C (límite ASHRAE A1 recomendado): riesgo para los equipos`
+            ? `${z.temp.toFixed(1)} °C > ${EMS_RULES.serverAlarm} °C (límite ASHRAE A1 recomendado): riesgo para los equipos`
             : `${z.temp.toFixed(1)} °C > ${limit} °C sin enfriamiento`,
         value: z.temp,
       });
@@ -849,6 +870,10 @@ export function simulateHistory(end: number, span: number, points: number, opts:
     const m = (history.EDIF ??= {});
     for (const k of ['pTotal', 'demand15', 'pHvac', 'tExt'] as const) {
       (m[k] ??= []).push([t, snap.meter![k]]);
+    }
+    if (snap.meter?.pPv !== undefined) {
+      (m.pPv ??= []).push([t, snap.meter.pPv]);
+      (m.pGrid ??= []).push([t, snap.meter.pGrid ?? 0]);
     }
   }
   return history;

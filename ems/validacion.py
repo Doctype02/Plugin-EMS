@@ -19,7 +19,7 @@ from .simulacion import simular
 
 DATOS = RAIZ / "data" / "energyplus"
 TZ = "America/Panama"
-SEMANAS_CALIBRACION = [("2006-02-12", 14), ("2006-08-13", 14)]  # estación seca y lluviosa
+SEMANAS_CALIBRACION = [("2006-02-12", 8), ("2006-08-13", 8)]  # estación seca y lluviosa (1 día de arranque)
 
 
 def _local(ts: pd.Series) -> pd.DatetimeIndex:
@@ -29,12 +29,15 @@ def _local(ts: pd.Series) -> pd.DatetimeIndex:
 def cargar_energyplus() -> dict:
     el = pd.read_csv(DATOS / "electricidad_10min.csv")
     el.index = _local(el.pop("ts"))
-    vrf = pd.read_csv(DATOS / "vrf_horario.csv")
-    vrf.index = _local(vrf.pop("ts"))
     zonas = pd.read_csv(DATOS / "zonas_horario.csv")
     zonas.index = _local(zonas.pop("ts"))
     resumen = json.loads((DATOS / "resumen_anual.json").read_text(encoding="utf-8"))
-    return {"electricidad": el["p_total_kw"], "vrf": vrf, "zonas": zonas, "resumen": resumen}
+    out = {"electricidad": el["p_total_kw"], "zonas": zonas, "resumen": resumen}
+    if (DATOS / "fv_horario.csv").exists():
+        fv = pd.read_csv(DATOS / "fv_horario.csv")
+        fv.index = _local(fv.pop("ts"))
+        out["fv_dc"] = fv["p_fv_dc_kw"]
+    return out
 
 
 def metricas(medido: pd.Series, modelo: pd.Series) -> dict:
@@ -49,7 +52,8 @@ def metricas(medido: pd.Series, modelo: pd.Series) -> dict:
 
 
 def comparar(cfg: dict, inicio: str, dias: float, ref: dict | None = None) -> dict:
-    """Corre la línea base (operación del modelo E+) y la compara hora a hora con EnergyPlus."""
+    """Corre la línea base (operación del modelo E+) y la compara hora a hora con EnergyPlus:
+    electricidad total, equipos de las zonas, fotovoltaica y temperatura de cada zona en horario ocupado."""
     ref = ref or cargar_energyplus()
     r = simular(cfg, "baseline", dias=dias, inicio=inicio)
     m = r.medidor
@@ -60,32 +64,41 @@ def comparar(cfg: dict, inicio: str, dias: float, ref: dict | None = None) -> di
     desde = t0 + pd.Timedelta(days=1)
     mod_h = m["p_total_kw"].resample("1h").mean().loc[desde:t1]
     ep_h = ref["electricidad"].resample("1h").mean().loc[desde:t1]
-    comp = (z.assign(p_comp=z["p_hvac_kw"] - z["p_ventilador_kw"]).groupby("ts")["p_comp"].sum())
-    comp_h = comp.resample("1h").mean().loc[desde:t1]
-    vrf_h = ref["vrf"].groupby(level=0)["p_kw"].sum().loc[desde:t1]
+    eq_mod = z.groupby("ts")["p_equipos_kw"].sum().resample("1h").mean().loc[desde:t1]
+    eq_ep = ref["zonas"].groupby(level=0)["p_equipos_kw"].sum().loc[desde:t1]
     temp_mod = z.set_index("ts").groupby("zona")["temp_real_c"].resample("1h").mean().unstack(0).loc[desde:t1]
     temp_ep = ref["zonas"].pivot_table(index=ref["zonas"].index, columns="zona", values="temp_c").loc[desde:t1]
-    ocup = ref["zonas"].pivot_table(index=ref["zonas"].index, columns="zona", values="ocupantes").loc[desde:t1].sum(axis=1) > 0
+    idx = temp_ep.index
+    ocup = pd.Series((idx.dayofweek < 5) & (idx.hour >= 8) & (idx.hour < 18), index=idx)  # BASE_Ocupacion
     rmse_t = {}
     for zid in temp_mod.columns:
         a, b = temp_ep[zid].align(temp_mod[zid], join="inner")
         sel = ocup.reindex(a.index).fillna(False)
         rmse_t[zid] = float(np.sqrt(((a[sel] - b[sel]) ** 2).mean())) if sel.any() else float("nan")
-    return {
+    series = {"energyplus_kw": ep_h, "modelo_kw": mod_h, "equipos_energyplus_kw": eq_ep, "equipos_modelo_kw": eq_mod}
+    out = {
         "periodo": f"{desde.date()} → {t1.date()}",
         "electricidad_total": metricas(ep_h, mod_h),
-        "compresores_vrf": metricas(vrf_h, comp_h),
+        "equipos": metricas(eq_ep, eq_mod),
         "energia_kwh": {"energyplus": float(ep_h.sum()), "modelo": float(mod_h.sum())},
         "pico_kw": {"energyplus": float(ep_h.max()), "modelo": float(mod_h.max())},
         "rmse_temp_ocupado_c": rmse_t,
-        "series": pd.DataFrame({"energyplus_kw": ep_h, "modelo_kw": mod_h, "vrf_energyplus_kw": vrf_h, "vrf_modelo_kw": comp_h}),
     }
+    if "fv_dc" in ref and "p_fv_kw" in m:
+        fv_ep = ref["fv_dc"].loc[desde:t1] * cfg["fv"]["inversor"]
+        fv_mod = m["p_fv_kw"].resample("1h").mean().loc[desde:t1]
+        out["fv"] = {**metricas(fv_ep[fv_ep.index.hour.isin(range(7, 18))], fv_mod[fv_mod.index.hour.isin(range(7, 18))]),
+                     "energia_kwh": {"energyplus": float(fv_ep.sum()), "modelo": float(fv_mod.sum())}}
+        series.update({"fv_energyplus_kw": fv_ep, "fv_modelo_kw": fv_mod})
+    out["series"] = pd.DataFrame(series)
+    return out
 
 
 PARAMETROS_CALIBRACION = {
-    "edificio.capacitancia_kwh_k_m2": [0.03, 0.08, 0.15],   # masa térmica efectiva
-    "edificio.factor_solar": [0.5, 0.7, 0.9],                # fracción solar que llega al aire de inmediato
-    "edificio.delta_t_cielo_c": [3.0, 6.0, 9.0],             # radiación al cielo (Text equivalente)
+    "edificio.factor_cop": [0.8, 1.0, 1.2],                  # COP estacional de VRF/PTAC (sin datos por sistema)
+    "edificio.capacitancia_kwh_k_m2": [0.03, 0.08],          # masa térmica efectiva
+    "edificio.factor_solar": [0.5, 0.9],                     # fracción solar que llega al aire de inmediato
+    "edificio.delta_t_cielo_c": [3.0, 6.0],                  # radiación al cielo (Text equivalente)
     "edificio.fraccion_latente_serpentin": [0.10, 0.25],     # latente retirado por el serpentín
 }
 

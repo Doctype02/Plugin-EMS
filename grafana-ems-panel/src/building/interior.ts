@@ -5,7 +5,7 @@
 import { BUILDING, Rect, Zone } from './model';
 
 export type FurnitureKind =
-  'desk' | 'table' | 'tableRound' | 'counter' | 'sofa' | 'bench' | 'rack' | 'cabinet' | 'plant';
+  'desk' | 'table' | 'tableRound' | 'counter' | 'sofa' | 'bench' | 'rack' | 'cabinet' | 'plant' | 'stall' | 'sink';
 
 export interface Furniture {
   kind: FurnitureKind;
@@ -100,14 +100,45 @@ function servers(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
   return { furniture, seats: [{ x: r.x + r.w / 2, y: r.y + r.d - m }] };
 }
 
-function electrical(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
+/** Baños: fila de cubículos contra el muro exterior más largo y lavamanos enfrente. */
+function bathroom(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
   const furniture: Furniture[] = [];
-  const m = margin(r);
-  const n = Math.max(1, Math.floor((r.w - 2 * m) / 0.9));
+  const long = r.w >= r.d;
+  const len = (long ? r.w : r.d) - 1;
+  const n = Math.max(1, Math.floor(len / 1.3));
   for (let i = 0; i < n; i++) {
-    furniture.push({ kind: 'cabinet', rect: { x: r.x + m + i * 0.9, y: r.y + r.d - m - 0.6, w: 0.8, d: 0.6 }, h: 1.9 });
+    const s = (long ? r.x : r.y) + 0.5 + i * 1.3;
+    furniture.push({
+      kind: 'stall',
+      rect: long ? { x: s, y: r.y + 0.2, w: 1.15, d: 1.5 } : { x: r.x + 0.2, y: s, w: 1.5, d: 1.15 },
+      h: 2.0,
+    });
   }
-  return { furniture, seats: [{ x: r.x + r.w / 2, y: r.y + m }] };
+  const sinks = Math.max(1, Math.floor(len / 2.2));
+  for (const c of spread((long ? r.x : r.y) + 0.5, (long ? r.x + r.w : r.y + r.d) - 0.5, sinks)) {
+    furniture.push({
+      kind: 'sink',
+      rect: long
+        ? { x: c - 0.45, y: r.y + r.d - 0.75, w: 0.9, d: 0.55 }
+        : { x: r.x + r.w - 0.75, y: c - 0.45, w: 0.55, d: 0.9 },
+      h: 0.85,
+    });
+  }
+  const seats = spread((long ? r.x : r.y) + 1, (long ? r.x + r.w : r.y + r.d) - 1, 3).map((c) =>
+    long ? { x: c, y: r.y + r.d * 0.62 } : { x: r.x + r.w * 0.62, y: c }
+  );
+  return { furniture, seats };
+}
+
+/** Oficina abierta: bancadas de escritorios y plantas entre islas. */
+function openOffice(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
+  const base = offices(r, 2.1, 2.4);
+  const plants: Furniture[] = [0.2, 0.8].map((f) => ({
+    kind: 'plant',
+    rect: { x: r.x + 0.3, y: r.y + r.d * f - 0.25, w: 0.5, d: 0.5 },
+    h: 1.3,
+  }));
+  return { furniture: [...base.furniture, ...plants], seats: base.seats };
 }
 
 function corridor(r: Rect): Pick<Interior, 'furniture' | 'seats'> {
@@ -160,22 +191,24 @@ export function interiorOf(zone: Zone): Interior {
     zone.type === 'oficina'
       ? offices(r, 2.2, 2.5)
       : zone.type === 'cubiculos'
-        ? offices(r, 2.6, 2.4)
+        ? offices(r, 2.2, 2.0)
         : zone.type === 'conferencia'
           ? conference(r)
           : zone.type === 'servidores'
             ? servers(r)
-            : zone.type === 'electrico'
-              ? electrical(r)
-              : zone.type === 'pasillo'
-                ? corridor(r)
-                : reception(r);
+            : zone.type === 'bano'
+              ? bathroom(r)
+              : zone.type === 'oficina_abierta'
+                ? openOffice(r)
+                : zone.type === 'pasillo'
+                  ? corridor(r)
+                  : reception(r);
   const nDiff = Math.min(4, Math.max(1, Math.round(zone.area / 90)));
   const long = r.w >= r.d;
   const diffusers = spread(long ? r.x : r.y, long ? r.x + r.w : r.y + r.d, nDiff).map((s) =>
     long ? { x: s, y: r.y + r.d / 2 } : { x: r.x + r.w / 2, y: s }
   );
-  const result: Interior = { ...base, hub: hubOf(r), diffusers, lights: grid(r, 5) };
+  const result: Interior = { ...base, hub: hubOf(r), diffusers, lights: zone.rects.flatMap((p) => grid(p, 5)) };
   CACHE.set(zone.id, result);
   return result;
 }
@@ -199,4 +232,79 @@ export function edgesOf(r: Rect): Array<{ side: 'n' | 's' | 'e' | 'w'; a: P2; b:
     },
     { side: 'w', a: { x: r.x, y: r.y + r.d }, b: { x: r.x, y: r.y }, exterior: r.x < eps },
   ];
+}
+
+export interface ZoneEdge {
+  side: 'n' | 's' | 'e' | 'w';
+  a: P2;
+  b: P2;
+  exterior: boolean;
+  /** Parte de la zona a la que pertenece el borde. */
+  part: Rect;
+}
+
+/** Resta de intervalos [a0, a1] − cortes (todos sobre la misma recta). */
+function subtract(a0: number, a1: number, cuts: Array<[number, number]>): Array<[number, number]> {
+  let out: Array<[number, number]> = [[Math.min(a0, a1), Math.max(a0, a1)]];
+  for (const [c0, c1] of cuts) {
+    out = out.flatMap(([s, e]) => {
+      if (c1 <= s || c0 >= e) {
+        return [[s, e] as [number, number]];
+      }
+      const keep: Array<[number, number]> = [];
+      if (c0 > s) {
+        keep.push([s, c0]);
+      }
+      if (c1 < e) {
+        keep.push([c1, e]);
+      }
+      return keep;
+    });
+  }
+  return out.filter(([s, e]) => e - s > 0.01);
+}
+
+/**
+ * Contorno de una zona de una o varias partes: los bordes de cada parte menos los tramos compartidos con
+ * otra parte de la misma zona (p. ej. la sala de conferencias en L no tiene muro entre sus dos partes).
+ */
+export function zoneEdges(zone: Pick<Zone, 'rects'>): ZoneEdge[] {
+  const parts = zone.rects;
+  const out: ZoneEdge[] = [];
+  const eps = 0.01;
+  parts.forEach((r, i) => {
+    const others = parts.filter((_, j) => j !== i);
+    for (const e of edgesOf(r)) {
+      const vertical = e.side === 'e' || e.side === 'w';
+      const line = vertical ? e.a.x : e.a.y;
+      const cuts: Array<[number, number]> = [];
+      for (const o of others) {
+        const oe = edgesOf(o).find((x) => {
+          const opp = { n: 's', s: 'n', e: 'w', w: 'e' }[e.side];
+          return x.side === opp && Math.abs((vertical ? x.a.x : x.a.y) - line) < eps;
+        });
+        if (oe) {
+          cuts.push(
+            vertical
+              ? [Math.min(oe.a.y, oe.b.y), Math.max(oe.a.y, oe.b.y)]
+              : [Math.min(oe.a.x, oe.b.x), Math.max(oe.a.x, oe.b.x)]
+          );
+        }
+      }
+      const a0 = vertical ? e.a.y : e.a.x;
+      const a1 = vertical ? e.b.y : e.b.x;
+      const reversed = a0 > a1;
+      for (const [s0, s1] of subtract(a0, a1, cuts)) {
+        const [p, q] = reversed ? [s1, s0] : [s0, s1];
+        out.push({
+          side: e.side,
+          a: vertical ? { x: line, y: p } : { x: p, y: line },
+          b: vertical ? { x: line, y: q } : { x: q, y: line },
+          exterior: e.exterior,
+          part: r,
+        });
+      }
+    }
+  });
+  return out;
 }

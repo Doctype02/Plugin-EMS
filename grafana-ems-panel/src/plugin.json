@@ -5,7 +5,7 @@
   "id": "doctype02-ems-panel",
   "info": {
     "keywords": ["panel", "ems", "energy", "smart building", "3d"],
-    "description": "Edificio inteligente en 3D con el estado de las 10 zonas, cargas, alarmas y resultados del EMS",
+    "description": "Edificio inteligente en 3D con el estado de las 26 zonas, cargas, alarmas y resultados del EMS",
     "author": {
       "name": "Doctype02"
     },

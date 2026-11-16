@@ -88,7 +88,7 @@ def alarmas_inicio(ev: Evento, zonas_unidad: list[str] | None = None) -> list[di
     if ev.tipo == "corte_energia":
         return [{"nivel": "crit", "codigo": "CORTE_ENERGIA", "zona": "EDIF",
                  "mensaje": "Sin tensión en la acometida: VRF, iluminación y tomacorrientes sin servicio"},
-                {"nivel": "warn", "codigo": "EN_UPS", "zona": "Z09",
+                {"nivel": "warn", "codigo": "EN_UPS", "zona": "EDIF",
                  "mensaje": f"Cargas críticas en UPS, autonomía ≈ {ev.intensidad:.0f} min", "valor": ev.intensidad}]
     if ev.tipo == "falla_vrf":
         return [{"nivel": "crit", "codigo": "FALLA_VRF", "zona": ev.unidad,
