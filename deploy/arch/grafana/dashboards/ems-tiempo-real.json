@@ -37,7 +37,19 @@
       "includeVars": false,
       "asDropdown": false,
       "tags": [],
-      "tooltip": "Abrir EMS · Edificio 3D"
+      "tooltip": "EMS · Edificio 3D"
+    },
+    {
+      "type": "link",
+      "title": "Tiempo real",
+      "url": "/d/ems-tiempo-real",
+      "icon": "dashboard",
+      "targetBlank": false,
+      "keepTime": false,
+      "includeVars": false,
+      "asDropdown": false,
+      "tags": [],
+      "tooltip": "EMS · Tiempo real"
     },
     {
       "type": "link",
@@ -49,31 +61,31 @@
       "includeVars": false,
       "asDropdown": false,
       "tags": [],
-      "tooltip": "Abrir EMS · Zonas"
+      "tooltip": "EMS · Zonas"
     },
     {
       "type": "link",
       "title": "Alarmas",
       "url": "/d/ems-alarmas",
-      "icon": "bolt",
+      "icon": "dashboard",
       "targetBlank": false,
       "keepTime": false,
       "includeVars": false,
       "asDropdown": false,
       "tags": [],
-      "tooltip": "Abrir EMS · Alarmas"
+      "tooltip": "EMS · Alarmas"
     },
     {
       "type": "link",
       "title": "Resultados",
       "url": "/d/ems-resultados",
-      "icon": "info",
+      "icon": "dashboard",
       "targetBlank": false,
       "keepTime": false,
       "includeVars": false,
       "asDropdown": false,
       "tags": [],
-      "tooltip": "Abrir EMS · Resultados"
+      "tooltip": "EMS · Resultados"
     }
   ],
   "templating": {
