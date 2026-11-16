@@ -1,4 +1,4 @@
-import { applyLocal, describe as describeCmd, prune, toPayload, validate } from './control';
+import { applyLocal, describe as describeCmd, prune, resolveControlUrl, toPayload, validate } from './control';
 import { simulate } from './simulator';
 
 const at = (h: number, m = 0, day = 3) => Date.UTC(2026, 10, day, h + 5, m);
@@ -81,5 +81,15 @@ describe('overrides en el simulador', () => {
   it('el setpoint con ocupación global cambia las zonas ocupadas', () => {
     const s = simulate(t, { ...base, spOccupied: 25 });
     expect(s.zones.Z02.setpoint).toBe(25);
+  });
+});
+
+describe('resolveControlUrl', () => {
+  it('reemplaza {host} por el host de Grafana', () => {
+    expect(resolveControlUrl('http://{host}:1880/ems/control', '192.168.0.30')).toBe(
+      'http://192.168.0.30:1880/ems/control'
+    );
+    expect(resolveControlUrl('http://{host}:1880/ems/control', 'fe80::1')).toBe('http://[fe80::1]:1880/ems/control');
+    expect(resolveControlUrl('http://10.0.0.5:1880/ems/control', 'otro')).toBe('http://10.0.0.5:1880/ems/control');
   });
 });

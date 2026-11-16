@@ -108,8 +108,9 @@ export const plugin = new PanelPlugin<EmsOptions>(EmsPanel).setPanelOptions((bui
     .addTextInput({
       path: 'controlUrl',
       name: 'URL de control (Node-RED)',
-      description: 'Endpoint HTTP que publica los comandos por MQTT en modo en vivo',
-      defaultValue: 'http://localhost:1880/ems/control',
+      description:
+        'Endpoint HTTP que publica los comandos por MQTT en modo en vivo. {host} = el host con el que se abrió Grafana',
+      defaultValue: 'http://{host}:1880/ems/control',
       showIf: (c) => c.allowControl && !c.demoMode,
     })
     .addBooleanSwitch({ path: 'showSummary', name: 'Mostrar encabezado', defaultValue: true })

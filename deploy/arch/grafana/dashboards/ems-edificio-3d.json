@@ -79,7 +79,7 @@
         "showSidebar": true,
         "animations": true,
         "allowControl": true,
-        "controlUrl": "http://localhost:1880/ems/control",
+        "controlUrl": "http://{host}:1880/ems/control",
         "demoSpeed": 60,
         "refreshSeconds": 2
       }

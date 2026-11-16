@@ -258,7 +258,17 @@ export function describe(command: Command): string {
 }
 
 /** Envía el comando al endpoint HTTP de Node-RED. */
+/**
+ * Resuelve la URL de control: `{host}` se reemplaza por el host con el que el navegador abrió Grafana, para que
+ * el panel funcione desde cualquier equipo de la red sin fijar la IP del servidor.
+ */
+export function resolveControlUrl(url: string, host?: string): string {
+  const h = host ?? (typeof window !== 'undefined' ? window.location.hostname : 'localhost');
+  return url.replace(/\{host\}/g, h.includes(':') && !h.startsWith('[') ? `[${h}]` : h);
+}
+
 export async function sendToNodeRed(url: string, command: Command, user?: string, timeoutMs = 5000): Promise<string> {
+  url = resolveControlUrl(url);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {

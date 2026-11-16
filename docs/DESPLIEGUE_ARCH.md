@@ -216,7 +216,7 @@ curl -s -X POST http://127.0.0.1:1880/ems/control -H 'Content-Type: application/
   primer arranque) pon `uiHost: "127.0.0.1"` y reinicia.
 - Si se abre desde otros equipos de la red: deja Node-RED escuchando en la LAN, **protege el editor** con
   `adminAuth` en `settings.js` (el endpoint `/ems/control` sigue abierto) y abre el puerto 1880 en el
-  firewall si lo hay. En la opción *URL de control* del panel usa `http://<ip-del-servidor>:1880/ems/control`.
+  firewall si lo hay. La opción *URL de control* del panel vale `http://{host}:1880/ems/control`: `{host}` es el host con el que el navegador abrió Grafana, así que funciona desde cualquier equipo sin fijar la IP.
 
 ## 7. Simulador (gemelo digital en vivo)
 
@@ -379,7 +379,7 @@ Resultados. Todos usan el datasource `ems-influx` y la variable `escenario`.
 |---|---|---|
 | El panel no aparece en la lista de visualizaciones | Plugin sin firmar o Grafana < 13.2 | `allow_loading_unsigned_plugins`, reiniciar; revisar `journalctl -u grafana` |
 | Panel con todas las zonas "Sin datos" | Consultas sin datos o rango de tiempo fuera | Revisar el paso 7 (`influx query`); rango `now-6h → now` con `EMS_VELOCIDAD=1` |
-| "Failed to fetch" al aplicar un control | El navegador no llega a Node-RED | URL de control con la IP correcta, puerto 1880 accesible (paso 6) |
+| "Failed to fetch" al aplicar un control | El navegador no llega a Node-RED | Puerto 1880 accesible desde la red del navegador (firewall, paso 6); la URL de control usa `{host}` |
 | "Se requiere rol Editor o Admin" | Usuario Viewer | Dar rol Editor al usuario de la demo |
 | El simulador reinicia en bucle | Token o URL de Influx incorrectos | `journalctl -u ems-simulador`; revisar `/etc/ems/ems.env` |
 | `${MQTT_HOST}` sin resolver en Node-RED | Variables no cargadas | `EnvironmentFile=/etc/ems/ems.env` en `node-red-ems.service` |
