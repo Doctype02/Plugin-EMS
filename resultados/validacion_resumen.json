@@ -1,17 +1,17 @@
 {
   "anual_horario": {
     "n": 8736,
-    "nmbe_pct": 3.1985884883957483,
-    "cvrmse_pct": 23.015501394976194,
+    "nmbe_pct": 7.526417840992794,
+    "cvrmse_pct": 21.17420395410199,
     "cumple_g14": true,
-    "r2": 0.9440217963153541
+    "r2": 0.9537204327286766
   },
   "pico_kw": {
-    "energyplus": 51.884,
-    "modelo": 53.542
+    "energyplus": 132.729,
+    "modelo": 119.153
   },
   "total_anual_kwh": {
-    "energyplus": 143994.4,
-    "modelo": 139368.17858333333
+    "energyplus": 552472.2,
+    "modelo": 510808.1815
   }
 }

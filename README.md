@@ -99,41 +99,57 @@ python -m ems energyplus --idf data/energyplus/modelo/in.idf --epw data/clima/PA
 
 ## Modelo del edificio y validación contra EnergyPlus
 
-Parámetros tomados del modelo del equipo (`EMS_Edificio_Ultima simulacion`): geometría (floorplan), cargas
-internas, horarios, envolvente (muro U 0.86, techo U 0.27, vidrio simple U 6.42 / SHGC 0.25, WWR 69 %),
-terminales y sistemas VRF autodimensionados y clima EPW de Panamá. Los cuatro parámetros efectivos del modelo
-RC (masa térmica, fracción solar convectiva, radiación al cielo y latente del serpentín) se calibran contra la
-serie horaria de E+ (`python -m ems calibrar`).
+Parámetros tomados de los modelos del equipo (`Edificio_Sin_EMS` y `Edificio_Sin_EMS_ConPV`) con
+`tools/importar_energyplus.py`: geometría (floorplan.json: PB y P1–P4 de 20 × 20 m), cargas internas por zona,
+horarios `BASE_*`/`TEMP_*` (el modelo sin EMS enfría a 22 °C las 24 h; baños a 24 °C), envolvente (muro U 2.48,
+techo U 0.61, losa U 4.02, vidrio tintado U 5.71 / SHGC 0.50), 21 terminales VRF en 6 sistemas y 5 PTAC
+autodimensionados, ascensor, FV y clima EPW de Panamá. El COP estacional y los parámetros efectivos del modelo
+RC se calibran contra la serie horaria de E+ (`python -m ems calibrar`).
 
 | Uso final anual | EnergyPlus | Gemelo digital | Diferencia |
 |---|---|---|---|
-| Enfriamiento | 66.8 MWh | 61.4 MWh | −8.1 % |
-| Ventiladores | 15.6 MWh | 15.6 MWh | −0.2 % |
-| Iluminación | 17.9 MWh | 18.7 MWh | +4.6 % |
-| Equipos | 43.8 MWh | 43.8 MWh | 0.0 % |
-| **Total** | **144.0 MWh** | **139.4 MWh** | **−3.2 %** |
+| Enfriamiento | 318.9 MWh | 275.1 MWh | −13.7 % |
+| Ventiladores | 74.9 MWh | 76.0 MWh | +1.6 % |
+| Iluminación | 60.6 MWh | 60.9 MWh | +0.5 % |
+| Equipos (incl. ascensor) | 98.1 MWh | 87.7 MWh | −10.6 % |
+| **Total** | **552.5 MWh** | **510.8 MWh** | **−7.5 %** |
 
-Serie horaria anual: NMBE 3.2 %, CV(RMSE) 23.0 % → **cumple ASHRAE Guideline 14** (±10 %, ≤ 30 %).
-Pico anual: 51.9 kW (E+) frente a 53.5 kW. `python -m ems validar` regenera la tabla y la figura.
+Serie horaria anual: NMBE 7.5 %, CV(RMSE) 21.2 % → **cumple ASHRAE Guideline 14** (±10 %, ≤ 30 %).
+Pico anual: 132.7 kW (E+) frente a 119.2 kW. FV (variante ConPV): NMBE < 1 % frente a la generación de E+
+(101 MWh/año). El modelo de un nodo por zona subestima la carga nocturna de E+ (inercia de los muros), así que
+la línea base queda algo baja y los ahorros del EMS son conservadores. `python -m ems validar` regenera la
+tabla y la figura.
 
 ## Resultados principales (4 semanas tipo con el EPW, `python -m ems todo`)
 
+Sin paneles (energía y demanda = consumo del edificio):
+
 | Escenario | Energía 4 sem. (kWh) | Demanda máx. 15 min (kW) | Confort (%) | Ahorro (%) | Pico evitado (kW) | Payback (años) |
 |---|---|---|---|---|---|---|
-| Línea base (operación del modelo E+) | 10 654 | 51.2 | 96.4 | — | — | — |
-| Reglas | 7 225 | 37.3 | 97.4 | 32.2 | 13.9 | 2.7 |
-| Reglas + DR (límite 30 kW) | 6 994 | 35.9 | 97.4 | 34.4 | 15.3 | 2.5 |
-| MPC | 6 935 | 33.9 | 97.4 | 34.9 | 17.3 | 2.4 |
+| Línea base (operación del modelo E+) | 39 448 | 138.0 | 98.8 | — | — | — |
+| Reglas | 19 359 | 109.7 | 98.9 | 50.9 | 28.3 | 1.2 |
+| Reglas + DR (límite 90 kW) | 18 853 | 92.6 | 98.9 | 52.2 | 45.4 | 1.0 |
+| MPC | 18 939 | 92.6 | 99.1 | 52.0 | 45.4 | 1.1 |
 
-Los ahorros vienen de: setpoint 24 °C con ocupación (el modelo usa 22 °C), ventiladores en automático fuera de
-ocupación (en el modelo 6 terminales ventilan 24 h), apagado de luces y corte de standby sin ocupación
-(incluidos los equipos que el horario del modelo deja encendidos sábado y domingo por la mañana) y
-aprovechamiento de luz natural.
+Con paneles (energía y demanda de la acometida, netas de 7.3 MWh FV en las 4 semanas; ahorro frente a la
+línea base con FV):
 
-Pronóstico día siguiente (regresión): sobre el año de EnergyPlus MAE 0.56 kW, RMSE 0.73 kW (serie determinista
-de horarios fijos); sobre el gemelo con ocupación estocástica MAE 0.89 kW, RMSE 1.26 kW. Pruebas: 10/10
-superadas, confiabilidad de la lógica 100 %, latencia de decisión < 1 ms (p99); lazo MQTT medido
-comando→actuador ≈ 12 ms de media. Detalle en `resultados/RESUMEN.md`.
+| Escenario | Energía de red (kWh) | Demanda máx. 15 min (kW) | Ahorro (%) | Pico evitado (kW) | Payback (años) |
+|---|---|---|---|---|---|
+| Línea base + FV | 32 139 | 110.3 | — | — | — |
+| Reglas + FV | 13 374 | 82.5 | 58.4 | 27.9 | 1.2 |
+| Reglas + DR + FV | 12 867 | 83.0 | 60.0 | 27.3 | 1.2 |
+| MPC + FV | 12 922 | 83.4 | 59.8 | 27.0 | 1.2 |
+
+Los ahorros vienen sobre todo de eliminar el enfriamiento nocturno y de fin de semana (el modelo mantiene 22 °C
+las 24 h con los ventiladores encendidos), del setpoint 24 °C con ocupación, del apagado de luces y del corte de
+standby sin ocupación. El límite de demanda (90 kW) recorta 45 kW del pico sin FV; con FV la demanda de la
+acometida ya queda por debajo del límite casi siempre.
+
+Pronóstico día siguiente (regresión ridge): sobre el año de EnergyPlus MAE 2.3 kW, RMSE 3.0 kW; sobre el gemelo
+con ocupación estocástica MAE 3.2 kW, RMSE 5.3 kW (persistencia semanal 3.7 / 6.5 kW). Pruebas: 10/10
+superadas, confiabilidad de la lógica 100 %, latencia de decisión ≈ 3 ms (p99); paridad exacta Python ⇄
+Node-RED en 2016 pasos. Detalle en `resultados/RESUMEN.md`.
 
 ## Supuestos y limitaciones
 
@@ -141,7 +157,7 @@ comando→actuador ≈ 12 ms de media. Detalle en `resultados/RESUMEN.md`.
   ocupación). La serie de EnergyPlus es determinista y favorece al pronóstico; con datos reales de medidor se
   esperan errores mayores.
 - El modelo E+ usa la temperatura de terreno por defecto de EnergyPlus (**18 °C**); en Panamá el terreno está a
-  26–28 °C (el propio IDF lo trae en `Site:GroundTemperature:FCfactorMethod`). Se replica para la calibración y
+  26–28 °C. Se replica para la calibración y
   se evalúa en la sensibilidad (`edificio.t_suelo_c`); conviene corregirlo en OpenStudio. Con 18 °C la losa
   enfría la planta baja de noche: el EMS incluye una regla de protección por baja temperatura (ventilador con
   aire exterior, sin compresor).

@@ -1,12 +1,12 @@
 {
-  "area_m2": 800.0,
-  "energia_semana_kwh": 10654.131916666667,
-  "energia_anual_mwh": 138.88421962797622,
-  "eui_kwh_m2_anio": 173.60527453497028,
-  "demanda_max_15min_kw": 51.2,
-  "factor_carga": 0.30965552678183905,
-  "fp_medio": 0.9299697172619048,
-  "costo_anual_usd": 42666.298242782745,
-  "co2_anual_t": 43.05410808467263,
-  "confort_pct": 96.40387275242047
+  "area_m2": 1980.0,
+  "energia_semana_kwh": 39447.80683333333,
+  "energia_anual_mwh": 514.2303390773809,
+  "eui_kwh_m2_anio": 259.7122924633237,
+  "demanda_max_15min_kw": 138.01333333333332,
+  "factor_carga": 0.42533639384105976,
+  "fp_medio": 0.9109909226190477,
+  "costo_anual_usd": 141727.54317217262,
+  "co2_anual_t": 159.41140511398808,
+  "confort_pct": 98.79439890710383
 }
