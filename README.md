@@ -128,8 +128,8 @@ Sin paneles (energía y demanda = consumo del edificio):
 |---|---|---|---|---|---|---|
 | Línea base (operación del modelo E+) | 39 448 | 138.0 | 98.8 | — | — | — |
 | Reglas | 19 359 | 109.7 | 98.9 | 50.9 | 28.3 | 1.2 |
-| Reglas + DR (límite 90 kW, valor anterior) | 18 853 | 92.6 | 98.9 | 52.2 | 45.4 | 1.0 |
-| MPC | 18 939 | 92.6 | 99.1 | 52.0 | 45.4 | 1.1 |
+| Reglas + DR (límite 170 kW) | 19 359 | 109.7 | 98.9 | 50.9 | 28.3 | 1.2 |
+| MPC | 19 524 | 113.5 | 99.1 | 50.5 | 24.6 | 1.2 |
 
 Con paneles (energía y demanda de la acometida, netas de 7.3 MWh FV en las 4 semanas; ahorro frente a la
 línea base con FV):
@@ -138,13 +138,14 @@ línea base con FV):
 |---|---|---|---|---|---|
 | Línea base + FV | 32 139 | 110.3 | — | — | — |
 | Reglas + FV | 13 374 | 82.5 | 58.4 | 27.9 | 1.2 |
-| Reglas + DR + FV | 12 867 | 83.0 | 60.0 | 27.3 | 1.2 |
-| MPC + FV | 12 922 | 83.4 | 59.8 | 27.0 | 1.2 |
+| Reglas + DR + FV | 13 374 | 82.5 | 58.4 | 27.9 | 1.2 |
+| MPC + FV | 13 507 | 81.8 | 58.0 | 28.5 | 1.2 |
 
 Los ahorros vienen sobre todo de eliminar el enfriamiento nocturno y de fin de semana (el modelo mantiene 22 °C
 las 24 h con los ventiladores encendidos), del setpoint 24 °C con ocupación, del apagado de luces y del corte de
-standby sin ocupación. El límite de demanda (90 kW) recorta 45 kW del pico sin FV; con FV la demanda de la
-acometida ya queda por debajo del límite casi siempre.
+standby sin ocupación. Con el límite de demanda de 170 kW (potencia máxima del edificio) la respuesta a la demanda no llega a
+actuar: el pico del edificio es 138 kW sin EMS y 110 kW con reglas, así que «Reglas + DR» coincide con «Reglas».
+(Con el límite anterior de 90 kW el DR recortaba 45 kW del pico.)
 
 Pronóstico día siguiente (regresión ridge): sobre el año de EnergyPlus MAE 2.3 kW, RMSE 3.0 kW; sobre el gemelo
 con ocupación estocástica MAE 3.2 kW, RMSE 5.3 kW (persistencia semanal 3.7 / 6.5 kW). Pruebas: 10/10
