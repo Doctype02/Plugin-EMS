@@ -48,7 +48,7 @@ Prefijo: `ems/{edificio}` (por defecto `ems/edificio1`). Zonas: `Z01` … `Z26` 
 | `ems/edificio1/sim/eventos` | sim → (retenido) | `{ts, activos: [{id, evento, zona, unidad, intensidad, restante_min}]}` |
 | `ems/edificio1/sim/estado` | sim → (retained, LWT) | `{en_linea, control, velocidad}` — usar para el panel de disponibilidad |
 | `ems/edificio1/nodered/estado` | Node-RED → (retained, LWT) | `{en_linea}` |
-| `ems/edificio1/ems/parametros` | → Node-RED | p. ej. `{limite_kw: 81, sp_ocupado: 25}` (cambio de parámetros en vivo) |
+| `ems/edificio1/ems/parametros` | → Node-RED | p. ej. `{limite_kw: 153, sp_ocupado: 25}` (cambio de parámetros en vivo) |
 | `ems/edificio1/ems/override` | panel/operador → Node-RED | control manual temporal: `{zona, setpoint_c?, hvac_enable?, luces_nivel?, equipos_nivel?, duracion_min (1–1440, def. 60), usuario?}` o `{tipo: "liberar", zona: "Z03"\|"*"}`. Prioridad sobre reglas y limitador de demanda; Z09/Z10 se rechazan. `ems/estado` informa `manual: [zonas]` |
 
 ### Endpoint HTTP de control (Node-RED, puerto 1880)
@@ -59,7 +59,7 @@ Prefijo: `ems/{edificio}` (por defecto `ems/edificio1`). Zonas: `Z01` … `Z26` 
 |---|---|---|
 | `override` | `zona`, `setpoint_c?`, `hvac_enable?`, `luces_nivel?`, `equipos_nivel?`, `duracion_min?`, `usuario?` | `ems/<edif>/ems/override` |
 | `liberar` | `zona` (`Z01`…`Z26` o `*`) | `ems/<edif>/ems/override` |
-| `parametros` | `limite_kw?` (0.25–3.3 × `ems.limite_demanda_kw`: 22–297 kW), `sp_ocupado?` (20–28) | `ems/<edif>/ems/parametros` |
+| `parametros` | `limite_kw?` (0.25–3.3 × `ems.limite_demanda_kw`: 42–561 kW), `sp_ocupado?` (20–28) | `ems/<edif>/ems/parametros` |
 
 Respuesta `{ok, mensaje, …}` con 200, o 400 si el comando no es válido (zona crítica, sin cambios, fuera de rango).
 
@@ -152,4 +152,4 @@ o `{tipo: "evento", accion: "detener", id | "*"}`. Tipos: `incendio`, `corte_ene
 del UPS en min), `falla_vrf` (unidad: cualquier id de `sistemas_vrf`, incluidos los PTAC), `falla_terminal`, `puerta_abierta` (%), `sensor`,
 `ola_calor` (°C), `sobreocupacion` (% sobre el aforo), `pico_carga` (kW). Alarmas nuevas: `INCENDIO`,
 `CORTE_ENERGIA`, `EN_UPS`, `UPS_AGOTADO`, `FALLA_VRF`, `FALLA_TERMINAL`, `PUERTA_ABIERTA`, `OLA_CALOR`,
-`SOBREOCUPACION`, `CARGA_EXTRA`. Rango de `limite_kw` en `parametros`: 22–297 kW.
+`SOBREOCUPACION`, `CARGA_EXTRA`. Rango de `limite_kw` en `parametros`: 42–561 kW.

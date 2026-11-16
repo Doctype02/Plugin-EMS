@@ -209,7 +209,7 @@ def sensibilidad(cfg: dict, controlador: str = "reglas_dr", dias: float = 7,
         fila("capex", f"{f:.0%}", kpi.economia(kb, ke, cfg, capex_factor=f))
     tecnicos = [
         ("ems.setpoint_ocupado_c", [23.0, 25.0]),
-        ("ems.limite_demanda_kw", [27, 33]),
+        ("ems.limite_demanda_kw", [153, 187]),
         ("ems.equipos_desocupado_ems", [0.2, 0.4]),
         ("edificio.t_suelo_c", [18.0, 27.0]),
     ]

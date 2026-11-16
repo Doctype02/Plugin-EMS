@@ -157,7 +157,8 @@ def test_sensor_congelado_detectado_y_modo_seguro(cfg):
 
 
 def test_limitador_demanda_responde_a_pico(cfg):
-    sin_fv = config.aplicar(cfg, {"fv.habilitado": False})  # el limitador ve el consumo completo
+    # el limitador ve el consumo completo; límite bajo para forzar el pico (el edificio no llega a 170 kW)
+    sin_fv = config.aplicar(cfg, {"fv.habilitado": False, "ems.limite_demanda_kw": 90})
     r = simular(sin_fv, "reglas_dr", dias=2, anomalias=[Anomalia("carga_extra", 37, 39, "Z13", {"kw": 25.0})])
     e = r.estado
     act = e[(pd.to_datetime(e.ts) >= "2026-11-03 13:00") & e.dr_activo]

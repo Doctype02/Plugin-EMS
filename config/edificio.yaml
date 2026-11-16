@@ -133,7 +133,7 @@ ems:
   equipos_desocupado_ems: 0.10
   retardo_vacancia_min: 15
   luces_desocupado_ems: 0.0
-  limite_demanda_kw: 90            # ≈ 82 % del pico con reglas en las semanas calurosas (≈ 68 % del pico del modelo E+, 133 kW)
+  limite_demanda_kw: 170           # potencia máxima del edificio (kW)
   dr_histeresis_kw: 5
   dr_margen_confort_c: 0.75
   dr_setpoint_extra_c: 1.5

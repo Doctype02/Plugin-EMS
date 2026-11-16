@@ -67,7 +67,7 @@ Comandos individuales: `auditoria`, `pronostico`, `escenarios`, `pruebas`, `sens
 `live`, `exportar`, `energyplus`. Cualquier parámetro de `config/edificio.yaml` se puede variar sin editar el archivo:
 
 ```bash
-python -m ems --set ems.limite_demanda_kw=27 --set tarifa.precio_punta_usd_kwh=0.28 escenarios
+python -m ems --set ems.limite_demanda_kw=150 --set tarifa.precio_punta_usd_kwh=0.28 escenarios
 ```
 
 ### Modo en vivo (demo)
@@ -128,7 +128,7 @@ Sin paneles (energía y demanda = consumo del edificio):
 |---|---|---|---|---|---|---|
 | Línea base (operación del modelo E+) | 39 448 | 138.0 | 98.8 | — | — | — |
 | Reglas | 19 359 | 109.7 | 98.9 | 50.9 | 28.3 | 1.2 |
-| Reglas + DR (límite 90 kW) | 18 853 | 92.6 | 98.9 | 52.2 | 45.4 | 1.0 |
+| Reglas + DR (límite 90 kW, valor anterior) | 18 853 | 92.6 | 98.9 | 52.2 | 45.4 | 1.0 |
 | MPC | 18 939 | 92.6 | 99.1 | 52.0 | 45.4 | 1.1 |
 
 Con paneles (energía y demanda de la acometida, netas de 7.3 MWh FV en las 4 semanas; ahorro frente a la

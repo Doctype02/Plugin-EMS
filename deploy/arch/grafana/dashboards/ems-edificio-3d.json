@@ -70,7 +70,7 @@
       ],
       "options": {
         "demoMode": false,
-        "limitKw": 90,
+        "limitKw": 170,
         "pvMode": "auto",
         "defaultView": "status",
         "azimuth": 0,
