@@ -5,6 +5,6 @@ providers:
     folder: EMS Edificio
     type: file
     disableDeletion: true
-    allowUiUpdates: false
+    allowUiUpdates: true
     options:
       path: /opt/Plugin-EMS/deploy/arch/grafana/dashboards
