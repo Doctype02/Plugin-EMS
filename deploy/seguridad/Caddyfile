@@ -1,0 +1,37 @@
+# /etc/caddy/Caddyfile — HTTPS para el EMS (Caddy obtiene y renueva solo el certificado de Let's Encrypt).
+#
+# Variables (en /etc/caddy/ems.env, ver deploy/seguridad/README.md):
+#   EMS_DOMINIO  dominio público, p. ej. ems.miempresa.com. Sin dominio propio sirve <IP-con-guiones>.sslip.io
+#
+# Qué publica:
+#   https://EMS_DOMINIO/             → Grafana (127.0.0.1:3000)
+#   https://EMS_DOMINIO/ems/control  → Node-RED (127.0.0.1:1880), SÓLO con una sesión de Grafana válida
+# Los puertos 3000 y 1880 dejan de estar abiertos a internet; el editor de Node-RED se usa por túnel SSH.
+
+{$EMS_DOMINIO} {
+	encode gzip
+
+	@control path /ems/control
+	handle @control {
+		# Grafana responde 200 a /api/user sólo si la cookie de sesión es válida; si no, 401 y la orden no pasa
+		forward_auth 127.0.0.1:3000 {
+			uri /api/user
+		}
+		reverse_proxy 127.0.0.1:1880
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}
+
+# Quien entre por la IP o por HTTP va al dominio con HTTPS
+:80 {
+	redir https://{$EMS_DOMINIO}{uri} permanent
+}

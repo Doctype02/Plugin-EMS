@@ -1,0 +1,136 @@
+# /etc/grafana/provisioning/alerting/alertas-ems.yaml — reglas de alerta del EMS (Grafana Alerting).
+# Las notificaciones salen por el punto de contacto por defecto de Grafana: configure ahí correo o Telegram
+# (Alerting → Contact points). Ver deploy/seguridad/README.md.
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: EMS
+    folder: EMS Edificio
+    interval: 1m
+    rules:
+      - uid: ems-servidores-calientes
+        title: Cuarto de servidores caliente
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: {severidad: critica}
+        annotations:
+          summary: El cuarto de servidores (Z06) lleva 10 min por encima de 27 °C.
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: ems-influx
+            model:
+              refId: A
+              query: |
+                from(bucket: "ems")
+                  |> range(start: -15m)
+                  |> filter(fn: (r) => r._measurement == "zona" and r.escenario == "live" and r.tipo == "servidores" and r._field == "temp_c")
+                  |> last()
+                  |> keep(columns: ["_time", "_value"])
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [{evaluator: {type: gt, params: [27]}}]
+      - uid: ems-demanda-sobre-limite
+        title: Demanda sobre el límite de 170 kW
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: {severidad: aviso}
+        annotations:
+          summary: La demanda de 15 min supera el límite contratado de 170 kW.
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: ems-influx
+            model:
+              refId: A
+              query: |
+                from(bucket: "ems")
+                  |> range(start: -15m)
+                  |> filter(fn: (r) => r._measurement == "medidor" and r.escenario == "live" and r._field == "demanda_15min_kw")
+                  |> last()
+                  |> keep(columns: ["_time", "_value"])
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [{evaluator: {type: gt, params: [170]}}]
+      - uid: ems-zona-muy-caliente
+        title: Zona por encima de 32 °C
+        condition: C
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severidad: aviso}
+        annotations:
+          summary: Alguna zona lleva 15 min por encima de 32 °C (límite de la protección por calor).
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: ems-influx
+            model:
+              refId: A
+              query: |
+                from(bucket: "ems")
+                  |> range(start: -15m)
+                  |> filter(fn: (r) => r._measurement == "zona" and r.escenario == "live" and r._field == "temp_c")
+                  |> last()
+                  |> group()
+                  |> max()
+                  |> keep(columns: ["_time", "_value"])
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [{evaluator: {type: gt, params: [32]}}]
+      - uid: ems-sin-datos
+        title: El EMS dejó de enviar datos
+        condition: C
+        for: 5m
+        noDataState: Alerting
+        execErrState: Error
+        labels: {severidad: critica}
+        annotations:
+          summary: No llegan lecturas del medidor desde hace más de 15 min (simulador, MQTT o InfluxDB detenidos).
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: ems-influx
+            model:
+              refId: A
+              query: |
+                from(bucket: "ems")
+                  |> range(start: -15m)
+                  |> filter(fn: (r) => r._measurement == "medidor" and r.escenario == "live" and r._field == "p_total_kw")
+                  |> count()
+                  |> keep(columns: ["_value"])
+          - refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [{evaluator: {type: lt, params: [1]}}]

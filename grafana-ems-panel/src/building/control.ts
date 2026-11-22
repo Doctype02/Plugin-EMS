@@ -582,8 +582,17 @@ export function resolveControlUrl(url: string, host?: string): string {
   return url.replace(/\{host\}/g, h.includes(':') && !h.startsWith('[') ? `[${h}]` : h);
 }
 
+/**
+ * Con Grafana servido por HTTPS el navegador bloquea las órdenes a `http://host:1880` (contenido mixto) y ese
+ * puerto no está publicado: las órdenes van al mismo origen (`/ems/control`), donde el proxy inverso sólo las
+ * deja pasar con una sesión de Grafana válida (deploy/arch/Caddyfile).
+ */
+export function secureControlUrl(url: string, loc: { protocol: string; origin: string } = window.location): string {
+  return loc.protocol === 'https:' && url.startsWith('http://') ? `${loc.origin}/ems/control` : url;
+}
+
 export async function sendToNodeRed(url: string, command: Command, user?: string, timeoutMs = 5000): Promise<string> {
-  url = resolveControlUrl(url);
+  url = secureControlUrl(resolveControlUrl(url));
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {

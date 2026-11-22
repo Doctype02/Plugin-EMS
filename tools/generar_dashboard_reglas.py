@@ -83,7 +83,7 @@ def flux_zonas(fn: str, nombre: str, ultimo: bool = False) -> str:
     if ultimo:
         return ('from(bucket: "ems")\n  |> range(start: -1h)\n'
                 '  |> filter(fn: (r) => r._measurement == "zona" and r.escenario == "live" and r.critica == "no" and r._field == "temp_c")\n'
-                f'  |> last()\n  |> group()\n  |> {fn}()\n  |> map(fn: (r) => ({{_time: now(), _value: r._value, _field: "{nombre}"}}))')
+                f'  |> last()\n  |> group()\n  |> {fn}()\n  |> map(fn: (r) => ({{_time: now(), _value: r._value, _field: "{nombre}"}}))\n  |> group(columns: ["_field"])')
     return ('from(bucket: "ems")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n'
             '  |> filter(fn: (r) => r._measurement == "zona" and r.escenario == "live" and r.critica == "no" and r._field == "temp_c")\n'
             '  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n'

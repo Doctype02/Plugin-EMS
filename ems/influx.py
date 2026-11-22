@@ -92,6 +92,14 @@ class Escritor:
                                         "zona": a["zona"]},
                     {"mensaje": a["mensaje"], "valor": a.get("valor") if a.get("valor") is not None else 0.0})
 
+    def auditoria(self, a: dict):
+        """Orden recibida por el endpoint de control (hora real, no simulada): quién, qué y con qué resultado."""
+        if self.habilitado:
+            self._p("auditoria", a.get("ts") or pd.Timestamp.now(tz="UTC"),
+                    {"tipo": a.get("tipo", "?"), "resultado": "aceptada" if a.get("ok") else "rechazada"},
+                    {"usuario": str(a.get("usuario") or "(sin nombre)"), "objetivo": str(a.get("objetivo") or ""),
+                     "codigo": int(a.get("codigo", 0)), "ip": str(a.get("ip") or ""), "detalle": str(a.get("detalle") or "")})
+
     def pronostico(self, serie: pd.Series, modelo: str, real: pd.Series | None = None):
         if not self.habilitado:
             return

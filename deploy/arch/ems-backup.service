@@ -1,0 +1,11 @@
+# /etc/systemd/system/ems-backup.service
+[Unit]
+Description=Copia de seguridad del EMS (InfluxDB, Grafana, Node-RED y configuración)
+After=influxdb.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/ems/ems.env
+EnvironmentFile=-/etc/ems/backup.env
+ExecStart=/opt/Plugin-EMS/deploy/arch/ems-backup.sh
+Nice=10

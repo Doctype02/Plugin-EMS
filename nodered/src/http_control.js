@@ -3,6 +3,7 @@
 // Salida 1: override/liberar → ems/<edif>/ems/override; evento, ocupación, unidad y sensor → ems/<edif>/sim/control
 // Salida 2: parámetros       → ems/<edif>/ems/parametros
 // Salida 3: respuesta HTTP (con CORS)
+// Cada orden (aceptada o rechazada) deja además un registro de auditoría en ems/<edif>/auditoria (salida 1).
 const edif = env.get("EMS_EDIFICIO") || "edificio1";
 const base = "ems/" + edif;
 const b = (typeof msg.payload === "string" ? JSON.parse(msg.payload || "{}") : msg.payload) || {};
@@ -15,6 +16,7 @@ const cors = {
 function responder(code, cuerpo) {
     return { req: msg.req, res: msg.res, statusCode: code, headers: cors, payload: JSON.stringify(cuerpo) };
 }
+function procesar() {
 // Listas generadas desde config/edificio.yaml por build_flows.py
 const ZONAS = /*@ZONAS@*/["Z01", "Z02", "Z03", "Z04", "Z05", "Z06", "Z07", "Z08", "Z09", "Z10", "Z11", "Z12", "Z13", "Z14", "Z15", "Z16", "Z17", "Z18", "Z19", "Z20", "Z21", "Z22", "Z23", "Z24", "Z25", "Z26"]/*@FIN@*/;
 const CRITICAS = /*@CRITICAS@*/["Z06"]/*@FIN@*/;
@@ -165,3 +167,18 @@ if (b.tipo === "sensor") {
     return [{ topic: `${base}/sim/control`, payload: p }, null, responder(200, { ok: true, mensaje: "sensor forzado publicado" })];
 }
 return [null, null, responder(400, { ok: false, mensaje: "tipo debe ser override, liberar, parametros, evento, ocupacion, unidad o sensor" })];
+}
+const salida = procesar();
+// ---------------------------------------------------------------- auditoría: quién ordenó qué y con qué resultado
+const resp = salida[2];
+const auditoria = {
+    topic: `${base}/auditoria`,
+    payload: {
+        ts: new Date().toISOString(), tipo: String(b.tipo || "?"), usuario: String(b.usuario || ""),
+        objetivo: String(b.zona || b.unidad || b.evento || ""), ok: resp.statusCode === 200, codigo: resp.statusCode,
+        ip: (msg.req && msg.req.headers && (msg.req.headers["x-forwarded-for"] || "")) || "",
+        detalle: JSON.stringify(b).slice(0, 300)
+    }
+};
+salida[0] = salida[0] ? [salida[0], auditoria] : auditoria;
+return salida;

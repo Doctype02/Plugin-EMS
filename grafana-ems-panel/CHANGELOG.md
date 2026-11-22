@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.3
+
+- **Órdenes seguras con HTTPS**: cuando Grafana se sirve por HTTPS, las órdenes de control van al mismo origen
+  (`/ems/control`), donde el proxy inverso sólo las deja pasar con una sesión de Grafana válida. Con HTTP (red
+  local) se sigue usando la URL configurada.
+
 ## 1.6.2
 
 Modo demostración más realista, alineado con el gemelo digital y las reglas nuevas del EMS.

@@ -161,7 +161,7 @@
                         "name": "ems-influx"
                       },
                       "spec": {
-                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\" and r.critica == \"no\" and r._field == \"temp_c\")\n  |> last()\n  |> group()\n  |> mean()\n  |> map(fn: (r) => ({_time: now(), _value: r._value, _field: \"Interior\"}))"
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\" and r.critica == \"no\" and r._field == \"temp_c\")\n  |> last()\n  |> group()\n  |> mean()\n  |> map(fn: (r) => ({_time: now(), _value: r._value, _field: \"Interior\"}))\n  |> group(columns: [\"_field\"])"
                       }
                     },
                     "refId": "A",

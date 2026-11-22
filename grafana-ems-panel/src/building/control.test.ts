@@ -5,6 +5,7 @@ import {
   feedbackFor,
   prune,
   resolveControlUrl,
+  secureControlUrl,
   toPayload,
   validate,
   validateCommand,
@@ -143,5 +144,15 @@ describe('resolveControlUrl', () => {
     );
     expect(resolveControlUrl('http://{host}:1880/ems/control', 'fe80::1')).toBe('http://[fe80::1]:1880/ems/control');
     expect(resolveControlUrl('http://10.0.0.5:1880/ems/control', 'otro')).toBe('http://10.0.0.5:1880/ems/control');
+  });
+});
+
+describe('secureControlUrl', () => {
+  it('con HTTPS las órdenes van al mismo origen; con HTTP se respeta la URL configurada', () => {
+    const https = { protocol: 'https:', origin: 'https://ems.example.org' };
+    const http = { protocol: 'http:', origin: 'http://192.168.0.30:3000' };
+    expect(secureControlUrl('http://192.168.0.30:1880/ems/control', https)).toBe('https://ems.example.org/ems/control');
+    expect(secureControlUrl('http://192.168.0.30:1880/ems/control', http)).toBe('http://192.168.0.30:1880/ems/control');
+    expect(secureControlUrl('https://otro/ems/control', https)).toBe('https://otro/ems/control');
   });
 });

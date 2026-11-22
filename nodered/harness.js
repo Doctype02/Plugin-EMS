@@ -30,8 +30,11 @@ rl.on("line", (line) => {
     else if (m.tipo === "parametros") fPar({ payload: m.payload }, flow, env, node);
     else if (m.tipo === "override") out = { overrides: (fOverride({ payload: m.payload }, flow, env, node) || {}).payload || null };
     else if (m.tipo === "http") {
-        const [mq, par, res] = fHttp({ payload: m.payload, req: {}, res: {} }, flow, env, node);
-        out = { mqtt: mq && { topic: mq.topic, payload: mq.payload }, parametros: par && { topic: par.topic, payload: par.payload }, status: res.statusCode, cuerpo: JSON.parse(res.payload), cors: res.headers["Access-Control-Allow-Origin"] };
+        const [sal, par, res] = fHttp({ payload: m.payload, req: {}, res: {} }, flow, env, node);
+        const lista = Array.isArray(sal) ? sal : [sal];
+        const mq = lista.find((x) => x && !x.topic.endsWith("/auditoria")) || null;
+        const aud = lista.find((x) => x && x.topic.endsWith("/auditoria"));
+        out = { auditoria: aud && aud.payload, mqtt: mq && { topic: mq.topic, payload: mq.payload }, parametros: par && { topic: par.topic, payload: par.payload }, status: res.statusCode, cuerpo: JSON.parse(res.payload), cors: res.headers["Access-Control-Allow-Origin"] };
     }
     else if (m.tipo === "medidor") {
         const [cmds, estado, alarmas] = fEms({ payload: m.payload }, flow, env, node);

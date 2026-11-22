@@ -217,3 +217,12 @@ def test_nodered_reacciona_al_sensor_forzado(h, paso):
     t2 = t + pd.Timedelta(minutes=20)
     cmd = {c["zona"]: c for c in _enviar_paso(h, t2, forzadas, med)["cmds"]}
     assert cmd["Z09"]["luces_nivel"] == 0 and cmd["Z09"]["setpoint_c"] > base["Z09"]["setpoint_c"]
+
+
+def test_cada_orden_deja_registro_de_auditoria(h):
+    ok = h("http", {"tipo": "override", "zona": "Z02", "setpoint_c": 23, "usuario": "ana"})
+    assert ok["status"] == 200 and ok["auditoria"]["ok"] is True
+    assert ok["auditoria"]["usuario"] == "ana" and ok["auditoria"]["tipo"] == "override" and ok["auditoria"]["objetivo"] == "Z02"
+    mal = h("http", {"tipo": "override", "zona": "Z06", "setpoint_c": 30, "usuario": "intruso"})
+    assert mal["status"] == 400 and mal["mqtt"] is None
+    assert mal["auditoria"]["ok"] is False and mal["auditoria"]["codigo"] == 400 and mal["auditoria"]["usuario"] == "intruso"

@@ -1,2028 +1,2844 @@
 {
-  "uid": "ems-alarmas",
-  "title": "EMS · Alarmas y eventos",
-  "description": "Alarmas en lenguaje llano: cuántas hay, qué pasó, cuáles se repiten y cuándo.",
-  "tags": [
-    "ems"
-  ],
-  "editable": true,
-  "graphTooltip": 1,
-  "schemaVersion": 39,
-  "version": 1,
-  "refresh": "30s",
-  "time": {
-    "from": "now-24h",
-    "to": "now"
+  "apiVersion": "dashboard.grafana.app/v2beta1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "ems-alarmas"
   },
-  "timezone": "America/Panama",
-  "fiscalYearStartMonth": 0,
-  "liveNow": false,
-  "weekStart": "monday",
-  "timepicker": {
-    "refresh_intervals": [
-      "30s",
-      "1m",
-      "5m",
-      "15m"
-    ]
-  },
-  "links": [
-    {
-      "type": "link",
-      "title": "Edificio 3D",
-      "url": "/d/ems-edificio-3d-vivo",
-      "icon": "dashboard",
-      "targetBlank": false,
-      "keepTime": false,
-      "includeVars": false,
-      "asDropdown": false,
-      "tags": [],
-      "tooltip": "EMS · Edificio 3D"
-    },
-    {
-      "type": "link",
-      "title": "Tiempo real",
-      "url": "/d/ems-tiempo-real",
-      "icon": "dashboard",
-      "targetBlank": false,
-      "keepTime": false,
-      "includeVars": false,
-      "asDropdown": false,
-      "tags": [],
-      "tooltip": "EMS · Tiempo real"
-    },
-    {
-      "type": "link",
-      "title": "Zonas",
-      "url": "/d/ems-zonas",
-      "icon": "dashboard",
-      "targetBlank": false,
-      "keepTime": false,
-      "includeVars": false,
-      "asDropdown": false,
-      "tags": [],
-      "tooltip": "EMS · Zonas"
-    },
-    {
-      "type": "link",
-      "title": "Alarmas",
-      "url": "/d/ems-alarmas",
-      "icon": "dashboard",
-      "targetBlank": false,
-      "keepTime": false,
-      "includeVars": false,
-      "asDropdown": false,
-      "tags": [],
-      "tooltip": "EMS · Alarmas"
-    },
-    {
-      "type": "link",
-      "title": "Reglas",
-      "url": "/d/ems-reglas",
-      "icon": "dashboard",
-      "targetBlank": false,
-      "keepTime": false,
-      "includeVars": false,
-      "asDropdown": false,
-      "tags": [],
-      "tooltip": "EMS · Reglas del EMS"
-    },
-    {
-      "type": "link",
-      "title": "Resultados",
-      "url": "/d/ems-resultados",
-      "icon": "dashboard",
-      "targetBlank": false,
-      "keepTime": false,
-      "includeVars": false,
-      "asDropdown": false,
-      "tags": [],
-      "tooltip": "EMS · Resultados"
-    }
-  ],
-  "templating": {
-    "list": []
-  },
-  "annotations": {
-    "list": [
+  "spec": {
+    "annotations": [
       {
-        "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
+        "kind": "AnnotationQuery",
+        "spec": {
+          "query": {
+            "kind": "DataQuery",
+            "group": "grafana",
+            "version": "v0",
+            "datasource": {
+              "name": "-- Grafana --"
+            },
+            "spec": {}
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "builtIn": true,
+          "legacyOptions": {
+            "type": "dashboard"
+          }
+        }
       },
       {
-        "datasource": {
-          "type": "influxdb",
-          "uid": "ems-influx"
-        },
-        "enable": false,
-        "hide": false,
-        "iconColor": "#F2495C",
-        "name": "Alarmas críticas",
-        "target": {
-          "refId": "Anno",
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"mensaje\" and r.nivel == \"crit\")\n  |> group()\n  |> map(fn: (r) => ({_time: r._time, text: r.codigo + \" · \" + r.zona + \": \" + r._value, tags: r.nivel}))"
+        "kind": "AnnotationQuery",
+        "spec": {
+          "query": {
+            "kind": "DataQuery",
+            "group": "influxdb",
+            "version": "v0",
+            "datasource": {
+              "name": "ems-influx"
+            },
+            "spec": {
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"mensaje\" and r.nivel == \"crit\")\n  |> group()\n  |> map(fn: (r) => ({_time: r._time, text: r.codigo + \" · \" + r.zona + \": \" + r._value, tags: r.nivel}))",
+              "refId": "Anno"
+            }
+          },
+          "enable": false,
+          "hide": false,
+          "iconColor": "#F2495C",
+          "name": "Alarmas críticas"
         }
       }
-    ]
-  },
-  "panels": [
-    {
-      "type": "row",
-      "title": "Ahora mismo",
-      "collapsed": false,
-      "gridPos": {
-        "x": 0,
-        "y": 0,
-        "w": 24,
-        "h": 1
-      },
-      "panels": [],
-      "id": 1
-    },
-    {
-      "type": "stat",
-      "title": "Alarmas activas ahora",
-      "description": "Alarmas sin resolver en este momento.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"n_alarmas\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
-        }
-      ],
-      "gridPos": {
-        "x": 0,
-        "y": 1,
-        "w": 6,
-        "h": 5
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "Sin datos",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#73BF69",
-                "value": null
-              },
-              {
-                "color": "#FF9830",
-                "value": 1
-              },
-              {
-                "color": "#F2495C",
-                "value": 3
-              }
-            ]
-          },
-          "decimals": 0,
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Sin alarmas",
-                  "color": "#73BF69",
-                  "index": 0
+    ],
+    "cursorSync": "Crosshair",
+    "description": "Alarmas en lenguaje llano: cuántas hay, qué pasó, cuáles se repiten y cuándo.",
+    "editable": true,
+    "elements": {
+      "panel-11": {
+        "kind": "Panel",
+        "spec": {
+          "id": 11,
+          "title": "Alarmas en el rango",
+          "description": "Total de alarmas registradas en el rango de tiempo.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
                 }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {
+                  "titleSize": 13,
+                  "valueSize": 30
+                },
+                "textMode": "auto",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "decimals": 0,
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Sin alarmas",
+                          "index": 0
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#5794F2"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "#5794F2"
+                  },
+                  "noValue": "Sin alarmas"
+                },
+                "overrides": []
               }
             }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background_solid",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "textMode": "value",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard",
-        "text": {
-          "titleSize": 14,
-          "valueSize": 30
+          }
         }
       },
-      "id": 2
-    },
-    {
-      "type": "stat",
-      "title": "Críticas",
-      "description": "Alarmas graves en el rango de tiempo (por defecto, últimas 24 h): requieren actuar ya.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
+      "panel-12": {
+        "kind": "Panel",
+        "spec": {
+          "id": 12,
+          "title": "Latencia de control",
+          "description": "Tiempo entre la orden del EMS y la confirmación del gemelo; sparkline de 6 h. Naranja ≥ 500 ms, rojo ≥ 2 s.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"latencia_ms\")\n  |> aggregateWindow(every: 5m, fn: last, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\" and r.nivel == \"crit\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "gridPos": {
-        "x": 6,
-        "y": 1,
-        "w": 6,
-        "h": 5
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "Sin datos",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#73BF69",
-                "value": null
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {
+                  "titleSize": 13,
+                  "valueSize": 30
+                },
+                "textMode": "auto",
+                "wideLayout": true
               },
-              {
-                "color": "#F2495C",
-                "value": 1
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ms",
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "green"
+                      },
+                      {
+                        "value": 500,
+                        "color": "orange"
+                      },
+                      {
+                        "value": 2000,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "Sin datos"
+                },
+                "overrides": []
               }
-            ]
-          },
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "textMode": "value",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard",
-        "text": {
-          "titleSize": 14,
-          "valueSize": 34
+            }
+          }
         }
       },
-      "id": 3
-    },
-    {
-      "type": "stat",
-      "title": "Avisos",
-      "description": "Avisos en el rango de tiempo: algo se sale de lo normal (calor, pico de demanda).",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
+      "panel-13": {
+        "kind": "Panel",
+        "spec": {
+          "id": 13,
+          "title": "Reparto por nivel",
+          "description": "Reparto de las alarmas del rango por nivel.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"nivel\"])\n  |> count()\n  |> keep(columns: [\"nivel\", \"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\" and r.nivel == \"warn\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "gridPos": {
-        "x": 12,
-        "y": 1,
-        "w": 6,
-        "h": 5
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "Sin datos",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#73BF69",
-                "value": null
-              },
-              {
-                "color": "#FF9830",
-                "value": 1
-              }
-            ]
-          },
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "textMode": "value",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard",
-        "text": {
-          "titleSize": 14,
-          "valueSize": 34
-        }
-      },
-      "id": 4
-    },
-    {
-      "type": "stat",
-      "title": "Informativas",
-      "description": "Mensajes informativos en el rango (p. ej. respuesta a la demanda activada).",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\" and r.nivel == \"info\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "gridPos": {
-        "x": 18,
-        "y": 1,
-        "w": 6,
-        "h": 5
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "Sin datos",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#4C8DE6"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "text",
-                "value": null
-              }
-            ]
-          },
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "textMode": "value",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard",
-        "text": {
-          "titleSize": 14,
-          "valueSize": 34
-        }
-      },
-      "id": 5
-    },
-    {
-      "type": "row",
-      "title": "¿Qué ha pasado?",
-      "collapsed": false,
-      "gridPos": {
-        "x": 0,
-        "y": 6,
-        "w": 24,
-        "h": 1
-      },
-      "panels": [],
-      "id": 6
-    },
-    {
-      "type": "table",
-      "title": "Registro de alarmas",
-      "description": "Todas las alarmas del rango, la más reciente arriba.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"mensaje\")\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 500)\n  |> keep(columns: [\"_time\", \"nivel\", \"zona\", \"_value\"])"
-        }
-      ],
-      "gridPos": {
-        "x": 0,
-        "y": 7,
-        "w": 16,
-        "h": 11
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false,
-            "filterable": false
-          },
-          "noValue": "Sin alarmas en el rango"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "_time"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Hora"
-              },
-              {
-                "id": "unit",
-                "value": "time:DD/MM HH:mm"
-              },
-              {
-                "id": "custom.width",
-                "value": 120
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "nivel"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Gravedad"
-              },
-              {
-                "id": "custom.width",
-                "value": 110
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "piechart",
+            "version": "",
+            "spec": {
+              "options": {
+                "displayLabels": [],
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "values": [
+                    "value",
+                    "percent"
+                  ]
+                },
+                "pieType": "donut",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "none"
                 }
               },
-              {
-                "id": "mappings",
-                "value": [
+              "fieldConfig": {
+                "defaults": {
+                  "displayName": "${__field.labels.nivel}",
+                  "decimals": 0,
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "noValue": "Sin alarmas"
+                },
+                "overrides": [
                   {
-                    "type": "value",
+                    "matcher": {
+                      "id": "byName",
+                      "options": "crit"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Crítica"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#F2495C",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "warn"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Aviso"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#FF9830",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "info"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Info"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#4C8DE6",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-14": {
+        "kind": "Panel",
+        "spec": {
+          "id": 14,
+          "title": "Estrategia, respuesta a la demanda y red",
+          "description": "Línea de tiempo de la estrategia de control del EMS, de la respuesta a la demanda y del estado de la red eléctrica (un corte deja las cargas críticas en el UPS).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"limite_kw\")\n  |> map(fn: (r) => ({_time: r._time, _value: r.modo}))"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"dr_activo\")\n  |> map(fn: (r) => ({_time: r._time, _value: 10.0 + float(v: r._value)}))"
+                      }
+                    },
+                    "refId": "B",
+                    "hidden": false
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"red_ok\")\n  |> map(fn: (r) => ({_time: r._time, _value: 20.0 + float(v: r._value)}))"
+                      }
+                    },
+                    "refId": "C",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "state-timeline",
+            "version": "",
+            "spec": {
+              "options": {
+                "alignValue": "center",
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": false
+                },
+                "mergeValues": true,
+                "rowHeight": 0.8,
+                "showValue": "auto",
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "none"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "10": {
+                          "text": "DR en espera",
+                          "color": "#73BF69",
+                          "index": 0
+                        },
+                        "11": {
+                          "text": "DR activa",
+                          "color": "#FF9830",
+                          "index": 1
+                        },
+                        "20": {
+                          "text": "Corte · UPS",
+                          "color": "#F2495C",
+                          "index": 2
+                        },
+                        "21": {
+                          "text": "Red normal",
+                          "color": "#73BF69",
+                          "index": 3
+                        }
+                      }
+                    },
+                    {
+                      "type": "value",
+                      "options": {
+                        "baseline": {
+                          "text": "Sin EMS",
+                          "index": 3
+                        },
+                        "externo": {
+                          "text": "Node-RED",
+                          "index": 6
+                        },
+                        "manual": {
+                          "text": "Manual",
+                          "index": 4
+                        },
+                        "mpc": {
+                          "text": "MPC predictivo",
+                          "index": 2
+                        },
+                        "reglas": {
+                          "text": "Reglas",
+                          "index": 0
+                        },
+                        "reglas_dr": {
+                          "text": "Reglas + DR",
+                          "index": 1
+                        },
+                        "seguro": {
+                          "text": "Modo seguro",
+                          "color": "#FF9830",
+                          "index": 5
+                        }
+                      }
+                    }
+                  ],
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "#5794F2"
+                  },
+                  "noValue": "Sin datos en el rango",
+                  "custom": {
+                    "fillOpacity": 75,
+                    "lineWidth": 0
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byFrameRefID",
+                      "options": "A"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Modo EMS"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byFrameRefID",
+                      "options": "B"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Respuesta a la demanda"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byFrameRefID",
+                      "options": "C"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Red eléctrica"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-15": {
+        "kind": "Panel",
+        "spec": {
+          "id": 15,
+          "title": "Límite del EMS frente a la demanda",
+          "description": "Demanda (mediana de 15 min, sin picos de reinicio) frente al límite dinámico del EMS y al de 170 kW.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_total_kw\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> set(key: \"_field\", value: \"demanda_15min_kw\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"limite_kw\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+                      }
+                    },
+                    "refId": "B",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "last"
+                  ],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "kwatt",
+                  "decimals": 1,
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "transparent"
+                      },
+                      {
+                        "value": 170,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "noValue": "Sin datos en el rango",
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "axisSoftMax": 180,
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 8,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 2,
+                    "pointSize": 4,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "never",
+                    "spanNulls": 600000,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "dashed"
+                    }
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "demanda_15min_kw"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Demanda 15 min"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#A352CC",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "limite_kw"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Límite EMS"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#FF9830",
+                          "mode": "fixed"
+                        }
+                      },
+                      {
+                        "id": "custom.lineStyle",
+                        "value": {
+                          "dash": [
+                            10,
+                            6
+                          ],
+                          "fill": "dash"
+                        }
+                      },
+                      {
+                        "id": "custom.fillOpacity",
+                        "value": 0
+                      },
+                      {
+                        "id": "custom.lineInterpolation",
+                        "value": "stepAfter"
+                      },
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 1
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-16": {
+        "kind": "Panel",
+        "spec": {
+          "id": 16,
+          "title": "Latencia de control",
+          "description": "Latencia orden → confirmación (ms) informada por el EMS. Naranja ≥ 500 ms, rojo ≥ 2 s.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"latencia_ms\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "last"
+                  ],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "displayName": "Latencia",
+                  "unit": "ms",
+                  "decimals": 0,
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "transparent"
+                      },
+                      {
+                        "value": 500,
+                        "color": "orange"
+                      },
+                      {
+                        "value": 2000,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "#5794F2"
+                  },
+                  "noValue": "Sin datos en el rango",
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 8,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 2,
+                    "pointSize": 4,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "never",
+                    "spanNulls": 600000,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "dashed"
+                    }
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "latencia_ms"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Latencia"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#5794F2",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-17": {
+        "kind": "Panel",
+        "spec": {
+          "id": 17,
+          "title": "Alarmas activas",
+          "description": "Alarmas activas y, durante un corte de red, potencia que entrega el UPS y su autonomía restante. Sin cortes en el rango no hay serie de UPS.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"n_alarmas\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "last"
+                  ],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "decimals": 0,
+                  "min": 0,
+                  "noValue": "Sin datos en el rango",
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 10,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "stepAfter",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 2,
+                    "pointSize": 4,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "never",
+                    "spanNulls": 600000,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "n_alarmas"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Alarmas activas"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#F2495C",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ups_kw"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Potencia del UPS"
+                      },
+                      {
+                        "id": "unit",
+                        "value": "kwatt"
+                      },
+                      {
+                        "id": "decimals",
+                        "value": 1
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#E87FA9",
+                          "mode": "fixed"
+                        }
+                      },
+                      {
+                        "id": "custom.axisPlacement",
+                        "value": "right"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ups_min"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Autonomía del UPS"
+                      },
+                      {
+                        "id": "unit",
+                        "value": "m"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#8E949E",
+                          "mode": "fixed"
+                        }
+                      },
+                      {
+                        "id": "custom.axisPlacement",
+                        "value": "right"
+                      },
+                      {
+                        "id": "custom.lineStyle",
+                        "value": {
+                          "dash": [
+                            10,
+                            6
+                          ],
+                          "fill": "dash"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-18": {
+        "kind": "Panel",
+        "spec": {
+          "id": 18,
+          "title": "UPS durante cortes",
+          "description": "Potencia y autonomía del UPS; sólo hay datos durante un corte de red.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"ups_kw\" or r._field == \"ups_min\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "last"
+                  ],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "decimals": 0,
+                  "min": 0,
+                  "noValue": "Sin datos en el rango",
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 10,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "stepAfter",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 2,
+                    "pointSize": 4,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "never",
+                    "spanNulls": 600000,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "n_alarmas"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Alarmas activas"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#F2495C",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ups_kw"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Potencia del UPS"
+                      },
+                      {
+                        "id": "unit",
+                        "value": "kwatt"
+                      },
+                      {
+                        "id": "decimals",
+                        "value": 1
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#E87FA9",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ups_min"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Autonomía del UPS"
+                      },
+                      {
+                        "id": "unit",
+                        "value": "m"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#8E949E",
+                          "mode": "fixed"
+                        }
+                      },
+                      {
+                        "id": "custom.lineStyle",
+                        "value": {
+                          "dash": [
+                            10,
+                            6
+                          ],
+                          "fill": "dash"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-19": {
+        "kind": "Panel",
+        "spec": {
+          "id": 19,
+          "title": "Alarmas en el tiempo",
+          "description": "Alarmas por hora y código (barras apiladas).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"codigo\"])\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 1h) then v.windowPeriod else 1h, fn: count, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"codigo\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "last"
+                  ],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "displayName": "${__field.labels.codigo}",
+                  "decimals": 0,
+                  "min": 0,
+                  "noValue": "Sin alarmas en el rango",
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "drawStyle": "bars",
+                    "fillOpacity": 80,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 1,
+                    "pointSize": 4,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "never",
+                    "spanNulls": 600000,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "normal"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byRegexp",
+                      "options": "/.*/"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "${__field.labels.codigo}"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "id": 2,
+          "title": "Alarmas activas ahora",
+          "description": "Alarmas sin resolver en este momento.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"n_alarmas\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "colorMode": "background_solid",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {
+                  "titleSize": 14,
+                  "valueSize": 30
+                },
+                "textMode": "value",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "decimals": 0,
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Sin alarmas",
+                          "color": "#73BF69",
+                          "index": 0
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#73BF69"
+                      },
+                      {
+                        "value": 1,
+                        "color": "#FF9830"
+                      },
+                      {
+                        "value": 3,
+                        "color": "#F2495C"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "Sin datos"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-20": {
+        "kind": "Panel",
+        "spec": {
+          "id": 20,
+          "title": "Órdenes recibidas por el EMS",
+          "description": "Cada orden enviada desde el panel: quién la dio, sobre qué y si se aceptó. Las rechazadas (zona crítica, valor fuera de rango) también quedan registradas.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"auditoria\")\n  |> filter(fn: (r) => r._field == \"usuario\" or r._field == \"objetivo\" or r._field == \"detalle\")\n  |> pivot(rowKey: [\"_time\", \"tipo\", \"resultado\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)\n  |> map(fn: (r) => ({Hora: r._time, Usuario: r.usuario, Orden: r.tipo, Sobre: r.objetivo, Resultado: r.resultado, Detalle: r.detalle}))"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "cellHeight": "sm",
+                "footer": {
+                  "countRows": false,
+                  "fields": "",
+                  "reducer": [
+                    "sum"
+                  ],
+                  "show": false
+                },
+                "showHeader": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "Sin órdenes en el rango",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "inspect": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Resultado"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-text"
+                        }
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "options": {
+                              "aceptada": {
+                                "color": "#73BF69",
+                                "index": 0,
+                                "text": "Aceptada"
+                              },
+                              "rechazada": {
+                                "color": "#F2495C",
+                                "index": 1,
+                                "text": "Rechazada"
+                              }
+                            },
+                            "type": "value"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.width",
+                        "value": 110
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Hora"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.width",
+                        "value": 170
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Usuario"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.width",
+                        "value": 150
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Orden"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.width",
+                        "value": 110
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Sobre"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.width",
+                        "value": 110
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-21": {
+        "kind": "Panel",
+        "spec": {
+          "id": 21,
+          "title": "Órdenes en el rango",
+          "description": "Órdenes aceptadas y rechazadas en el rango de tiempo.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"auditoria\" and r._field == \"codigo\")\n  |> group(columns: [\"resultado\"])\n  |> count()\n  |> map(fn: (r) => ({_time: now(), _value: r._value, _field: if r.resultado == \"aceptada\" then \"Aceptadas\" else \"Rechazadas\"}))\n  |> group(columns: [\"_field\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "horizontal",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {
+                  "titleSize": 14,
+                  "valueSize": 34
+                },
+                "textMode": "value_and_name",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#73BF69"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "#73BF69"
+                  },
+                  "noValue": "0"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Rechazadas"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#F2495C",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3,
+          "title": "Críticas",
+          "description": "Alarmas graves en el rango de tiempo (por defecto, últimas 24 h): requieren actuar ya.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\" and r.nivel == \"crit\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {
+                  "titleSize": 14,
+                  "valueSize": 34
+                },
+                "textMode": "value",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#73BF69"
+                      },
+                      {
+                        "value": 1,
+                        "color": "#F2495C"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "Sin datos"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4,
+          "title": "Avisos",
+          "description": "Avisos en el rango de tiempo: algo se sale de lo normal (calor, pico de demanda).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\" and r.nivel == \"warn\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {
+                  "titleSize": 14,
+                  "valueSize": 34
+                },
+                "textMode": "value",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#73BF69"
+                      },
+                      {
+                        "value": 1,
+                        "color": "#FF9830"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "Sin datos"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "id": 5,
+          "title": "Informativas",
+          "description": "Mensajes informativos en el rango (p. ej. respuesta a la demanda activada).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\" and r.nivel == \"info\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {
+                  "titleSize": 14,
+                  "valueSize": 34
+                },
+                "textMode": "value",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "text"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "#4C8DE6"
+                  },
+                  "noValue": "Sin datos"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 7,
+          "title": "Registro de alarmas",
+          "description": "Todas las alarmas del rango, la más reciente arriba.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"mensaje\")\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 500)\n  |> keep(columns: [\"_time\", \"nivel\", \"zona\", \"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "organize",
+                  "spec": {
+                    "id": "organize",
                     "options": {
-                      "crit": {
-                        "text": "● Crítica",
-                        "color": "#F2495C",
-                        "index": 0
+                      "excludeByName": {
+                        "codigo": true,
+                        "valor": true
                       },
-                      "warn": {
-                        "text": "● Aviso",
-                        "color": "#FF9830",
-                        "index": 1
-                      },
-                      "info": {
-                        "text": "● Info",
-                        "color": "#4C8DE6",
-                        "index": 2
+                      "indexByName": {
+                        "_time": 0,
+                        "_value": 2,
+                        "mensaje": 2,
+                        "nivel": 1,
+                        "zona": 3
                       }
                     }
                   }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "cellHeight": "sm",
+                "footer": {
+                  "fields": "",
+                  "reducer": [
+                    "sum"
+                  ],
+                  "show": false
+                },
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "desc": true,
+                    "displayName": "Hora"
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "Sin alarmas en el rango",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": false,
+                    "inspect": false
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Hora"
+                      },
+                      {
+                        "id": "unit",
+                        "value": "time:DD/MM HH:mm"
+                      },
+                      {
+                        "id": "custom.width",
+                        "value": 120
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "nivel"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Gravedad"
+                      },
+                      {
+                        "id": "custom.width",
+                        "value": 110
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-text"
+                        }
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "options": {
+                              "crit": {
+                                "color": "#F2495C",
+                                "index": 0,
+                                "text": "● Crítica"
+                              },
+                              "info": {
+                                "color": "#4C8DE6",
+                                "index": 2,
+                                "text": "● Info"
+                              },
+                              "warn": {
+                                "color": "#FF9830",
+                                "index": 1,
+                                "text": "● Aviso"
+                              }
+                            },
+                            "type": "value"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "zona"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Dónde"
+                      },
+                      {
+                        "id": "custom.width",
+                        "value": 100
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "_value"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Qué pasó"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "mensaje"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Qué pasó"
+                      }
+                    ]
+                  }
                 ]
               }
-            ]
+            }
+          }
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
+          "title": "¿Qué alarmas se repiten más?",
+          "description": "Los 5 tipos de alarma más frecuentes en el rango de tiempo.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "nombre = (c) => if c == \"PICO_DEMANDA\" then \"Pico de demanda\" else if c == \"FALLA_VRF\" then \"Falla de un equipo de clima\"\n    else if c == \"TEMP_ALTA\" then \"Zona demasiado caliente\" else if c == \"TEMP_BAJA\" then \"Zona demasiado fría\"\n    else if c == \"HVAC_ON_SIN_OCUPACION\" then \"Clima encendido sin gente\" else if c == \"DR_ACTIVO\" then \"Respuesta a la demanda\"\n    else c\n\nfrom(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"codigo\"])\n  |> count()\n  |> group()\n  |> map(fn: (r) => ({tipo: nombre(c: r.codigo), _value: r._value}))\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 5)"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
           },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "zona"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Dónde"
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "bargauge",
+            "version": "",
+            "spec": {
+              "options": {
+                "displayMode": "basic",
+                "legend": {
+                  "showLegend": false
+                },
+                "maxVizHeight": 48,
+                "minVizHeight": 16,
+                "minVizWidth": 8,
+                "namePlacement": "top",
+                "orientation": "horizontal",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": true
+                },
+                "showUnfilled": true,
+                "sizing": "manual",
+                "valueMode": "color"
               },
-              {
-                "id": "custom.width",
-                "value": 100
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "decimals": 0,
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "text"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "#FF9830"
+                  },
+                  "noValue": "Sin datos"
+                },
+                "overrides": []
               }
-            ]
+            }
+          }
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
+          "title": "Alarmas por hora",
+          "description": "Cuántas alarmas hubo en cada hora, por gravedad.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group()\n  |> map(fn: (r) => ({_time: r._time, _value: 1, _field: if r.nivel == \"crit\" then \"Críticas\" else if r.nivel == \"warn\" then \"Avisos\" else \"Informativas\"}))\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 1h) then v.windowPeriod else 1h, fn: count, createEmpty: false)"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "decimals": 0,
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "transparent"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "noValue": "Sin datos en el rango",
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "drawStyle": "bars",
+                    "fillOpacity": 80,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "smooth",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 2,
+                    "pointSize": 4,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "never",
+                    "spanNulls": 1800000,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "normal"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Críticas"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#F2495C",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Avisos"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#FF9830",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Informativas"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#4C8DE6",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "layout": {
+      "kind": "TabsLayout",
+      "spec": {
+        "tabs": [
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "title": "Resumen",
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 6,
+                        "height": 5,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-2"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 6,
+                        "y": 0,
+                        "width": 6,
+                        "height": 5,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-3"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 12,
+                        "y": 0,
+                        "width": 6,
+                        "height": 5,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-4"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 18,
+                        "y": 0,
+                        "width": 6,
+                        "height": 5,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-5"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 5,
+                        "width": 16,
+                        "height": 11,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-7"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 16,
+                        "y": 5,
+                        "width": 8,
+                        "height": 11,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-8"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 16,
+                        "width": 24,
+                        "height": 7,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-9"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
           },
           {
-            "matcher": {
-              "id": "byName",
-              "options": "_value"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Qué pasó"
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "title": "Estado del EMS",
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 6,
+                        "height": 4,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-11"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 6,
+                        "y": 0,
+                        "width": 6,
+                        "height": 4,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-12"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 12,
+                        "y": 0,
+                        "width": 12,
+                        "height": 8,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-13"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 8,
+                        "width": 24,
+                        "height": 6,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-14"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 14,
+                        "width": 12,
+                        "height": 8,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-15"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 12,
+                        "y": 14,
+                        "width": 12,
+                        "height": 8,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-16"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 22,
+                        "width": 12,
+                        "height": 8,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-17"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 12,
+                        "y": 22,
+                        "width": 12,
+                        "height": 8,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-18"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 30,
+                        "width": 24,
+                        "height": 8,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-19"
+                        }
+                      }
+                    }
+                  ]
+                }
               }
-            ]
+            }
           },
           {
-            "matcher": {
-              "id": "byName",
-              "options": "mensaje"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Qué pasó"
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "title": "Auditoría",
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 18,
+                        "height": 14,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-20"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 18,
+                        "y": 0,
+                        "width": 6,
+                        "height": 14,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-21"
+                        }
+                      }
+                    }
+                  ]
+                }
               }
-            ]
+            }
           }
         ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false,
-          "reducer": [
-            "sum"
-          ],
-          "fields": ""
-        },
-        "sortBy": [
-          {
-            "displayName": "Hora",
-            "desc": true
-          }
-        ]
-      },
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "codigo": true,
-              "valor": true
-            },
-            "indexByName": {
-              "_time": 0,
-              "nivel": 1,
-              "_value": 2,
-              "mensaje": 2,
-              "zona": 3
-            }
-          }
-        }
-      ],
-      "id": 7
+      }
     },
-    {
-      "type": "bargauge",
-      "title": "¿Qué alarmas se repiten más?",
-      "description": "Los 5 tipos de alarma más frecuentes en el rango de tiempo.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
+    "links": [
+      {
+        "type": "link",
+        "title": "Edificio 3D",
+        "url": "/d/ems-edificio-3d-vivo",
+        "icon": "dashboard",
+        "targetBlank": false,
+        "keepTime": false,
+        "includeVars": false,
+        "asDropdown": false,
+        "tags": [],
+        "tooltip": "EMS · Edificio 3D"
       },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "nombre = (c) => if c == \"PICO_DEMANDA\" then \"Pico de demanda\" else if c == \"FALLA_VRF\" then \"Falla de un equipo de clima\"\n    else if c == \"TEMP_ALTA\" then \"Zona demasiado caliente\" else if c == \"TEMP_BAJA\" then \"Zona demasiado fría\"\n    else if c == \"HVAC_ON_SIN_OCUPACION\" then \"Clima encendido sin gente\" else if c == \"DR_ACTIVO\" then \"Respuesta a la demanda\"\n    else c\n\nfrom(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"codigo\"])\n  |> count()\n  |> group()\n  |> map(fn: (r) => ({tipo: nombre(c: r.codigo), _value: r._value}))\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 5)"
-        }
+      {
+        "type": "link",
+        "title": "Tiempo real",
+        "url": "/d/ems-tiempo-real",
+        "icon": "dashboard",
+        "targetBlank": false,
+        "keepTime": false,
+        "includeVars": false,
+        "asDropdown": false,
+        "tags": [],
+        "tooltip": "EMS · Tiempo real"
+      },
+      {
+        "type": "link",
+        "title": "Zonas",
+        "url": "/d/ems-zonas",
+        "icon": "dashboard",
+        "targetBlank": false,
+        "keepTime": false,
+        "includeVars": false,
+        "asDropdown": false,
+        "tags": [],
+        "tooltip": "EMS · Zonas"
+      },
+      {
+        "type": "link",
+        "title": "Alarmas",
+        "url": "/d/ems-alarmas",
+        "icon": "dashboard",
+        "targetBlank": false,
+        "keepTime": false,
+        "includeVars": false,
+        "asDropdown": false,
+        "tags": [],
+        "tooltip": "EMS · Alarmas"
+      },
+      {
+        "type": "link",
+        "title": "Reglas",
+        "url": "/d/ems-reglas",
+        "icon": "dashboard",
+        "targetBlank": false,
+        "keepTime": false,
+        "includeVars": false,
+        "asDropdown": false,
+        "tags": [],
+        "tooltip": "EMS · Reglas del EMS"
+      },
+      {
+        "type": "link",
+        "title": "Resultados",
+        "url": "/d/ems-resultados",
+        "icon": "dashboard",
+        "targetBlank": false,
+        "keepTime": false,
+        "includeVars": false,
+        "asDropdown": false,
+        "tags": [],
+        "tooltip": "EMS · Resultados"
+      }
+    ],
+    "liveNow": false,
+    "preload": false,
+    "tags": [
+      "ems"
+    ],
+    "timeSettings": {
+      "timezone": "America/Panama",
+      "from": "now-24h",
+      "to": "now",
+      "autoRefresh": "30s",
+      "autoRefreshIntervals": [
+        "30s",
+        "1m",
+        "5m",
+        "15m"
       ],
-      "gridPos": {
-        "x": 16,
-        "y": 7,
-        "w": 8,
-        "h": 11
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "min": 0,
-          "noValue": "Sin datos",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#FF9830"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "text",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": true
-        },
-        "orientation": "horizontal",
-        "displayMode": "basic",
-        "valueMode": "color",
-        "namePlacement": "top",
-        "showUnfilled": true,
-        "sizing": "manual",
-        "minVizHeight": 16,
-        "maxVizHeight": 48,
-        "minVizWidth": 8,
-        "legend": {
-          "showLegend": false
-        }
-      },
-      "id": 8
+      "hideTimepicker": false,
+      "weekStart": "monday",
+      "fiscalYearStartMonth": 0
     },
-    {
-      "type": "timeseries",
-      "title": "Alarmas por hora",
-      "description": "Cuántas alarmas hubo en cada hora, por gravedad.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group()\n  |> map(fn: (r) => ({_time: r._time, _value: 1, _field: if r.nivel == \"crit\" then \"Críticas\" else if r.nivel == \"warn\" then \"Avisos\" else \"Informativas\"}))\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 1h) then v.windowPeriod else 1h, fn: count, createEmpty: false)"
-        }
-      ],
-      "gridPos": {
-        "x": 0,
-        "y": 18,
-        "w": 24,
-        "h": 7
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "custom": {
-            "drawStyle": "bars",
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": 1800000,
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "barAlignment": 0,
-            "insertNulls": false,
-            "stacking": {
-              "mode": "normal",
-              "group": "A"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineStyle": {
-              "fill": "solid"
-            }
-          },
-          "noValue": "Sin datos en el rango",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "transparent",
-                "value": null
-              }
-            ]
-          },
-          "min": 0
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Críticas"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#F2495C"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Avisos"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#FF9830"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Informativas"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#4C8DE6"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "showLegend": true,
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": []
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "id": 9
-    },
-    {
-      "type": "row",
-      "title": "Detalle técnico · estado del EMS",
-      "collapsed": true,
-      "gridPos": {
-        "x": 0,
-        "y": 25,
-        "w": 24,
-        "h": 1
-      },
-      "panels": [
-        {
-          "type": "stat",
-          "title": "Alarmas en el rango",
-          "description": "Total de alarmas registradas en el rango de tiempo.",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "datasource": {
-                "type": "influxdb",
-                "uid": "ems-influx"
-              },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "noValue": "Sin alarmas",
-              "color": {
-                "mode": "fixed",
-                "fixedColor": "#5794F2"
-              },
-              "decimals": 0,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "#5794F2",
-                    "value": null
-                  }
-                ]
-              },
-              "mappings": [
-                {
-                  "type": "value",
-                  "options": {
-                    "0": {
-                      "text": "Sin alarmas",
-                      "index": 0
-                    }
-                  }
-                }
-              ]
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "colorMode": "value",
-            "graphMode": "none",
-            "justifyMode": "center",
-            "orientation": "auto",
-            "textMode": "auto",
-            "wideLayout": true,
-            "showPercentChange": false,
-            "percentChangeColorMode": "standard",
-            "text": {
-              "titleSize": 13,
-              "valueSize": 30
-            }
-          },
-          "id": 11,
-          "gridPos": {
-            "x": 0,
-            "y": 26,
-            "w": 6,
-            "h": 4
-          }
-        },
-        {
-          "type": "stat",
-          "title": "Latencia de control",
-          "description": "Tiempo entre la orden del EMS y la confirmación del gemelo; sparkline de 6 h. Naranja ≥ 500 ms, rojo ≥ 2 s.",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "datasource": {
-                "type": "influxdb",
-                "uid": "ems-influx"
-              },
-              "query": "from(bucket: \"ems\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"latencia_ms\")\n  |> aggregateWindow(every: 5m, fn: last, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\"])"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "noValue": "Sin datos",
-              "color": {
-                "mode": "thresholds"
-              },
-              "unit": "ms",
-              "decimals": 0,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 500
-                  },
-                  {
-                    "color": "red",
-                    "value": 2000
-                  }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "colorMode": "value",
-            "graphMode": "none",
-            "justifyMode": "center",
-            "orientation": "auto",
-            "textMode": "auto",
-            "wideLayout": true,
-            "showPercentChange": false,
-            "percentChangeColorMode": "standard",
-            "text": {
-              "titleSize": 13,
-              "valueSize": 30
-            }
-          },
-          "id": 12,
-          "gridPos": {
-            "x": 6,
-            "y": 26,
-            "w": 6,
-            "h": 4
-          }
-        },
-        {
-          "id": 13,
-          "type": "piechart",
-          "title": "Reparto por nivel",
-          "description": "Reparto de las alarmas del rango por nivel.",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 26,
-            "w": 12,
-            "h": 8
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "datasource": {
-                "type": "influxdb",
-                "uid": "ems-influx"
-              },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"nivel\"])\n  |> count()\n  |> keep(columns: [\"nivel\", \"_value\"])"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "decimals": 0,
-              "displayName": "${__field.labels.nivel}",
-              "noValue": "Sin alarmas",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "crit"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Crítica"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#F2495C"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "warn"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Aviso"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#FF9830"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "info"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Info"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#4C8DE6"
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "pieType": "donut",
-            "displayLabels": [],
-            "legend": {
-              "showLegend": true,
-              "displayMode": "table",
-              "placement": "right",
-              "values": [
-                "value",
-                "percent"
-              ]
-            },
-            "tooltip": {
-              "mode": "single",
-              "sort": "none"
-            }
-          }
-        },
-        {
-          "id": 14,
-          "type": "state-timeline",
-          "title": "Estrategia, respuesta a la demanda y red",
-          "description": "Línea de tiempo de la estrategia de control del EMS, de la respuesta a la demanda y del estado de la red eléctrica (un corte deja las cargas críticas en el UPS).",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 34,
-            "w": 24,
-            "h": 6
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "datasource": {
-                "type": "influxdb",
-                "uid": "ems-influx"
-              },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"limite_kw\")\n  |> map(fn: (r) => ({_time: r._time, _value: r.modo}))"
-            },
-            {
-              "refId": "B",
-              "datasource": {
-                "type": "influxdb",
-                "uid": "ems-influx"
-              },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"dr_activo\")\n  |> map(fn: (r) => ({_time: r._time, _value: 10.0 + float(v: r._value)}))"
-            },
-            {
-              "refId": "C",
-              "datasource": {
-                "type": "influxdb",
-                "uid": "ems-influx"
-              },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"red_ok\")\n  |> map(fn: (r) => ({_time: r._time, _value: 20.0 + float(v: r._value)}))"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "fixed",
-                "fixedColor": "#5794F2"
-              },
-              "custom": {
-                "fillOpacity": 75,
-                "lineWidth": 0
-              },
-              "mappings": [
-                {
-                  "type": "value",
-                  "options": {
-                    "10": {
-                      "text": "DR en espera",
-                      "color": "#73BF69",
-                      "index": 0
-                    },
-                    "11": {
-                      "text": "DR activa",
-                      "color": "#FF9830",
-                      "index": 1
-                    },
-                    "20": {
-                      "text": "Corte · UPS",
-                      "color": "#F2495C",
-                      "index": 2
-                    },
-                    "21": {
-                      "text": "Red normal",
-                      "color": "#73BF69",
-                      "index": 3
-                    }
-                  }
-                },
-                {
-                  "type": "value",
-                  "options": {
-                    "reglas": {
-                      "text": "Reglas",
-                      "index": 0
-                    },
-                    "reglas_dr": {
-                      "text": "Reglas + DR",
-                      "index": 1
-                    },
-                    "mpc": {
-                      "text": "MPC predictivo",
-                      "index": 2
-                    },
-                    "baseline": {
-                      "text": "Sin EMS",
-                      "index": 3
-                    },
-                    "manual": {
-                      "text": "Manual",
-                      "index": 4
-                    },
-                    "seguro": {
-                      "text": "Modo seguro",
-                      "color": "#FF9830",
-                      "index": 5
-                    },
-                    "externo": {
-                      "text": "Node-RED",
-                      "index": 6
-                    }
-                  }
-                }
-              ],
-              "noValue": "Sin datos en el rango"
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byFrameRefID",
-                  "options": "A"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Modo EMS"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byFrameRefID",
-                  "options": "B"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Respuesta a la demanda"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byFrameRefID",
-                  "options": "C"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Red eléctrica"
-                  }
-                ]
-              }
-            ]
-          },
-          "options": {
-            "showValue": "auto",
-            "mergeValues": true,
-            "alignValue": "center",
-            "rowHeight": 0.8,
-            "legend": {
-              "showLegend": false,
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "single",
-              "sort": "none"
-            }
-          }
-        },
-        {
-          "id": 15,
-          "type": "timeseries",
-          "title": "Límite del EMS frente a la demanda",
-          "description": "Demanda (mediana de 15 min, sin picos de reinicio) frente al límite dinámico del EMS y al de 170 kW.",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 40,
-            "w": 12,
-            "h": 8
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "datasource": {
-                "type": "influxdb",
-                "uid": "ems-influx"
-              },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_total_kw\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> set(key: \"_field\", value: \"demanda_15min_kw\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
-            },
-            {
-              "refId": "B",
-              "datasource": {
-                "type": "influxdb",
-                "uid": "ems-influx"
-              },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"limite_kw\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "kwatt",
-              "decimals": 1,
-              "min": 0,
-              "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "gradientMode": "opacity",
-                "showPoints": "never",
-                "pointSize": 4,
-                "spanNulls": 600000,
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisBorderShow": false,
-                "axisCenteredZero": false,
-                "axisColorMode": "text",
-                "barAlignment": 0,
-                "insertNulls": false,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
-                },
-                "thresholdsStyle": {
-                  "mode": "dashed"
-                },
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "lineStyle": {
-                  "fill": "solid"
-                },
-                "axisSoftMax": 180
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "transparent",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 170
-                  }
-                ]
-              },
-              "noValue": "Sin datos en el rango"
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "demanda_15min_kw"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Demanda 15 min"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#A352CC"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "limite_kw"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Límite EMS"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#FF9830"
-                    }
-                  },
-                  {
-                    "id": "custom.lineStyle",
-                    "value": {
-                      "fill": "dash",
-                      "dash": [
-                        10,
-                        6
-                      ]
-                    }
-                  },
-                  {
-                    "id": "custom.fillOpacity",
-                    "value": 0
-                  },
-                  {
-                    "id": "custom.lineInterpolation",
-                    "value": "stepAfter"
-                  },
-                  {
-                    "id": "custom.lineWidth",
-                    "value": 1
-                  }
-                ]
-              }
-            ]
-          },
-          "options": {
-            "legend": {
-              "showLegend": true,
-              "displayMode": "list",
-              "placement": "bottom",
-              "calcs": [
-                "last"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          }
-        },
-        {
-          "id": 16,
-          "type": "timeseries",
-          "title": "Latencia de control",
-          "description": "Latencia orden → confirmación (ms) informada por el EMS. Naranja ≥ 500 ms, rojo ≥ 2 s.",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 40,
-            "w": 12,
-            "h": 8
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "datasource": {
-                "type": "influxdb",
-                "uid": "ems-influx"
-              },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"latencia_ms\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "ms",
-              "decimals": 0,
-              "min": 0,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "transparent",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 500
-                  },
-                  {
-                    "color": "red",
-                    "value": 2000
-                  }
-                ]
-              },
-              "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "gradientMode": "opacity",
-                "showPoints": "never",
-                "pointSize": 4,
-                "spanNulls": 600000,
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisBorderShow": false,
-                "axisCenteredZero": false,
-                "axisColorMode": "text",
-                "barAlignment": 0,
-                "insertNulls": false,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
-                },
-                "thresholdsStyle": {
-                  "mode": "dashed"
-                },
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "lineStyle": {
-                  "fill": "solid"
-                }
-              },
-              "color": {
-                "mode": "fixed",
-                "fixedColor": "#5794F2"
-              },
-              "displayName": "Latencia",
-              "noValue": "Sin datos en el rango"
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "latencia_ms"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Latencia"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#5794F2"
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "options": {
-            "legend": {
-              "showLegend": true,
-              "displayMode": "list",
-              "placement": "bottom",
-              "calcs": [
-                "last"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          }
-        },
-        {
-          "id": 17,
-          "type": "timeseries",
-          "title": "Alarmas activas",
-          "description": "Alarmas activas y, durante un corte de red, potencia que entrega el UPS y su autonomía restante. Sin cortes en el rango no hay serie de UPS.",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 48,
-            "w": 12,
-            "h": 8
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "datasource": {
-                "type": "influxdb",
-                "uid": "ems-influx"
-              },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"n_alarmas\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "decimals": 0,
-              "min": 0,
-              "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "stepAfter",
-                "lineWidth": 2,
-                "fillOpacity": 10,
-                "gradientMode": "opacity",
-                "showPoints": "never",
-                "pointSize": 4,
-                "spanNulls": 600000,
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisBorderShow": false,
-                "axisCenteredZero": false,
-                "axisColorMode": "text",
-                "barAlignment": 0,
-                "insertNulls": false,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                },
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "lineStyle": {
-                  "fill": "solid"
-                }
-              },
-              "noValue": "Sin datos en el rango"
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "n_alarmas"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Alarmas activas"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#F2495C"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "ups_kw"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Potencia del UPS"
-                  },
-                  {
-                    "id": "unit",
-                    "value": "kwatt"
-                  },
-                  {
-                    "id": "decimals",
-                    "value": 1
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#E87FA9"
-                    }
-                  },
-                  {
-                    "id": "custom.axisPlacement",
-                    "value": "right"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "ups_min"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Autonomía del UPS"
-                  },
-                  {
-                    "id": "unit",
-                    "value": "m"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#8E949E"
-                    }
-                  },
-                  {
-                    "id": "custom.axisPlacement",
-                    "value": "right"
-                  },
-                  {
-                    "id": "custom.lineStyle",
-                    "value": {
-                      "fill": "dash",
-                      "dash": [
-                        10,
-                        6
-                      ]
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "options": {
-            "legend": {
-              "showLegend": true,
-              "displayMode": "list",
-              "placement": "bottom",
-              "calcs": [
-                "last"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          }
-        },
-        {
-          "id": 18,
-          "type": "timeseries",
-          "title": "UPS durante cortes",
-          "description": "Potencia y autonomía del UPS; sólo hay datos durante un corte de red.",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 48,
-            "w": 12,
-            "h": 8
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "datasource": {
-                "type": "influxdb",
-                "uid": "ems-influx"
-              },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"ups_kw\" or r._field == \"ups_min\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "decimals": 0,
-              "min": 0,
-              "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "stepAfter",
-                "lineWidth": 2,
-                "fillOpacity": 10,
-                "gradientMode": "opacity",
-                "showPoints": "never",
-                "pointSize": 4,
-                "spanNulls": 600000,
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisBorderShow": false,
-                "axisCenteredZero": false,
-                "axisColorMode": "text",
-                "barAlignment": 0,
-                "insertNulls": false,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                },
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "lineStyle": {
-                  "fill": "solid"
-                }
-              },
-              "noValue": "Sin datos en el rango"
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "n_alarmas"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Alarmas activas"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#F2495C"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "ups_kw"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Potencia del UPS"
-                  },
-                  {
-                    "id": "unit",
-                    "value": "kwatt"
-                  },
-                  {
-                    "id": "decimals",
-                    "value": 1
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#E87FA9"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "ups_min"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Autonomía del UPS"
-                  },
-                  {
-                    "id": "unit",
-                    "value": "m"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#8E949E"
-                    }
-                  },
-                  {
-                    "id": "custom.lineStyle",
-                    "value": {
-                      "fill": "dash",
-                      "dash": [
-                        10,
-                        6
-                      ]
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "options": {
-            "legend": {
-              "showLegend": true,
-              "displayMode": "list",
-              "placement": "bottom",
-              "calcs": [
-                "last"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          }
-        },
-        {
-          "id": 19,
-          "type": "timeseries",
-          "title": "Alarmas en el tiempo",
-          "description": "Alarmas por hora y código (barras apiladas).",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 56,
-            "w": 24,
-            "h": 8
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "datasource": {
-                "type": "influxdb",
-                "uid": "ems-influx"
-              },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\" and r._field == \"valor\")\n  |> group(columns: [\"codigo\"])\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 1h) then v.windowPeriod else 1h, fn: count, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"codigo\"])"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "decimals": 0,
-              "min": 0,
-              "displayName": "${__field.labels.codigo}",
-              "noValue": "Sin alarmas en el rango",
-              "custom": {
-                "drawStyle": "bars",
-                "lineInterpolation": "linear",
-                "lineWidth": 1,
-                "fillOpacity": 80,
-                "gradientMode": "opacity",
-                "showPoints": "never",
-                "pointSize": 4,
-                "spanNulls": 600000,
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisBorderShow": false,
-                "axisCenteredZero": false,
-                "axisColorMode": "text",
-                "barAlignment": 0,
-                "insertNulls": false,
-                "stacking": {
-                  "mode": "normal",
-                  "group": "A"
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                },
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "lineStyle": {
-                  "fill": "solid"
-                }
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byRegexp",
-                  "options": "/.*/"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "${__field.labels.codigo}"
-                  }
-                ]
-              }
-            ]
-          },
-          "options": {
-            "legend": {
-              "showLegend": true,
-              "displayMode": "list",
-              "placement": "bottom",
-              "calcs": [
-                "last"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          }
-        }
-      ],
-      "id": 10
-    }
-  ]
+    "title": "EMS · Alarmas y eventos",
+    "variables": []
+  }
 }

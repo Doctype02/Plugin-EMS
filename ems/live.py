@@ -87,6 +87,7 @@ class Puente:
     def _on_connect(self, cli, userdata, flags, rc, props=None):
         cli.subscribe(f"{self.base}/zona/+/cmd")
         cli.subscribe(f"{self.base}/sim/control")
+        cli.subscribe(f"{self.base}/auditoria")
         if self.control == "externo":
             # estado y alarmas que publica Node-RED → InfluxDB (el panel en vivo los lee de ahí)
             cli.subscribe(f"{self.base}/ems/estado")
@@ -130,6 +131,8 @@ class Puente:
                 a = {"ts": t, "nivel": data.get("nivel", "warn"), "codigo": data.get("codigo", "ALARMA"),
                      "zona": data.get("zona", "EDIF"), "mensaje": data.get("mensaje", ""), "valor": data.get("valor")}
                 self.influx.alarma(a)
+            elif partes[-1] == "auditoria":
+                self.influx.auditoria(data)
             elif partes[-1] == "control" and data.get("accion") == "evento":
                 self._evento(ed, t, data)
             elif partes[-1] == "control" and data.get("accion") in ("unidad", "sensor"):
