@@ -19,7 +19,9 @@ if command -v influx >/dev/null; then
         influx backup "$DEST/influx" --host "${INFLUX_URL:-http://127.0.0.1:8086}" --token "$INFLUX_TOKEN_BACKUP" >/dev/null
     else
         # sin las variables del simulador (su token sólo escribe): usa la configuración del cliente de root
-        env -u INFLUX_TOKEN -u INFLUX_URL -u INFLUX_ORG -u INFLUX_BUCKET influx backup "$DEST/influx" >/dev/null
+        # (/etc/ems/influx-configs si existe; si no, ~/.influxdbv2/configs)
+        CFG=(); [ -f /etc/ems/influx-configs ] && CFG=(--configs-path /etc/ems/influx-configs)
+        env -u INFLUX_TOKEN -u INFLUX_URL -u INFLUX_ORG -u INFLUX_BUCKET influx backup "$DEST/influx" "${CFG[@]}" >/dev/null
     fi
 fi
 
