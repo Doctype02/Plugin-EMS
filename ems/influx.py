@@ -74,9 +74,17 @@ class Escritor:
 
     def ems(self, ts, est: dict, escenario: str = "live"):
         if self.habilitado:
-            self._p("ems", ts, {"escenario": escenario, "modo": est.get("modo", "?")},
-                    {"dr_activo": est.get("dr_activo", False), "limite_kw": est.get("limite_kw", 0),
-                     "n_alarmas": est.get("n_alarmas", 0), "latencia_ms": est.get("latencia_ms", 0.0)})
+            campos = {"dr_activo": est.get("dr_activo", False), "limite_kw": est.get("limite_kw", 0),
+                      "n_alarmas": est.get("n_alarmas", 0), "latencia_ms": est.get("latencia_ms", 0.0)}
+            # actividad de cada regla del EMS (zonas afectadas en el paso) → dashboard «Reglas del EMS»
+            for k, v in (est.get("reglas") or {}).items():
+                if isinstance(v, (int, float, bool)):
+                    campos[f"r_{k}"] = v
+            ms = est.get("modo_seguro")
+            campos["r_modo_seguro"] = len(ms) if isinstance(ms, (list, tuple, set)) else (ms or 0)
+            if isinstance(est.get("manual"), list):
+                campos["r_manual"] = len(est["manual"])
+            self._p("ems", ts, {"escenario": escenario, "modo": est.get("modo", "?")}, campos)
 
     def alarma(self, a: dict, escenario: str = "live"):
         if self.habilitado:

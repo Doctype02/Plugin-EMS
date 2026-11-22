@@ -41,6 +41,9 @@ class ControladorNodeRed(Controlador):
             "dr_margen_confort": e["dr_margen_confort_c"], "confort_max": e["confort_max_c"],
             "confort_min": e["confort_min_c"], "alarma_servidor": e["alarma_servidor_c"],
             "plr_min": PLR_MIN, "banda_prop": BANDA_PROPORCIONAL_C,
+            "t_prot_max": e.get("t_proteccion_max_c", 32.0), "t_prot_retorno": e.get("t_proteccion_retorno_c", 30.0),
+            "rampa_sp_c_h": e.get("rampa_setpoint_c_h", 0.0), "arranques_max": e.get("arranques_max_paso", 0),
+            "paso_min": cfg["edificio"]["paso_min"],
             "hvac": {z.id: [z.hvac_kw, z.cop, z.fan_kw] for z in self.zonas},
         })
 

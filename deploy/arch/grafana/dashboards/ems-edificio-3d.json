@@ -477,6 +477,18 @@
     },
     {
       "type": "link",
+      "title": "Reglas",
+      "url": "/d/ems-reglas",
+      "icon": "dashboard",
+      "targetBlank": false,
+      "keepTime": false,
+      "includeVars": false,
+      "asDropdown": false,
+      "tags": [],
+      "tooltip": "EMS · Reglas del EMS"
+    },
+    {
+      "type": "link",
       "title": "Resultados",
       "url": "/d/ems-resultados",
       "icon": "dashboard",

@@ -85,9 +85,10 @@ describe('simulador del edificio', () => {
 
   it('ocupación de 8 a 18 h y ascensor según su horario', () => {
     const o = { ...opts, demoIncidents: false };
-    expect(simulate(at(7, 30), o).zones.Z07.occupants).toBe(0);
+    // la llegada y la salida son graduales (rampa de 60 min ± 25 min por zona y día)
+    expect(simulate(at(7), o).zones.Z07.occupants).toBe(0);
     expect(simulate(at(10), o).zones.Z07.occupants).toBeGreaterThan(0);
-    expect(simulate(at(18, 30), o).zones.Z07.occupants).toBe(0);
+    expect(simulate(at(19), o).zones.Z07.occupants).toBe(0);
     // Ascensor 14.86 kW × 0.2 (8–18 h) + extractores 0.075 kW
     expect(simulate(at(10), o).meter!.pFixed).toBeCloseTo(14.86 * 0.2 + 0.075, 6);
     expect(simulate(at(3), o).meter!.pFixed).toBe(0);

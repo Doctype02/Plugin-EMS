@@ -192,6 +192,8 @@ export function pvPowerKw(irrWm2: number): number {
 export interface Thermal {
   /** Conducción por la envolvente: muros opacos, vidrio y techo (kW/K). */
   ua: number;
+  /** Conducción expuesta al cielo (kW/K): muros opacos × 0.5 + techo × 1 (factor de forma, como el gemelo). */
+  uaSky: number;
   /** Infiltración (kW/K). */
   gInf: number;
   /** Acople con el terreno (kW/K). */
@@ -220,6 +222,7 @@ export function thermal(zone: Zone): Thermal {
   const wallsGross = facades.reduce((a, o) => a + (s.walls[o] ?? 0), 0);
   const opaqueSum = facades.reduce((a, o) => a + opaque[o], 0);
   const ua = (ENVELOPE.uWall * opaqueSum + ENVELOPE.uGlass * glass + ENVELOPE.uRoof * s.roof) / 1000;
+  const uaSky = (0.5 * ENVELOPE.uWall * opaqueSum + ENVELOPE.uRoof * s.roof) / 1000;
   const gInf = ENVELOPE.infiltration * (wallsGross + s.roof) * ENVELOPE.rhoCp;
   const slab = (ENVELOPE.uInterfloor * zone.area) / 1000;
   const uaUp = zone.floor < BUILDING.floors - 1 && !s.roof ? slab : 0;
@@ -236,7 +239,7 @@ export function thermal(zone: Zone): Thermal {
     solarOpaque.h = (ENVELOPE.uRoof * s.roof * ALPHA_HO) / 1000;
   }
   const g = ua + gInf + uaGround + uaUp + uaDown;
-  return { ua, gInf, uaGround, uaUp, uaDown, c, glass, solarOpaque, tau: c / Math.max(g, 1e-6) };
+  return { ua, uaSky, gInf, uaGround, uaUp, uaDown, c, glass, solarOpaque, tau: c / Math.max(g, 1e-6) };
 }
 
 /** Conductancia total hacia el exterior, el terreno y las plantas vecinas (kW/K). */

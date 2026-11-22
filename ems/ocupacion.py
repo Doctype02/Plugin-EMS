@@ -12,9 +12,11 @@ import pandas as pd
 from .config import Zona, horario
 
 
-def fraccion(cfg: dict, nombre: str, idx: pd.DatetimeIndex) -> np.ndarray:
+def fraccion(cfg: dict, nombre: str, idx: pd.DatetimeIndex, desplazamiento_h: np.ndarray | None = None) -> np.ndarray:
     dow = idx.dayofweek.values
     h = (idx.hour + idx.minute / 60.0).values
+    if desplazamiento_h is not None:
+        h = np.clip(h - desplazamiento_h, 0.0, 23.99)
     # el horario es escalonado: se evalúa una vez por (día de semana, hora del día) para ir rápido
     claves = dow * 10000 + np.round(h * 100).astype(int)
     unicos, inv = np.unique(claves, return_inverse=True)
@@ -31,8 +33,12 @@ def generar(zs: list[Zona], idx: pd.DatetimeIndex, cfg_o: dict, factor: float = 
     n_dias = int(dia.max()) + 1
     laborable = idx.dayofweek.values < 5
     out = {}
+    # cada zona llega y se va un poco antes o después cada día (σ en minutos): junto con la rampa de los
+    # horarios (horarios.transicion_min) la gente entra al edificio de forma gradual, no a las 8:00 en punto
+    sigma_h = cfg_o.get("dispersion_llegada_min", 0.0) / 60.0
     for z in zs:
-        f = fraccion(cfg, z.horario_ocupacion, idx)
+        desp = rng.normal(0.0, sigma_h, n_dias)[dia] if sigma_h > 0 else None
+        f = fraccion(cfg, z.horario_ocupacion, idx, desp)
         aus = np.clip(rng.normal(cfg_o.get("ausentismo", 0.0), 0.05, n_dias), 0, 0.5)[dia]
         f = f * np.where(laborable, 1 - aus, 1.0) * factor
         ruido = pd.Series(1 + rng.normal(0, cfg_o.get("ruido", 0.1), len(idx))).rolling(3, min_periods=1).mean().values

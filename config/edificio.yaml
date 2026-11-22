@@ -21,7 +21,8 @@ edificio:
   u_ventana: 5.708             # CONST_VIDRIO_TINTADO
   shgc: 0.501
   vt: 0.451                    # transmitancia visible del vidrio
-  t_suelo_c: 18.0              # el modelo no define Site:GroundTemperature: valor por defecto de E+
+  t_suelo_c: 27.0              # terreno en Panamá ≈ temperatura media anual del aire (26–28 °C)
+  t_suelo_energyplus_c: 18.0   # el modelo E+ no define Site:GroundTemperature y usa 18 °C: sólo para validar contra E+
   infiltracion_m3s_m2: 0.0     # el modelo no tiene objetos de infiltración
   u_entrepiso: 1.8             # losa interior entre plantas (W/m2K, estimado)
   ventilacion_m3s_persona: 0.00944 # DesignSpecification:OutdoorAir "ClosedOffice/Conference" (9.44 L/s·persona)
@@ -30,11 +31,16 @@ edificio:
   # El COP estacional de cada sistema (sistemas_vrf.cop) se calibra contra el uso final "Cooling" de E+.
   fraccion_standby_equipos: 0.10
   fraccion_latente_serpentin: 0.10  # latente retirado / sensible
-  # Parámetros efectivos del modelo RC calibrados contra la electricidad de E+ (python -m ems calibrar):
-  # CV(RMSE) horario 22–24 %, NMBE 3–8 % (ASHRAE Guideline 14: ≤ 30 % y ±10 %); pico +9–15 %. El modelo de un
-  # nodo subestima la carga nocturna (inercia de los muros de E+): los ahorros del EMS son conservadores.
-  factor_cop: 1.15             # multiplicador del COP estacional de VRF y PTAC (calibrado: python -m ems calibrar)
-  capacitancia_kwh_k_m2: 0.03  # masa térmica efectiva por m2 de piso
+  # Parámetros efectivos del modelo térmico 2R2C (nodo de aire + nodo de masa por zona) calibrados contra la
+  # electricidad de E+ (python -m ems calibrar, semanas de febrero y agosto): CV(RMSE) horario 14–17 %, NMBE
+  # ≈ +3.5 % (ASHRAE Guideline 14: ≤ 30 % y ±10 %); pico +6.6 %. La masa (80 Wh/K·m², edificio de hormigón)
+  # da el retraso con que el interior sigue al clima exterior cuando el aire está apagado.
+  factor_cop: 1.30             # multiplicador del COP estacional de VRF y PTAC (calibrado: python -m ems calibrar)
+  capacitancia_kwh_k_m2: 0.08  # nodo de masa (losas, muros, tabiques) por m2 de piso
+  capacitancia_aire_kwh_k_m2: 0.015  # nodo de aire (aire, mobiliario y capa superficial de tabiques) por m2
+  h_aire_masa_kw_k_m2: 0.045   # acople aire ↔ masa: 9.1 W/m2K × ≈5 m2 de superficie (losas, muros, mobiliario) por m2
+  fraccion_radiante: 0.5       # parte de las ganancias internas y solares que calienta primero la masa
+  rampa_compresor_por_min: 0.10  # el inverter del VRF sube 10 % de capacidad por minuto (0 → 100 % en 10 min)
   factor_solar: 0.5
   delta_t_cielo_c: 3.0         # radiación al cielo: Text equivalente para la conducción de la envolvente
 
@@ -49,7 +55,10 @@ clima:
   semilla: 7
 
 # Horarios del modelo E+ (Schedule:Day:Interval). Cada lista: [hora de inicio, valor] escalonado.
+# transicion_min: cada escalón se suaviza en una rampa de esa duración (llegada y salida gradual de la gente,
+# encendido progresivo de equipos e iluminación); 0 = escalones de E+.
 horarios:
+  transicion_min: 60
   ocupacion:            # BASE_Ocupacion
     laborable: [[0, 0], [8, 1.0], [18, 0]]
     sabado: [[0, 0]]
@@ -93,6 +102,7 @@ horarios:
 
 ocupacion:
   ruido: 0.10
+  dispersion_llegada_min: 15   # cada zona llega/sale ±15 min respecto al horario según el día
   ausentismo: 0.08
   semilla: 11
   hora_entrada: 8.0            # BASE_Ocupacion
@@ -128,7 +138,11 @@ ems:
   setpoint_ocupado_c: 24.0
   setpoint_desocupado_c: 27.0
   setpoint_baseline_c: 22.0        # setpoint del modelo E+ (constante)
-  precool_min: 60
+  precool_min: 90                  # pre-enfriamiento escalonado antes de la entrada
+  rampa_setpoint_c_h: 3.0          # la consigna cambia como máximo 3 °C por hora (0.25 °C por paso)
+  arranques_max_paso: 2            # terminales que pueden arrancar en un mismo paso de 5 min
+  t_proteccion_max_c: 32.0         # fuera de horario el aire está apagado salvo que la zona pase de 32 °C…
+  t_proteccion_retorno_c: 30.0     # …y entonces enfría sólo hasta 30 °C
   lux_objetivo: 500
   equipos_desocupado_ems: 0.10
   retardo_vacancia_min: 15

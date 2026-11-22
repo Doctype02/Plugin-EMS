@@ -34,6 +34,9 @@ def _desde_config(codigo: str) -> str:
         "dr_equipos": e["dr_equipos_nivel"], "dr_margen_confort": e["dr_margen_confort_c"],
         "confort_max": e["confort_max_c"], "confort_min": e["confort_min_c"], "alarma_servidor": e["alarma_servidor_c"],
         "plr_min": PLR_MIN, "banda_prop": BANDA_PROPORCIONAL_C,
+        "t_prot_max": e["t_proteccion_max_c"], "t_prot_retorno": e["t_proteccion_retorno_c"],
+        "rampa_sp_c_h": e["rampa_setpoint_c_h"], "arranques_max": e["arranques_max_paso"],
+        "paso_min": cfg["edificio"]["paso_min"],
     }
     bloque = codigo[codigo.index("const P = Object.assign({"): codigo.index("}, flow.get(\"parametros\")")]
     nuevo = bloque

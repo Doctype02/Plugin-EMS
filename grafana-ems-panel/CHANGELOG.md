@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.6.2
+
+Modo demostración más realista, alineado con el gemelo digital y las reglas nuevas del EMS.
+
+- **Aire apagado fuera de horario**: noches, sábados y domingos la temperatura de cada zona sigue al clima
+  exterior (modelo RC integrado hora a hora con el clima desde el último fin de jornada, con el sol y el standby):
+  sube de día y baja de noche con retraso. Antes quedaba fija en 25,5 °C. Si pasa de 32 °C arranca la
+  protección por calor.
+- **Pre-enfriamiento escalonado con rampa**: 2 terminales arrancan cada 5 min (las plantas altas primero) y la
+  consigna baja 3 °C/h desde la temperatura de la zona; la potencia de la mañana sube en rampa, sin escalón.
+- **Llegada gradual**: los horarios pasan en rampas de 60 min (`scheduleTransitionMin`) y cada zona llega
+  ±25 min según el día; luces y enchufes se encienden a medida que llega la gente.
+- **Radiación al cielo** sólo en los opacos (muros × 0,5, techo × 1), como el gemelo 2R2C; la capacitancia
+  total incluye la masa del edificio (0,095 kWh/K·m²).
+
 ## 1.6.1
 
 Animaciones fluidas (~60 fps) y pruebas e2e al día con Grafana 13.2.

@@ -87,8 +87,12 @@ def test_termostato_vrf_histeresis_y_modulacion(cfg):
 
 
 def test_planta_baja_mas_fria_por_el_terreno(cfg):
+    # con el terreno del modelo E+ (18 °C) la losa enfría la planta baja
+    from ems.validacion import condiciones_energyplus
+
+    cfg = condiciones_energyplus(cfg)
     ed = Edificio(cfg)
-    ed.aplicar({zid: {"hvac_enable": False} for zid in ed.estado})
+    ed.aplicar({zid: {"hvac_enable": False, "luces_nivel": 0.0} for zid in ed.estado})
     for _ in range(288 * 3):
         ed.paso({"t_ext_c": 27.0, "irr_wm2": 0.0, "hr_pct": 80}, {}, 120, 6)
     pb, pa = ed.estado["Z02"].t, ed.estado["Z12"].t
@@ -251,3 +255,35 @@ def test_estado_live_se_restaura(cfg, tmp_path, monkeypatch):
     d = Edificio(cfg)
     p._restaurar(d, t + pd.Timedelta(hours=12))  # demasiado antiguo: arranque normal
     assert d.e_kwh == 0.0
+
+
+def test_fin_de_semana_aire_apagado_sigue_al_clima(cfg, semana):
+    """Sábado y domingo el aire está apagado: la temperatura deriva con el exterior (no se queda fija)."""
+    r = semana["reglas_dr"]
+    z = r.zonas.copy()
+    z["ts"] = pd.to_datetime(z["ts"])
+    finde = z[(z.ts.dt.dayofweek >= 5) & ~z.critica]
+    assert (finde.hvac_on.mean()) < 0.05                       # casi sin compresores (sólo protección)
+    media = finde.groupby("ts").temp_real_c.mean()
+    assert media.max() - media.min() > 2.5                     # sube de día y baja de noche
+    assert finde.temp_real_c.max() <= cfg["ems"]["t_proteccion_max_c"] + 1.0
+    # el interior responde al exterior con retraso por la masa térmica: el máximo llega después del exterior
+    sab = media[media.index.dayofweek == 5]
+    t_ext = r.medidor.t_ext_c[r.medidor.index.dayofweek == 5]
+    assert sab.idxmax() > t_ext.idxmax()
+
+
+def test_arranque_escalonado_y_rampa_de_setpoint(cfg, semana):
+    r = semana["reglas_dr"]
+    reglas = pd.DataFrame(list(r.estado.reglas))
+    assert reglas.arranques.max() <= cfg["ems"]["arranques_max_paso"]
+    assert reglas.arranque_espera.max() > 0                    # el pre-enfriamiento sí tuvo que esperar turno
+    z = r.zonas[~r.zonas.critica].copy()
+    paso_c = cfg["ems"]["rampa_setpoint_c_h"] * cfg["edificio"]["paso_min"] / 60
+    saltos = z.sort_values("ts").groupby("zona").apply(
+        lambda g: g.setpoint_c.diff().abs()[g.hvac_enable & g.hvac_enable.shift(fill_value=False)].max())
+    assert saltos.max() <= paso_c + 1e-6                       # sin escalones de consigna
+    # la potencia sube de forma gradual en el pre-enfriamiento (sin el escalón de todos los compresores juntos)
+    m = r.medidor
+    manana = m[(m.index.dayofweek < 5) & (m.index.hour >= 6) & (m.index.hour < 9)]
+    assert manana.p_total_kw.diff().max() < 15

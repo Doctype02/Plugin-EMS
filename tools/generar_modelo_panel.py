@@ -222,14 +222,15 @@ def generar(cfg: dict) -> tuple[str, dict]:
         "uGlass": num(e["u_ventana"]), "shgc": num(e["shgc"]), "vt": num(e.get("vt", 0.45)),
         "infiltration": num(e["infiltracion_m3s_m2"], 8), "uInterfloor": num(e.get("u_entrepiso", 0.0)),
         "rhoCp": 1.2 * 1.006, "tGround": num(e["t_suelo_c"]),
-        "capacitancePerM2": num(e["capacitancia_kwh_k_m2"]), "solarFactor": num(e["factor_solar"]),
+        # capacitancia total (nodo de masa + nodo de aire del gemelo 2R2C)
+        "capacitancePerM2": num(e["capacitancia_kwh_k_m2"] + e.get("capacitancia_aire_kwh_k_m2", 0.0), 4), "solarFactor": num(e["factor_solar"]),
         "skyDeltaT": num(e.get("delta_t_cielo_c", 0.0)), "ventilationPerPerson": num(e.get("ventilacion_m3s_persona", 0), 6),
         "copFactor": num(f_cop), "latentFraction": num(e.get("fraccion_latente_serpentin", 0.1)),
         "standbyFraction": num(e.get("fraccion_standby_equipos", 0.1)),
     }
 
     schedules = {nombre: {DIAS[k]: [[num(a), num(b)] for a, b in perfil] for k, perfil in h.items()}
-                 for nombre, h in cfg["horarios"].items()}
+                 for nombre, h in cfg["horarios"].items() if isinstance(h, dict)}
     fixed = [{"name": c["nombre"], "kw": num(c["kw"]), "schedule": c.get("horario"), "pf": num(c.get("fp", 0.9)),
               "critical": bool(c.get("critica", False))}
              for c in cfg.get("cargas_fijas") or [] if "horario" in c]
@@ -240,7 +241,10 @@ def generar(cfg: dict) -> tuple[str, dict]:
     rules = {
         "band": num(m["banda_histeresis_c"]), "spOccupied": num(m["setpoint_ocupado_c"]),
         "spUnoccupied": num(m["setpoint_desocupado_c"]), "spBaseline": num(m.get("setpoint_baseline_c", 22)),
-        "spNight": 29, "precoolMin": num(m["precool_min"]), "entry": num(o["hora_entrada"]), "exit": num(o["hora_salida"]),
+        "tProtMax": num(m.get("t_proteccion_max_c", 32)), "tProtReturn": num(m.get("t_proteccion_retorno_c", 30)),
+        "setpointRampCh": num(m.get("rampa_setpoint_c_h", 0)), "startsPerStep": num(m.get("arranques_max_paso", 0)),
+        "scheduleTransitionMin": num(cfg["horarios"].get("transicion_min", 0)),
+        "precoolMin": num(m["precool_min"]), "entry": num(o["hora_entrada"]), "exit": num(o["hora_salida"]),
         "luxTarget": num(m["lux_objetivo"]), "comfortMax": num(m["confort_max_c"]), "comfortMin": num(m["confort_min_c"]),
         "serverAlarm": num(m["alarma_servidor_c"]), "drMarginC": num(m["dr_margen_confort_c"]),
         "drHysteresisKw": num(m["dr_histeresis_kw"]), "plugsUnoccupied": num(m["equipos_desocupado_ems"]),

@@ -6,8 +6,9 @@
 
 const P = Object.assign({
     edificio: env.get("EMS_EDIFICIO") || "edificio1",
-    banda: 0.5, sp_ocupado: 24.0, sp_desocupado: 27.0, sp_noche: 29.0,
-    precool_min: 60, entrada: 7.0, salida: 18.0,
+    banda: 0.5, sp_ocupado: 24.0, sp_desocupado: 27.0,
+    t_prot_max: 32.0, t_prot_retorno: 30.0, rampa_sp_c_h: 3.0, arranques_max: 2, paso_min: 5,
+    precool_min: 90, entrada: 8.0, salida: 18.0,
     lux_objetivo: 500, lux_artificial: 500,
     luces_desocupado: 0.0, equipos_desocupado: 0.1, retardo_vacancia_min: 15,
     limite_kw: 30, dr_hist_kw: 3, dr_luces: 0.7, dr_equipos: 0.85, dr_margen_confort: 0.75,
@@ -76,6 +77,9 @@ if (cond("EDIF:PICO", med.demanda_15min_kw > P.limite_kw))
     alarma("warn", "PICO_DEMANDA", "EDIF", `Demanda 15 min ${med.demanda_15min_kw.toFixed(1)} kW > ${P.limite_kw} kW`, med.demanda_15min_kw);
 
 // ---------------------------------------------------------------- reglas por zona
+// contadores de cada regla (zonas afectadas en este paso) → dashboard «Reglas del EMS»
+const R = { ocupadas: 0, vacancia: 0, setback: 0, apagadas: 0, proteccion_alta: 0, proteccion_baja: 0,
+            luz_natural: 0, standby: 0, precool: precool ? 1 : 0, fuera_horario: horarioLaboral ? 0 : 1 };
 const cmds = {};
 const tMs = d.getTime();
 for (const zid of Object.keys(zonas)) {
@@ -83,21 +87,57 @@ for (const zid of Object.keys(zonas)) {
     if (z.critica) continue;
     if (z.ocupado) st.ultimoOcup[zid] = tMs;
     const ocup = z.ocupado || (st.ultimoOcup[zid] !== undefined && tMs - st.ultimoOcup[zid] <= P.retardo_vacancia_min * 60000);
+    if (z.ocupado) R.ocupadas++; else if (ocup) R.vacancia++;
     let sp, en;
     if (ocup || precool) { sp = P.sp_ocupado; en = true; }
-    else if (horarioLaboral) { sp = P.sp_desocupado; en = true; }
-    else { sp = P.sp_noche; en = z.temp_c > P.sp_noche + P.banda; }
+    else if (horarioLaboral) { sp = P.sp_desocupado; en = true; R.setback++; }
+    else {
+        // noches, sábados y domingos: aire apagado (la zona sigue al clima exterior); sólo protección
+        // por alta temperatura: arranca sobre t_prot_max y enfría hasta t_prot_retorno
+        sp = P.t_prot_retorno;
+        en = z.temp_c > P.t_prot_max || (!!z.hvac_enable && z.temp_c > P.t_prot_retorno);
+        if (en) R.proteccion_alta++; else R.apagadas++;
+    }
     let luces, equipos;
     if (ocup) {
         const luxDia = Math.max(z.lux - P.lux_artificial * z.luces_nivel, 0);
         luces = Math.min(Math.max((P.lux_objetivo - luxDia) / P.lux_artificial, 0.1), 1.0);
         luces = Math.round(Math.round(luces / 0.05) * 0.05 * 100) / 100;
         equipos = 1.0;
-    } else { luces = P.luces_desocupado; equipos = P.equipos_desocupado; }
+        if (luces < 1.0) R.luz_natural++;
+    } else { luces = P.luces_desocupado; equipos = P.equipos_desocupado; R.standby++; }
     let vent = "dcv";
     // protección por baja temperatura (losa al terreno a 18 °C en el modelo E+): ventilador con aire exterior
-    if (z.temp_c < P.confort_min + 1.0) { en = true; vent = "fija"; }
+    if (z.temp_c < P.confort_min + 1.0) { en = true; vent = "fija"; R.proteccion_baja++; }
     cmds[zid] = { hvac_enable: en, setpoint_c: sp, ventilacion: vent, luces_nivel: luces, equipos_nivel: equipos, hvac_mod: null };
+}
+
+// ---------------------------------------------------------------- rampa de setpoint + arranque escalonado
+// (misma lógica que Controlador._secuenciar en ems/control.py)
+{
+    const pasoC = P.rampa_sp_c_h * P.paso_min / 60;
+    const nuevos = [];
+    for (const zid of Object.keys(cmds)) {
+        const z = zonas[zid], c = cmds[zid];
+        if (!c.hvac_enable) continue;
+        if (!z.hvac_enable && c.ventilacion !== "fija") nuevos.push({ zid, urg: z.temp_c - c.setpoint_c });
+    }
+    nuevos.sort((a, b) => (b.urg - a.urg) || (a.zid < b.zid ? -1 : a.zid > b.zid ? 1 : 0));
+    const espera = {};
+    if (P.arranques_max > 0) for (const n of nuevos.slice(P.arranques_max)) espera[n.zid] = true;
+    let nRampa = 0;
+    for (const zid of Object.keys(cmds)) {
+        const z = zonas[zid], c = cmds[zid];
+        if (espera[zid]) { c.hvac_enable = false; continue; }
+        if (pasoC <= 0 || !c.hvac_enable) continue;
+        const objetivo = c.setpoint_c;
+        const previo = z.hvac_enable ? z.setpoint_c : Math.max(objetivo, Math.min(z.temp_c, 30));
+        c.setpoint_c = Math.round((previo + Math.max(-pasoC, Math.min(pasoC, objetivo - previo))) * 100) / 100;
+        if (Math.abs(c.setpoint_c - objetivo) > 1e-6) nRampa++;
+    }
+    R.rampa_setpoint = nRampa;
+    R.arranque_espera = Object.keys(espera).length;
+    R.arranques = nuevos.length - R.arranque_espera;
 }
 
 // ---------------------------------------------------------------- overrides del operador (prioridad sobre las reglas)
@@ -144,6 +184,8 @@ const dem = med.demanda_15min_kw;
 if (dem > P.limite_kw) { st.drEtapa = 2; st.drCont = 0; }
 else if (st.drEtapa === 2 && dem < P.limite_kw - P.dr_hist_kw) { st.drCont++; if (st.drCont >= 3) { st.drEtapa = 0; st.drCont = 0; } }
 if (st.drEtapa < 2) st.drEtapa = forzadas ? 1 : 0;
+R.rotacion_compresores = forzadas;
+R.dr_etapa = st.drEtapa;
 if (st.drEtapa >= 2) {
     for (const zid of Object.keys(cmds)) {
         if (manual[zid]) continue;
@@ -174,7 +216,8 @@ const estado = {
     payload: {
         ts: med.ts, origen: "nodered", modo: "reglas_dr", dr_activo: drActivo, dr_etapa: st.drEtapa,
         limite_kw: P.limite_kw, n_alarmas: Object.keys(st.activas).length,
-        modo_seguro: Object.keys(invalidos), manual: Object.keys(manual), latencia_ms: Date.now() - tInicio, zonas_forzadas: forzadas
+        modo_seguro: Object.keys(invalidos), manual: Object.keys(manual), latencia_ms: Date.now() - tInicio, zonas_forzadas: forzadas,
+        reglas: R
     }
 };
 flow.set("st", st);

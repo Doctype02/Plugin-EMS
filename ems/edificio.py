@@ -1,16 +1,21 @@
-"""Gemelo digital del edificio: modelo térmico RC por zona, cargas, sensores, actuadores y medidor.
+"""Gemelo digital del edificio: modelo térmico 2R2C por zona, cargas, sensores, actuadores y medidor.
 
-Cada zona se modela como un nodo térmico (1R1C) con los parámetros del modelo E+ (config.zonas):
+Cada zona tiene dos nodos térmicos (ISO 13790 simplificado) con los parámetros del modelo E+ (config.zonas):
 
-    C·dT/dt = UA·(Text − T) + UA_suelo·(Tsuelo − T) + G_vent·(Text − T)
-              + Q_personas + Q_luces + Q_equipos + Q_solar,ventanas + Q_solar,opaco + Q_ventilador − Q_hvac
+    C_aire·dTa/dt = (UA_vidrio + G_vent + G_inf)·(Text − Ta) + H_am·(Tm − Ta) + Q_convectivo − Q_hvac
+    C_masa·dTm/dt = UA_muro·(Text − ΔT_cielo/2 − Tm) + UA_techo·(Text − ΔT_cielo − Tm) + UA_suelo·(Tsuelo − Tm)
+                    + UA_losas·(T_planta_vecina − Tm) + H_am·(Ta − Tm) + Q_radiante + Q_solar,opaco
 
-con Q en kW, C en kWh/K y t en horas. La ganancia solar usa la irradiancia sobre cada fachada.
+con Q en kW, C en kWh/K y t en horas. El aire (rápido) recibe el HVAC, la ventilación y la parte convectiva de
+las ganancias; la masa (lenta: losas y muros) recibe la conducción de los opacos y la parte radiante del sol y
+de las ganancias. Con el aire apagado la zona sigue al clima exterior con el retraso de la masa (sube de día,
+baja de noche), y al arrancar el aire la temperatura baja de forma gradual.
 
 HVAC: terminal VRF modulante. Con el termostato local, la capacidad sigue el error de temperatura
 dentro de la banda (sp ± banda) y el terminal hace on/off con histéresis: enciende sobre sp + banda y
 apaga bajo sp − banda (a carga baja cicla). El EMS puede fijar la modulación (`hvac_mod`, MPC y
-limitador de demanda). La potencia eléctrica es capacidad × modulación / COP estacional del sistema
+limitador de demanda). El compresor (inverter) sigue la modulación pedida con una rampa de subida (`rampa_compresor_por_min`): la
+potencia nunca sube de golpe. La potencia eléctrica es capacidad × modulación / COP estacional del sistema
 VRF (calibrado con la simulación de E+), más el ventilador del terminal: continuo (línea base, como
 en E+) o sólo cuando hay ocupación o compresor (EMS).
 Los sensores agregan ruido y pueden fallar (congelado, ruidoso, fuera de rango, deriva).
@@ -48,7 +53,9 @@ ACTUADORES = ("setpoint_c", "hvac_enable", "luces_nivel", "equipos_nivel", "hvac
 
 @dataclass
 class EstadoZona:
-    t: float                          # temperatura real (°C)
+    t: float                          # temperatura real del aire (°C)
+    tm: float | None = None           # temperatura del nodo de masa (losas/muros) (°C)
+    mod_real: float = 0.0             # capacidad que entrega el compresor (sigue al pedido con rampa)
     setpoint_c: float = 24.0
     hvac_enable: bool = True
     luces_nivel: float = 1.0
@@ -132,13 +139,13 @@ class Edificio:
         self.estado: dict[str, EstadoZona] = {}
         for z in self.zonas:
             t = z.setpoint_fijo if z.setpoint_fijo else t0
-            self.estado[z.id] = EstadoZona(t=t, setpoint_c=z.setpoint_fijo or 24.0, t_medida=t)
+            self.estado[z.id] = EstadoZona(t=t, tm=t, setpoint_c=z.setpoint_fijo or 24.0, t_medida=t)
         self.e_kwh = 0.0
         self.e_fv_kwh = 0.0
         self._hist_p = []
 
     # ------------------------------------------------------- persistencia (live)
-    _CAMPOS_ESTADO = ("t", "setpoint_c", "hvac_enable", "luces_nivel", "equipos_nivel", "hvac_mod", "ventilacion",
+    _CAMPOS_ESTADO = ("t", "tm", "mod_real", "setpoint_c", "hvac_enable", "luces_nivel", "equipos_nivel", "hvac_mod", "ventilacion",
                       "hvac_on", "t_medida", "w", "hr_medida", "ocupado_medido")
 
     def exportar_estado(self) -> dict:
@@ -157,6 +164,8 @@ class Edificio:
             for k, v in campos.items():
                 if k in self._CAMPOS_ESTADO:
                     setattr(s, k, v)
+            if s.tm is None or "tm" not in campos:  # estado guardado por una versión de un solo nodo
+                s.tm = s.t
             n += 1
         self.e_kwh = float(d.get("e_kwh", self.e_kwh))
         self.e_fv_kwh = float(d.get("e_fv_kwh", self.e_fv_kwh))
@@ -456,8 +465,13 @@ class Edificio:
         f_sol = self.e.get("factor_solar", 1.0)
         v_pers = self.e["ventilacion_m3s_persona"]
         no_crit = [z for z in self.zonas if not z.critica]
-        # radiación hacia el cielo: temperatura exterior equivalente para la conducción de la envolvente
-        t_eq = t_ext - self.e.get("delta_t_cielo_c", 0.0)
+        # radiación hacia el cielo: temperatura exterior equivalente para la conducción de los opacos
+        # (factor de forma al cielo 0.5 en muros verticales y 1 en la cubierta)
+        dt_cielo = self.e.get("delta_t_cielo_c", 0.0)
+        t_eq_muro = t_ext - 0.5 * dt_cielo
+        t_eq_techo = t_ext - dt_cielo
+        f_rad = self.e.get("fraccion_radiante", 0.5)
+        rampa_comp = self.e.get("rampa_compresor_por_min", 0.1)
         # temperatura media (por área) de cada planta en el paso anterior, para el acople por el entrepiso
         t_planta = {}
         for pl in sorted({z.planta for z in self.zonas}):
@@ -530,18 +544,34 @@ class Edificio:
             caudal_ext = (g_vent + g_puerta) / RHO_CP + self.e["infiltracion_m3s_m2"] * (sum(z.muros.values()) + z.techo)
             q_lat = n * Q_PERSONA_LAT_KW + 1.2 * caudal_ext * H_FG * dw
 
-            # --- integración térmica (subpasos de 1 min, Euler explícito)
+            # --- integración térmica 2R2C (subpasos de 1 min, Euler explícito)
+            # Nodo de aire (rápido): vidrio, ventilación/infiltración, fracción convectiva de las ganancias y
+            # el HVAC. Nodo de masa (lento): muros, cubierta, terreno, losas entre plantas, la fracción
+            # radiante de las ganancias y el sol sobre los opacos. El aire sigue a la masa con retardo:
+            # con los equipos apagados la zona deriva hacia el clima exterior en horas, no de golpe.
             t_arriba = t_planta.get(z.planta + 1, s.t)
             t_abajo = t_planta.get(z.planta - 1, s.t)
-            q_hvac_sens = mod * cap
+            q_rad = f_rad * (q_int - p_fan - q_opaco) + q_opaco
+            q_conv = q_int - q_rad
             sub = max(int(self.e["paso_min"]), 1)
             dt = self.paso_h / sub
-            t = s.t
+            t, tm = s.t, (s.t if s.tm is None else s.tm)
+            mod_r = s.mod_real if cap > 0 else 0.0
+            g_ext = z.ua_vidrio + z.g_inf + g_vent + g_puerta
+            sube = rampa_comp * self.e["paso_min"] / sub     # el inverter acelera de forma gradual
+            q_hvac_sens = 0.0
             for _ in range(sub):
-                dTdt = (z.ua * (t_eq - t) + (z.g_inf + g_vent + g_puerta) * (t_ext - t) + z.ua_suelo * (t_suelo - t)
-                        + z.ua_arriba * (t_arriba - t) + z.ua_abajo * (t_abajo - t) + q_int - q_hvac_sens) / z.c
-                t += dTdt * dt
-            s.t = t
+                mod_r = min(mod, mod_r + sube) if mod > mod_r else mod
+                q_h = mod_r * cap
+                q_hvac_sens += q_h / sub
+                dTm = (z.ua_muro * (t_eq_muro - tm) + z.ua_techo * (t_eq_techo - tm) + z.ua_suelo * (t_suelo - tm)
+                       + z.ua_arriba * (t_arriba - tm) + z.ua_abajo * (t_abajo - tm) + z.h_am * (t - tm) + q_rad) / z.c_masa
+                # el nodo de aire es rígido (constante de tiempo de minutos): Euler implícito
+                k = dt / z.c_aire
+                t = (t + k * (g_ext * t_ext + z.h_am * tm + q_conv - q_h)) / (1 + k * (g_ext + z.h_am))
+                tm += dTm * dt
+            s.t, s.tm, s.mod_real = t, tm, mod_r
+            mod = q_hvac_sens / cap if cap > 0 else 0.0
             # el VRF no controla humedad (en E+ la HR interior llega a 90 %+): sólo retira el latente que
             # condensa su serpentín, ≈ fracción del sensible, limitado por la humedad disponible
             q_lat_ret = min(q_lat, self.e.get("fraccion_latente_serpentin", 0.25) * q_hvac_sens) if mod > 0 else 0.0

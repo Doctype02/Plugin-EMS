@@ -75,7 +75,10 @@ def test_override_setpoint_y_liberar(h, paso):
     assert cmd["Z05"]["setpoint_c"] == 22.5 and cmd["Z05"]["hvac_enable"] is True
     h("override", {"tipo": "liberar", "zona": "Z05"})
     r = _enviar_paso(h, t, zonas, med)
-    assert {c["zona"]: c for c in r["cmds"]}["Z05"]["setpoint_c"] == 24.0
+    # liberado vuelve a las reglas con la rampa de setpoint: ≤ 0.25 °C por paso desde el del terminal
+    previo = next(z for z in zonas if z["zona"] == "Z05")["setpoint_c"]
+    sp = {c["zona"]: c for c in r["cmds"]}["Z05"]["setpoint_c"]
+    assert sp != 22.5 and abs(sp - previo) <= 0.25 + 1e-9
     assert r["estado"]["manual"] == []
 
 
@@ -115,7 +118,10 @@ def test_parametros_en_vivo_cambian_el_setpoint(h, paso):
     h("parametros", {"sp_ocupado": 25})
     cmd = {c["zona"]: c for c in _enviar_paso(h, t, zonas, med)["cmds"]}
     ocupadas = [z["zona"] for z in zonas if z["ocupado"] and not z["critica"]]
-    assert ocupadas and all(cmd[z]["setpoint_c"] == 25 for z in ocupadas)
+    previo = {z["zona"]: z["setpoint_c"] for z in zonas}
+    # la consigna avanza hacia 25 °C con la rampa (0.25 °C por paso de 5 min)
+    assert ocupadas and all(cmd[z]["setpoint_c"] == round(previo[z] + max(-0.25, min(0.25, 25 - previo[z])), 2)
+                            for z in ocupadas)
 
 
 def test_endpoint_http_eventos_simulados(h):

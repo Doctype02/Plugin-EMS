@@ -51,10 +51,18 @@ def metricas(medido: pd.Series, modelo: pd.Series) -> dict:
             "cumple_g14": bool(abs(nmbe) <= 10 and cvrmse <= 30), "r2": float(np.corrcoef(a, b)[0, 1] ** 2)}
 
 
+def condiciones_energyplus(cfg: dict) -> dict:
+    """Configuración con las condiciones de borde del modelo E+ (terreno a 18 °C, su valor por defecto) para
+    comparar en igualdad de condiciones. La operación usa la temperatura real del terreno (`t_suelo_c`)."""
+    t = cfg["edificio"].get("t_suelo_energyplus_c")
+    return m_config.aplicar(cfg, {"edificio.t_suelo_c": t}) if t is not None else cfg
+
+
 def comparar(cfg: dict, inicio: str, dias: float, ref: dict | None = None) -> dict:
     """Corre la línea base (operación del modelo E+) y la compara hora a hora con EnergyPlus:
     electricidad total, equipos de las zonas, fotovoltaica y temperatura de cada zona en horario ocupado."""
     ref = ref or cargar_energyplus()
+    cfg = condiciones_energyplus(cfg)
     r = simular(cfg, "baseline", dias=dias, inicio=inicio)
     m = r.medidor
     z = r.zonas.copy()
@@ -95,8 +103,8 @@ def comparar(cfg: dict, inicio: str, dias: float, ref: dict | None = None) -> di
 
 
 PARAMETROS_CALIBRACION = {
-    "edificio.factor_cop": [0.8, 1.0, 1.2],                  # COP estacional de VRF/PTAC (sin datos por sistema)
-    "edificio.capacitancia_kwh_k_m2": [0.03, 0.08],          # masa térmica efectiva
+    "edificio.factor_cop": [1.15, 1.3, 1.45],                # COP estacional de VRF/PTAC (sin datos por sistema)
+    "edificio.capacitancia_kwh_k_m2": [0.05, 0.08, 0.11],    # nodo de masa (losas, muros) del modelo 2R2C
     "edificio.factor_solar": [0.5, 0.9],                     # fracción solar que llega al aire de inmediato
     "edificio.delta_t_cielo_c": [3.0, 6.0],                  # radiación al cielo (Text equivalente)
     "edificio.fraccion_latente_serpentin": [0.10, 0.25],     # latente retirado por el serpentín
@@ -126,6 +134,7 @@ def calibrar(cfg: dict, rejilla: dict | None = None, semanas=SEMANAS_CALIBRACION
 def anual(cfg: dict) -> dict:
     """Año completo con el EPW: usos finales y pico frente al resumen anual de E+."""
     ref = cargar_energyplus()
+    cfg = condiciones_energyplus(cfg)
     r = simular(cfg, "baseline", dias=365, inicio="2006-01-01")
     paso_h = cfg["edificio"]["paso_min"] / 60
     m = r.medidor

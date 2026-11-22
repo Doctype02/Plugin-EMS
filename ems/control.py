@@ -1,8 +1,10 @@
 """Algoritmos de control del EMS.
 
 - `Baseline`: operación típica sin EMS (horarios fijos, setpoint 22.5 °C, ventilación de diseño).
-- `Reglas`: setpoints por ocupación con retardo de vacancia, pre-enfriamiento, aprovechamiento de luz
-  natural, corte de standby de enchufes; el termostato local hace on/off con histéresis.
+- `Reglas`: setpoints por ocupación con retardo de vacancia, pre-enfriamiento escalonado, aire apagado fuera
+  de horario (noches y fines de semana, con protección por calor), rampa de consigna, arranque escalonado de
+  los terminales, aprovechamiento de luz natural y corte de standby; el termostato local hace on/off con
+  histéresis.
 - `ReglasDR`: Reglas + respuesta a la demanda (deslastre escalonado con histéresis sobre la demanda
   de 15 min).
 - `MPC`: ReglasDR para luces/equipos + MPC simplificado (horizonte finito, búsqueda exhaustiva de
@@ -111,6 +113,7 @@ class Supervisor:
 class Controlador:
     nombre = "base"
     usa_dr = False
+    secuencial = False   # rampa de setpoint + arranque escalonado de los terminales (EMS)
 
     def __init__(self, cfg: dict):
         self.cfg = cfg
@@ -125,6 +128,7 @@ class Controlador:
         self.alarmas: list[dict] = []
         self.ultimo_ocupado: dict[str, pd.Timestamp] = {}
         self.modo_seguro: set[str] = set()
+        self.reglas: dict[str, int] = {}
 
     # ---------------------------------------------------------------- utilidades
     def ocupado_efectivo(self, t, z: dict) -> bool:
@@ -147,6 +151,8 @@ class Controlador:
     def decidir(self, t: pd.Timestamp, tel: list[dict], med: dict) -> dict[str, dict]:
         self.alarmas = self.sup.evaluar(t, tel, med, self.limite_kw, self.dr_activo)
         cmds = self._decidir(t, tel, med)
+        if self.secuencial:
+            self._secuenciar(tel, cmds)
         if self.usa_dr:
             self._respuesta_demanda(med, cmds, tel)
         # modo seguro: sensor inválido → capacidad fija, sin depender del termostato
@@ -169,7 +175,48 @@ class Controlador:
     def estado(self, t) -> dict:
         return {"ts": t.isoformat(), "origen": "python", "modo": self.nombre, "dr_activo": self.dr_activo,
                 "dr_etapa": self.dr_etapa, "limite_kw": self.limite_kw, "n_alarmas": len(self.sup.activas),
-                "modo_seguro": sorted(self.modo_seguro)}
+                "modo_seguro": sorted(self.modo_seguro), "reglas": dict(self.reglas)}
+
+    # ------------------------------------------------- rampa de setpoint y arranque escalonado
+    def _secuenciar(self, tel: list[dict], cmds: dict):
+        """Transiciones graduales en vez de escalones.
+
+        1. Rampa de setpoint: la consigna enviada cambia como máximo `rampa_setpoint_c_h` °C por hora
+           respecto a la que tiene el terminal. Un terminal que arranca parte de la temperatura medida, así
+           el compresor sube de carga poco a poco en lugar de arrancar al 100 %.
+        2. Arranque escalonado: como máximo `arranques_max_paso` terminales pasan de apagado a encendido en
+           cada paso, por orden de urgencia (T − consigna); el resto espera al paso siguiente. Evita que todos
+           los compresores arranquen a la vez (pico de arranque del pre-enfriamiento y del fin de un corte).
+        """
+        paso_c = self.e.get("rampa_setpoint_c_h", 0.0) * self.cfg["edificio"]["paso_min"] / 60.0
+        n_max = int(self.e.get("arranques_max_paso", 0) or 0)
+        tz = {z["zona"]: z for z in tel}
+        nuevos = []
+        for zid, c in cmds.items():
+            z = tz.get(zid)
+            if z is None or z["critica"] or not c.get("hvac_enable"):
+                continue
+            if not z["hvac_enable"] and c.get("ventilacion") != "fija":
+                nuevos.append((-(z["temp_c"] - c["setpoint_c"]), zid))
+        espera = {zid for _, zid in sorted(nuevos)[n_max:]} if n_max > 0 else set()
+        n_rampa = 0
+        for zid, c in cmds.items():
+            z = tz.get(zid)
+            if z is None or z["critica"] or "setpoint_c" not in c:
+                continue
+            if zid in espera:
+                c["hvac_enable"] = False
+                continue
+            if paso_c <= 0 or not c.get("hvac_enable"):
+                continue
+            objetivo = c["setpoint_c"]
+            previo = z["setpoint_c"] if z["hvac_enable"] else max(objetivo, min(z["temp_c"], 30.0))
+            sp = previo + max(-paso_c, min(paso_c, objetivo - previo))
+            c["setpoint_c"] = round(sp, 2)
+            if abs(c["setpoint_c"] - objetivo) > 1e-6:
+                n_rampa += 1
+        self.reglas.update({"rampa_setpoint": n_rampa, "arranque_espera": len(espera),
+                            "arranques": len(nuevos) - len(espera)})
 
     # ------------------------------------------------------- respuesta a la demanda
     def _respuesta_demanda(self, med: dict, cmds: dict, tel: list[dict]):
@@ -232,6 +279,7 @@ class Controlador:
         if self.dr_etapa < 2:
             self.dr_etapa = 1 if forzadas else 0
         self.dr_activo = self.dr_etapa > 0
+        self.reglas.update({"rotacion_compresores": forzadas, "dr_etapa": self.dr_etapa})
         if self.dr_etapa >= 2:
             for zid, c in cmds.items():
                 if self.zmap[zid].critica:
@@ -269,32 +317,51 @@ class Baseline(Controlador):
 
 class Reglas(Controlador):
     nombre = "reglas"
+    secuencial = True
 
     def _reglas_zona(self, t, z: dict) -> dict:
         ocup = self.ocupado_efectivo(t, z)
+        r = self.reglas
+        if z["ocupado"]:
+            r["ocupadas"] += 1
+        elif ocup:
+            r["vacancia"] += 1
         if ocup or self.precool(t):
             sp, en = self.e["setpoint_ocupado_c"], True
         elif self.horario_laboral(t):
             sp, en = self.e["setpoint_desocupado_c"], True
+            r["setback"] += 1
         else:
-            sp, en = 29.0, z["temp_c"] > 29.0 + self.e["banda_histeresis_c"]
+            # noches, sábados y domingos: el aire queda apagado y la zona sigue al clima exterior; sólo
+            # arranca como protección si supera `t_proteccion_max_c` y enfría hasta `t_proteccion_retorno_c`
+            t_max, t_ret = self.e.get("t_proteccion_max_c", 32.0), self.e.get("t_proteccion_retorno_c", 30.0)
+            sp = t_ret
+            en = z["temp_c"] > t_max or (z["hvac_enable"] and z["temp_c"] > t_ret)
+            r["proteccion_alta" if en else "apagadas"] += 1
         if ocup:
             lux_dia = max(z["lux"] - LUX_ARTIFICIAL * z["luces_nivel"], 0.0)
             luces = float(np.clip((self.e["lux_objetivo"] - lux_dia) / LUX_ARTIFICIAL, 0.1, 1.0))
             luces = round(round(luces / 0.05) * 0.05, 2)
             equipos = 1.0
+            if luces < 1.0:
+                r["luz_natural"] += 1
         else:
             luces = self.e["luces_desocupado_ems"]
             equipos = self.e["equipos_desocupado_ems"]
+            r["standby"] += 1
         vent = "dcv"
         if z["temp_c"] < self.e["confort_min_c"] + 1.0:
             # protección por baja temperatura (losa al terreno a 18 °C en el modelo E+): ventilador con
             # aire exterior para recuperar temperatura, sin compresor
             en, vent = True, "fija"
+            r["proteccion_baja"] += 1
         return {"hvac_enable": en, "setpoint_c": sp, "ventilacion": vent,
                 "luces_nivel": luces, "equipos_nivel": equipos}
 
     def _decidir(self, t, tel, med):
+        self.reglas = {k: 0 for k in ("ocupadas", "vacancia", "setback", "apagadas", "proteccion_alta",
+                                      "proteccion_baja", "luz_natural", "standby")}
+        self.reglas.update({"precool": int(self.precool(t)), "fuera_horario": int(not self.horario_laboral(t))})
         return {z["zona"]: self._reglas_zona(t, z) for z in tel if not z["critica"]}
 
 

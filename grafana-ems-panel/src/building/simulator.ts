@@ -140,18 +140,16 @@ const PRECOOL_H = EMS_RULES.precoolMin / 60;
 const BAND = EMS_RULES.band;
 const SP_OCC = EMS_RULES.spOccupied;
 const SP_UNOCC = EMS_RULES.spUnoccupied;
-const SP_NIGHT = EMS_RULES.spNight;
+const T_PROT_MAX = EMS_RULES.tProtMax;
+const RAMP_C_H = EMS_RULES.setpointRampCh;
+const STARTS_PER_STEP = Math.max(EMS_RULES.startsPerStep, 1);
+const TRANSITION_H = EMS_RULES.scheduleTransitionMin / 60;
 const PLR_MIN = 0.15;
 const Q_PERSON = 0.075; // kW sensibles por persona
 /** Temperatura supuesta de las plantas vecinas (acondicionadas) para el acople por las losas. */
 const T_NEIGHBOR = 24;
 
-export function scheduleValue(name: string, dow: number, h: number): number {
-  const s = SCHEDULES[name];
-  if (!s) {
-    return 0;
-  }
-  const p = dow === 0 ? s.sunday : dow === 6 ? s.saturday : s.weekday;
+function stepValue(p: Array<[number, number]>, h: number): number {
   let v = p[0][1];
   for (const [start, value] of p) {
     if (h >= start) {
@@ -161,6 +159,32 @@ export function scheduleValue(name: string, dow: number, h: number): number {
     }
   }
   return v;
+}
+
+/**
+ * Valor del horario. Como en ems/config.py (`horarios.transicion_min`), cada escalón de E+ se suaviza en una
+ * rampa centrada en la hora del cambio: la gente llega y enciende los equipos de forma gradual.
+ */
+export function scheduleValue(name: string, dow: number, h: number): number {
+  const s = SCHEDULES[name];
+  if (!s) {
+    return 0;
+  }
+  const p = (dow === 0 ? s.sunday : dow === 6 ? s.saturday : s.weekday) as Array<[number, number]>;
+  if (TRANSITION_H <= 0) {
+    return stepValue(p, h);
+  }
+  const a = Math.max(h - TRANSITION_H / 2, 0);
+  const b = Math.min(h + TRANSITION_H / 2, 24);
+  if (b <= a) {
+    return stepValue(p, a);
+  }
+  const cuts = [a, ...p.map(([start]) => start).filter((x) => x > a && x < b), b];
+  let acc = 0;
+  for (let i = 1; i < cuts.length; i++) {
+    acc += stepValue(p, cuts[i - 1]) * (cuts[i] - cuts[i - 1]);
+  }
+  return acc / (b - a);
 }
 
 /** Hash determinista en [0, 1). */
@@ -191,7 +215,9 @@ function occupancyFraction(z: Zone, c: Clock): number {
   if (z.occupants === 0) {
     return 0;
   }
-  const f = scheduleValue(z.schedules.occupancy, c.dow, c.h);
+  // cada zona llega y se va antes o después según el día (± 25 min), como ocupacion.dispersion_llegada_min
+  const shiftH = (hash('llegada', z.id, c.day) - 0.5) * (50 / 60);
+  const f = scheduleValue(z.schedules.occupancy, c.dow, Math.min(Math.max(c.h - shiftH, 0), 23.99));
   const absent = c.weekday ? EMS_RULES.absenteeism * hash('ausentismo', z.id, c.day) * 2 : 0;
   return f * (1 - absent);
 }
@@ -302,13 +328,84 @@ export function freeFloat(
   const th = thermal(z);
   const g = totalConductance(th) + extraG;
   const teq =
-    (th.ua * (tExt - ENVELOPE.skyDeltaT) +
+    (th.ua * tExt -
+      th.uaSky * ENVELOPE.skyDeltaT +
       (th.gInf + extraG) * tExt +
       th.uaGround * ENVELOPE.tGround +
       (th.uaUp + th.uaDown) * tNeighbor +
       gainsKw) /
     g;
   return teq + (t0Temp - teq) * Math.exp(-Math.max(hours, 0) / Math.max(th.c / g, 0.05));
+}
+
+// ---------------------------------------------------------------- aire apagado fuera de horario
+/** Orden de arranque escalonado del pre-enfriamiento: plantas altas (más calientes) primero. */
+const START_RANK = new Map(
+  ZONES.filter((z) => !z.critical && z.fixedSetpoint === undefined)
+    .slice()
+    .sort((a, b) => b.floor - a.floor || a.id.localeCompare(b.id))
+    .map((z, i) => [z.id, i])
+);
+
+/** Hora local (h) en que arranca el pre-enfriamiento de la zona: STARTS_PER_STEP terminales cada 5 min. */
+export function precoolStartH(z: Zone): number {
+  const rank = START_RANK.get(z.id) ?? 0;
+  return ENTRY - PRECOOL_H + Math.floor(rank / STARTS_PER_STEP) * (5 / 60);
+}
+
+/** Último fin de jornada (día laborable, salida + 30 min) anterior a t. */
+function lastShutoff(t: number): number {
+  const day = Math.floor((t + TZ_OFFSET) / DAY);
+  for (let d = day; d > day - 8; d--) {
+    const midnight = d * DAY - TZ_OFFSET;
+    const shut = midnight + (EXIT + 0.5) * HOUR;
+    if (clock(midnight + 12 * HOUR).weekday && shut <= t) {
+      return shut;
+    }
+  }
+  return t - DAY;
+}
+
+const driftMemo = new Map<string, number>();
+
+/** Avanza la libre flotación de la zona entre ta y tb con el clima y las ganancias en standby. */
+function driftStep(z: Zone, temp: number, ta: number, tb: number): number {
+  const mid = (ta + tb) / 2;
+  const c = clock(mid);
+  const w = baseWeather(mid);
+  const th = thermal(z);
+  const plugs =
+    ((z.epd * z.area) / 1000) * scheduleValue(z.schedules.equipment, c.dow, c.h) * EMS_RULES.plugsUnoccupied +
+    (z.itKw ?? 0);
+  const opaque = Object.entries(th.solarOpaque).reduce((a, [o, k]) => a + (k ?? 0) * w.irr * (o === 'h' ? 1 : 0.4), 0);
+  const solar = (th.glass * ENVELOPE.shgc * ENVELOPE.solarFactor * w.irr * 0.4) / 1000 + opaque;
+  // las plantas vecinas también están apagadas: el acople por las losas no cambia la deriva
+  return Math.min(freeFloat(z, temp, (tb - ta) / HOUR, plugs + solar, w.tExt, 0, temp), T_PROT_MAX);
+}
+
+/**
+ * Temperatura de la zona con el aire apagado (noches y fines de semana): el modelo RC integrado hora a hora
+ * con el clima real desde el último fin de jornada. Sube de día y baja de noche con la temperatura exterior y
+ * el sol, con el retraso de la masa térmica; la protección por calor la limita a `tProtMax`.
+ */
+export function offTemp(z: Zone, t: number): number {
+  const t0 = lastShutoff(t);
+  let temp = SP_OCC + 0.5;
+  let ta = t0;
+  if (driftMemo.size > 60_000) {
+    driftMemo.clear();
+  }
+  for (let k = Math.ceil(t0 / HOUR); k * HOUR <= t; k++) {
+    const key = `${z.id}|${t0}|${k}`;
+    let v = driftMemo.get(key);
+    if (v === undefined) {
+      v = driftStep(z, temp, ta, k * HOUR);
+      driftMemo.set(key, v);
+    }
+    temp = v;
+    ta = k * HOUR;
+  }
+  return t > ta ? driftStep(z, temp, ta, t) : temp;
 }
 
 function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolean): ZoneCore {
@@ -335,7 +432,19 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
   const frozen = sensor?.frozen ? sensor.frozenAt : undefined;
   const occupied = frozen ? frozen.occupied : (sensor?.presence ?? occupiedReal);
   const unitAdj = activeUnit(z.system, t, opts);
-  const precool = c.weekday && c.h >= ENTRY - PRECOOL_H && c.h < ENTRY;
+  // pre-enfriamiento escalonado: cada zona arranca en su turno y baja la consigna en rampa (RAMP_C_H °C/h)
+  const startH = precoolStartH(z);
+  const precool = c.weekday && c.h >= startH && c.h < ENTRY;
+  let rampSp: number | undefined;
+  let pulldownKw = 0;
+  if (c.weekday && c.h >= startH && c.h < ENTRY + 3 && RAMP_C_H > 0 && z.fixedSetpoint === undefined) {
+    const tStart = t - (c.h - startH) * HOUR;
+    const sp = offTemp(z, tStart) - RAMP_C_H * (c.h - startH);
+    if (sp > (opts.spOccupied ?? SP_OCC)) {
+      rampSp = sp;
+      pulldownKw = thermal(z).c * RAMP_C_H; // enfriar la masa térmica al ritmo de la rampa
+    }
+  }
   const workHours = c.weekday && c.h >= ENTRY - 0.5 && c.h < EXIT + 0.5;
   const baseline = opts.controller === 'baseline';
   const th = thermal(z);
@@ -351,13 +460,14 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     setpoint = scheduleValue(z.schedules.ac, c.dow, c.h);
     hvacEnable = true;
   } else if (occupied || precool) {
-    setpoint = opts.spOccupied ?? SP_OCC;
+    setpoint = rampSp ?? opts.spOccupied ?? SP_OCC;
     hvacEnable = true;
   } else if (workHours) {
-    setpoint = SP_UNOCC;
+    setpoint = rampSp ?? SP_UNOCC;
     hvacEnable = true;
   } else {
-    setpoint = SP_NIGHT;
+    // fuera de horario el aire está apagado; sólo arranca como protección sobre tProtMax
+    setpoint = EMS_RULES.tProtReturn;
     hvacEnable = false;
   }
 
@@ -427,12 +537,12 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
   // ---- carga sensible relativa a la capacidad del terminal → modulación (mismo RC que el gemelo; las
   // plantas vecinas están acondicionadas a una temperatura parecida, el acople por las losas se desprecia)
   const vent = occupants * ENVELOPE.ventilationPerPerson * ENVELOPE.rhoCp;
-  const envelope = th.ua * (w.tExt - ENVELOPE.skyDeltaT - spPhys) + (th.gInf + vent) * (w.tExt - spPhys);
+  const envelope = th.ua * (w.tExt - spPhys) - th.uaSky * ENVELOPE.skyDeltaT + (th.gInf + vent) * (w.tExt - spPhys);
   const ground = th.uaGround * (ENVELOPE.tGround - spPhys);
   const internal = occupants * Q_PERSON + pLights + pPlugs + z.fanKw;
   // puerta o ventana abierta: aire exterior caliente (sensible) — el VRF también debe retirar su humedad
   const door = ev.doorFlow * ENVELOPE.rhoCp * Math.max(w.tExt - spPhys, 0) * 1.6;
-  const load = Math.max(0, internal + solar + envelope + ground + door);
+  const load = Math.max(0, internal + solar + envelope + ground + door + pulldownKw);
   const plr = Math.min(1, load / Math.max(z.hvacKw, 0.01));
   const period = 30 * MIN;
   const phase = (((t / period + hash('fase', z.id)) % 1) + 1) % 1;
@@ -497,11 +607,13 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     temp = SP_OCC + (target - SP_OCC) * (1 - Math.exp(-mins / 90));
     hvacOn = false;
   } else {
-    // sin HVAC: deriva nocturna (la planta baja se enfría por el terreno a 18 °C)
-    const hoursOff = c.h >= EXIT ? c.h - EXIT : c.h + 24 - EXIT;
-    const target = z.floor === 0 ? 22.2 : 25.5;
-    temp = 24 + (target - 24) * (1 - Math.exp(-hoursOff / 4));
-    hvacOn = false;
+    // aire apagado fuera de horario: la zona sigue al clima exterior (protección por calor en tProtMax)
+    temp = offTemp(z, t);
+    hvacOn = !baseline && temp >= T_PROT_MAX - 0.05;
+    if (hvacOn) {
+      hvacEnable = true;
+      mod = Math.max(PLR_MIN, plr);
+    }
   }
 
   if (ev.doorFlow > 0) {

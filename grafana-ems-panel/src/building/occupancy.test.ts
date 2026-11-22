@@ -2,7 +2,7 @@ import { applyOccupancy, toPayload, validateOccupancy } from './control';
 import { simulate } from './simulator';
 
 const at = (h: number, m = 0, day = 3) => Date.UTC(2026, 10, day, h + 5, m);
-const base = { limitKw: 75, demoIncidents: false };
+const base = { limitKw: 170, demoIncidents: false };
 const occ = (zone: string, v: { people?: number; pct?: number }, from = at(8), until = at(18)) => ({
   [zone]: { ...v, since: from, until },
 });
