@@ -1,516 +1,288 @@
 {
-  "title": "EMS · Edificio 3D (en vivo)",
-  "uid": "ems-edificio-3d-vivo",
-  "tags": [
-    "ems"
-  ],
-  "editable": true,
-  "schemaVersion": 39,
-  "version": 1,
-  "refresh": "30s",
-  "time": {
-    "from": "now-24h",
-    "to": "now"
+  "apiVersion": "dashboard.grafana.app/v2beta1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "ems-edificio-3d-vivo"
   },
-  "timezone": "America/Panama",
-  "templating": {
-    "list": []
-  },
-  "annotations": {
-    "list": [
+  "spec": {
+    "annotations": [
       {
-        "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
+        "kind": "AnnotationQuery",
+        "spec": {
+          "query": {
+            "kind": "DataQuery",
+            "group": "grafana",
+            "version": "v0",
+            "datasource": {
+              "name": "-- Grafana --"
+            },
+            "spec": {}
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "builtIn": true
+        }
       }
-    ]
-  },
-  "panels": [
-    {
-      "type": "gauge",
-      "title": "Potencia ahora",
-      "description": "Potencia que usa el edificio en este momento (mediana de los últimos 15 min). La aguja llega al rojo al acercarse al límite contratado de 170 kW.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"p_total_kw\")\n  // Mediana de las 3 últimas muestras (15 min): ignora el pico aislado de un reinicio del simulador\n  |> tail(n: 3)\n  |> median()\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "gridPos": {
-        "x": 0,
-        "y": 0,
-        "w": 6,
-        "h": 5
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "kwatt",
-          "decimals": 1,
-          "min": 0,
-          "max": 170,
-          "noValue": "Sin datos",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "#EAB839",
-                "value": 136
-              },
-              {
-                "color": "orange",
-                "value": 153
-              },
-              {
-                "color": "red",
-                "value": 170
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto",
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "text": {
-          "titleSize": 14,
-          "valueSize": 28
-        }
-      },
-      "id": 1
-    },
-    {
-      "type": "stat",
-      "title": "Solar ahora",
-      "description": "Potencia que generan ahora los paneles fotovoltaicos (0 de noche).",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"p_fv_kw\")\n  // Mediana de las 3 últimas muestras (15 min): ignora el pico aislado de un reinicio del simulador\n  |> tail(n: 3)\n  |> median()\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "gridPos": {
-        "x": 6,
-        "y": 0,
-        "w": 6,
-        "h": 5
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "Sin datos",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#E8B10C"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "text",
-                "value": null
-              }
-            ]
-          },
-          "unit": "kwatt",
-          "decimals": 1
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "textMode": "value",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard",
-        "text": {
-          "titleSize": 14,
-          "valueSize": 34
-        }
-      },
-      "id": 2
-    },
-    {
-      "type": "stat",
-      "title": "Red eléctrica",
-      "description": "Verde: hay suministro de la red. Rojo: corte; el cuarto de servidores sigue con UPS.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"red_ok\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
-        }
-      ],
-      "gridPos": {
-        "x": 12,
-        "y": 0,
-        "w": 6,
-        "h": 5
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "Sin datos",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#F2495C",
-                "value": null
-              },
-              {
-                "color": "#73BF69",
-                "value": 1
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "1": {
-                  "text": "Normal",
-                  "color": "#73BF69",
-                  "index": 0
+    ],
+    "cursorSync": "Crosshair",
+    "description": "Gemelo digital en vivo: potencia frente a 170 kW, paneles solares, red y alarmas, y el edificio en 3D.",
+    "editable": true,
+    "elements": {
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "id": 5,
+          "title": "Gemelo digital del edificio",
+          "description": "Vista 3D del edificio de 5 plantas con el estado de cada zona, las unidades VRF/PTAC y los controles del EMS. Haz clic en una planta o zona para ver su detalle.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\")\n  |> aggregateWindow(every: 5m, fn: last, createEmpty: false)\n  |> pivot(rowKey: [\"_time\", \"zona\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
                 },
-                "0": {
-                  "text": "Corte · con UPS",
-                  "color": "#F2495C",
-                  "index": 1
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> aggregateWindow(every: 5m, fn: last, createEmpty: false)\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()"
+                      }
+                    },
+                    "refId": "B",
+                    "hidden": false
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\")\n  |> last()\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()"
+                      }
+                    },
+                    "refId": "C",
+                    "hidden": false
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\")\n  |> pivot(rowKey: [\"_time\", \"zona\", \"codigo\", \"nivel\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()"
+                      }
+                    },
+                    "refId": "D",
+                    "hidden": false
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"unidad\" and r.escenario == \"live\")\n  |> last()\n  |> pivot(rowKey: [\"_time\", \"unidad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()"
+                      }
+                    },
+                    "refId": "E",
+                    "hidden": false
+                  }
                 }
-              }
+              ],
+              "transformations": [],
+              "queryOptions": {}
             }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background_solid",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "textMode": "value",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard",
-        "text": {
-          "titleSize": 14,
-          "valueSize": 28
-        }
-      },
-      "id": 3
-    },
-    {
-      "type": "stat",
-      "title": "Alarmas activas",
-      "description": "Alarmas sin resolver ahora mismo. El detalle está en el tablero Alarmas.",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field == \"n_alarmas\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
-        }
-      ],
-      "gridPos": {
-        "x": 18,
-        "y": 0,
-        "w": 6,
-        "h": 5
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "Sin datos",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#73BF69",
-                "value": null
-              },
-              {
-                "color": "#FF9830",
-                "value": 1
-              },
-              {
-                "color": "#F2495C",
-                "value": 3
-              }
-            ]
-          },
-          "decimals": 0,
-          "mappings": [
-            {
-              "type": "value",
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "doctype02-ems-panel",
+            "version": "1.6.2",
+            "spec": {
               "options": {
-                "0": {
-                  "text": "Sin alarmas",
-                  "color": "#73BF69",
-                  "index": 0
-                }
+                "allowControl": true,
+                "animations": true,
+                "azimuth": 0,
+                "controlUrl": "http://{host}:1880/ems/control",
+                "defaultFloor": "auto",
+                "defaultView": "status",
+                "demoController": "reglas_dr",
+                "demoMode": true,
+                "demoSpeed": 60,
+                "exploded": true,
+                "limitKw": 170,
+                "pvMode": "auto",
+                "refreshSeconds": 2,
+                "showSidebar": true,
+                "showSummary": true,
+                "showTimeBar": true
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
               }
             }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background_solid",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "textMode": "value",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard",
-        "text": {
-          "titleSize": 14,
-          "valueSize": 28
+          }
         }
-      },
-      "id": 4
+      }
     },
-    {
-      "id": 5,
-      "type": "doctype02-ems-panel",
-      "title": "Gemelo digital del edificio",
-      "datasource": {
-        "type": "influxdb",
-        "uid": "ems-influx"
+    "layout": {
+      "kind": "AutoGridLayout",
+      "spec": {
+        "maxColumnCount": 3,
+        "columnWidthMode": "standard",
+        "rowHeightMode": "standard",
+        "fillScreen": true,
+        "items": [
+          {
+            "kind": "AutoGridLayoutItem",
+            "spec": {
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-5"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "links": [
+      {
+        "type": "link",
+        "title": "Edificio 3D",
+        "url": "/d/ems-edificio-3d-vivo",
+        "icon": "dashboard",
+        "targetBlank": false,
+        "keepTime": false,
+        "includeVars": false,
+        "asDropdown": false,
+        "tags": [],
+        "tooltip": "EMS · Edificio 3D"
       },
-      "gridPos": {
-        "x": 0,
-        "y": 5,
-        "w": 24,
-        "h": 26
+      {
+        "type": "link",
+        "title": "Tiempo real",
+        "url": "/d/ems-tiempo-real",
+        "icon": "dashboard",
+        "targetBlank": false,
+        "keepTime": false,
+        "includeVars": false,
+        "asDropdown": false,
+        "tags": [],
+        "tooltip": "EMS · Tiempo real"
       },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\")\n  |> aggregateWindow(every: 5m, fn: last, createEmpty: false)\n  |> pivot(rowKey: [\"_time\", \"zona\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> aggregateWindow(every: 5m, fn: last, createEmpty: false)\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()"
-        },
-        {
-          "refId": "C",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\")\n  |> last()\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()"
-        },
-        {
-          "refId": "D",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"alarma\" and r.escenario == \"live\")\n  |> pivot(rowKey: [\"_time\", \"zona\", \"codigo\", \"nivel\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()"
-        },
-        {
-          "refId": "E",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ems-influx"
-          },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"unidad\" and r.escenario == \"live\")\n  |> last()\n  |> pivot(rowKey: [\"_time\", \"unidad\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()"
-        }
+      {
+        "type": "link",
+        "title": "Zonas",
+        "url": "/d/ems-zonas",
+        "icon": "dashboard",
+        "targetBlank": false,
+        "keepTime": false,
+        "includeVars": false,
+        "asDropdown": false,
+        "tags": [],
+        "tooltip": "EMS · Zonas"
+      },
+      {
+        "type": "link",
+        "title": "Alarmas",
+        "url": "/d/ems-alarmas",
+        "icon": "dashboard",
+        "targetBlank": false,
+        "keepTime": false,
+        "includeVars": false,
+        "asDropdown": false,
+        "tags": [],
+        "tooltip": "EMS · Alarmas"
+      },
+      {
+        "type": "link",
+        "title": "Reglas",
+        "url": "/d/ems-reglas",
+        "icon": "dashboard",
+        "targetBlank": false,
+        "keepTime": false,
+        "includeVars": false,
+        "asDropdown": false,
+        "tags": [],
+        "tooltip": "EMS · Reglas del EMS"
+      },
+      {
+        "type": "link",
+        "title": "Resultados",
+        "url": "/d/ems-resultados",
+        "icon": "dashboard",
+        "targetBlank": false,
+        "keepTime": false,
+        "includeVars": false,
+        "asDropdown": false,
+        "tags": [],
+        "tooltip": "EMS · Resultados"
+      }
+    ],
+    "liveNow": false,
+    "preload": false,
+    "tags": [
+      "ems"
+    ],
+    "timeSettings": {
+      "timezone": "America/Panama",
+      "from": "now-24h",
+      "to": "now",
+      "autoRefresh": "30s",
+      "autoRefreshIntervals": [
+        "30s",
+        "1m",
+        "5m",
+        "15m"
       ],
-      "options": {
-        "demoMode": false,
-        "limitKw": 170,
-        "pvMode": "auto",
-        "defaultView": "status",
-        "azimuth": 0,
-        "exploded": true,
-        "showSummary": true,
-        "showSidebar": true,
-        "animations": true,
-        "allowControl": true,
-        "controlUrl": "http://{host}:1880/ems/control",
-        "demoSpeed": 60,
-        "refreshSeconds": 2
-      },
-      "description": "Vista 3D del edificio de 5 plantas con el estado de cada zona, las unidades VRF/PTAC y los controles del EMS. Haz clic en una planta o zona para ver su detalle."
-    }
-  ],
-  "links": [
-    {
-      "type": "link",
-      "title": "Edificio 3D",
-      "url": "/d/ems-edificio-3d-vivo",
-      "icon": "dashboard",
-      "targetBlank": false,
-      "keepTime": false,
-      "includeVars": false,
-      "asDropdown": false,
-      "tags": [],
-      "tooltip": "EMS · Edificio 3D"
+      "hideTimepicker": false,
+      "weekStart": "monday",
+      "fiscalYearStartMonth": 0
     },
-    {
-      "type": "link",
-      "title": "Tiempo real",
-      "url": "/d/ems-tiempo-real",
-      "icon": "dashboard",
-      "targetBlank": false,
-      "keepTime": false,
-      "includeVars": false,
-      "asDropdown": false,
-      "tags": [],
-      "tooltip": "EMS · Tiempo real"
-    },
-    {
-      "type": "link",
-      "title": "Zonas",
-      "url": "/d/ems-zonas",
-      "icon": "dashboard",
-      "targetBlank": false,
-      "keepTime": false,
-      "includeVars": false,
-      "asDropdown": false,
-      "tags": [],
-      "tooltip": "EMS · Zonas"
-    },
-    {
-      "type": "link",
-      "title": "Alarmas",
-      "url": "/d/ems-alarmas",
-      "icon": "dashboard",
-      "targetBlank": false,
-      "keepTime": false,
-      "includeVars": false,
-      "asDropdown": false,
-      "tags": [],
-      "tooltip": "EMS · Alarmas"
-    },
-    {
-      "type": "link",
-      "title": "Reglas",
-      "url": "/d/ems-reglas",
-      "icon": "dashboard",
-      "targetBlank": false,
-      "keepTime": false,
-      "includeVars": false,
-      "asDropdown": false,
-      "tags": [],
-      "tooltip": "EMS · Reglas del EMS"
-    },
-    {
-      "type": "link",
-      "title": "Resultados",
-      "url": "/d/ems-resultados",
-      "icon": "dashboard",
-      "targetBlank": false,
-      "keepTime": false,
-      "includeVars": false,
-      "asDropdown": false,
-      "tags": [],
-      "tooltip": "EMS · Resultados"
-    }
-  ],
-  "description": "Gemelo digital en vivo: potencia frente a 170 kW, paneles solares, red y alarmas, y el edificio en 3D.",
-  "graphTooltip": 1,
-  "weekStart": "monday",
-  "fiscalYearStartMonth": 0,
-  "liveNow": false,
-  "timepicker": {
-    "refresh_intervals": [
-      "30s",
-      "1m",
-      "5m",
-      "15m"
-    ]
+    "title": "EMS · Edificio 3D (en vivo)",
+    "variables": []
   }
 }
