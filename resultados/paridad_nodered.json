@@ -2,7 +2,7 @@
   "pasos": 2016,
   "pasos_distintos": 0,
   "max_dif_kw": 0.0,
-  "alarmas_python": 19,
-  "alarmas_nodered": 19,
-  "latencia_media_nodered_ms": 5.534745682556575
+  "alarmas_python": 2,
+  "alarmas_nodered": 2,
+  "latencia_media_nodered_ms": 2.339137976009841
 }

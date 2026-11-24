@@ -15,6 +15,7 @@ y plataforma IoT (MQTT + Node-RED + InfluxDB + Grafana).
 - Encargo del agente de infraestructura: [`docs/AGENTE_INFRA.md`](docs/AGENTE_INFRA.md)
 - Despliegue en Arch Linux (systemd): [`docs/DESPLIEGUE_ARCH.md`](docs/DESPLIEGUE_ARCH.md) · plantillas en `deploy/arch/`
 - Resultados generados: [`resultados/RESUMEN.md`](resultados/RESUMEN.md)
+- Informe técnico: [`docs/INFORME.md`](docs/INFORME.md) · hoja de ruta a un edificio real: [`docs/PILOTO.md`](docs/PILOTO.md)
 - Planta de respaldo (generador, UPS y paneles en un corte): [`docs/PLANTA_RESPALDO.md`](docs/PLANTA_RESPALDO.md)
 - Seguridad y operación (HTTPS, auditoría, copias, alertas): [`deploy/seguridad/README.md`](deploy/seguridad/README.md)
 
@@ -138,9 +139,9 @@ Tarifa única de 0,15672 USD/kWh. Sin paneles (energía y demanda = consumo del 
 | Escenario | Energía 4 sem. (kWh) | Demanda máx. 15 min (kW) | Confort (%) | Ahorro (%) | Pico evitado (kW) | Ahorro anual (USD) | Payback (años) |
 |---|---|---|---|---|---|---|---|
 | Línea base (operación del modelo E+) | 43 632 | 131.6 | 100.0 | — | — | — | — |
-| Reglas | 21 925 | 125.7 | 99.3 | 49.8 | 5.9 | 45 729 | 1.5 |
-| Reglas + DR (límite 170 kW) | 21 925 | 125.7 | 99.3 | 49.8 | 5.9 | 45 729 | 1.5 |
-| MPC | 21 783 | 117.8 | 99.5 | 50.1 | 13.8 | 47 860 | 1.4 |
+| Reglas | 22 111 | 106.0 | 99.9 | 49.3 | 25.6 | 49 962 | 1.4 |
+| Reglas + DR (límite 170 kW) | 22 110 | 106.0 | 99.9 | 49.3 | 25.6 | 49 965 | 1.4 |
+| MPC | 21 900 | 111.8 | 99.9 | 49.8 | 19.7 | 49 016 | 1.4 |
 
 Con paneles (energía y demanda de la acometida, netas de 7.3 MWh FV en las 4 semanas; ahorro frente a la
 línea base con FV):
@@ -148,24 +149,24 @@ línea base con FV):
 | Escenario | Energía de red (kWh) | Demanda máx. 15 min (kW) | Ahorro (%) | Pico evitado (kW) | Ahorro anual (USD) | Payback (años) |
 |---|---|---|---|---|---|---|
 | Línea base + FV | 36 323 | 112.2 | — | — | — | — |
-| Reglas + FV | 16 435 | 115.3 | 54.8 | −3.1 | 42 271 | 1.6 |
-| Reglas + DR + FV | 16 435 | 115.3 | 54.8 | −3.1 | 42 271 | 1.6 |
-| MPC + FV | 16 295 | 104.4 | 55.1 | 7.7 | 45 100 | 1.5 |
+| Reglas + FV | 16 621 | 87.6 | 54.2 | 24.5 | 48 363 | 1.4 |
+| Reglas + DR + FV | 16 620 | 86.3 | 54.2 | 25.9 | 48 680 | 1.4 |
+| MPC + FV | 16 412 | 84.8 | 54.8 | 27.4 | 49 462 | 1.4 |
 
-Estrategia desplegada (Reglas + DR): VPN a 10 años ≈ 246 000 USD, TIR 68 %, 88 t de CO₂ evitadas al año.
+Estrategia desplegada (Reglas + DR): VPN a 10 años ≈ 277 000 USD, TIR 75 %, 87 t de CO₂ evitadas al año.
 
-Los ahorros vienen de apagar el aire fuera de horario (el modelo sin EMS mantiene 22 °C las 24 h con los
-ventiladores encendidos), del setpoint de 24 °C con ocupación, del apagado de luces y del corte de standby.
+Los ahorros de energía vienen de apagar el aire fuera de horario (el modelo sin EMS mantiene 22 °C las 24 h con
+los ventiladores encendidos), del setpoint de 24 °C con ocupación, del apagado de luces y del corte de standby.
 
-**El pico apenas baja con las reglas** (125,7 kW frente a 131,6 kW), y con paneles incluso sube 3 kW: como el
-aire queda apagado el fin de semana, el lunes por la mañana el edificio arranca caliente y la recuperación
-concentra la demanda antes de que haya sol. El arranque es gradual (rampa de consigna y 2 terminales cada 5 min),
-pero no reduce la energía que hay que retirar. El MPC lo reparte mejor (117,8 kW). Con el límite de 170 kW la
-respuesta a la demanda no llega a actuar, así que «Reglas + DR» coincide con «Reglas».
+El pico baja 25,6 kW gracias al **arranque óptimo**: como el aire queda apagado el fin de semana, el lunes el
+edificio amanece caliente; cada zona empieza a enfriar antes cuanto más caliente está (hasta 7 h antes de la
+entrada), por turnos y sin pasar de 90 kW antes de abrir. Sin esa regla el pico del lunes llegaba a 143 kW; con
+ella queda en 89 kW, como una tarde normal, a cambio de un 1,4 % más de energía. Con el límite de 170 kW la
+respuesta a la demanda sólo actúa de forma marginal.
 
 Pronóstico día siguiente (regresión ridge): sobre el año de EnergyPlus MAE 2.3 kW, RMSE 3.0 kW; sobre el gemelo
-con ocupación estocástica MAE 2.8 kW, RMSE 6.1 kW (persistencia semanal 3.1 / 6.7 kW). Pruebas: 10/10
-superadas (la respuesta a la demanda se prueba con un límite de 100 kW), latencia de decisión ≈ 4 ms (p99);
+con ocupación estocástica MAE 3.2 kW, RMSE 6.7 kW (persistencia semanal 3.4 / 7.3 kW). Pruebas: 10/10
+superadas (la respuesta a la demanda se prueba con un límite de 100 kW), latencia de decisión ≈ 5 ms (p99);
 paridad exacta Python ⇄ Node-RED en 2016 pasos. Detalle en `resultados/RESUMEN.md`.
 
 ## Supuestos y limitaciones
