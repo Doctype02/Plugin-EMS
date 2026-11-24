@@ -149,7 +149,7 @@
     },
     {
       "type": "gauge",
-      "title": "Potencia ahora",
+      "title": "Potencia",
       "description": "Potencia que usa el edificio en este momento (mediana de los últimos 15 min). La aguja llega al rojo al acercarse al límite contratado de 170 kW.",
       "datasource": {
         "type": "influxdb",
@@ -228,7 +228,7 @@
     },
     {
       "type": "stat",
-      "title": "Solar ahora",
+      "title": "Solar",
       "description": "Potencia que generan ahora los paneles fotovoltaicos (0 de noche).",
       "datasource": {
         "type": "influxdb",
@@ -296,7 +296,7 @@
     },
     {
       "type": "stat",
-      "title": "Energía usada hoy",
+      "title": "Energía hoy",
       "description": "Energía que ha consumido el edificio desde la medianoche.",
       "datasource": {
         "type": "influxdb",
@@ -456,7 +456,7 @@
     },
     {
       "type": "stat",
-      "title": "Red eléctrica",
+      "title": "Red",
       "description": "Verde: suministro de la red. Naranja: corte de red, el edificio funciona con la planta de respaldo y los paneles. Rojo: sin planta, sólo el UPS de los servidores.",
       "datasource": {
         "type": "influxdb",
@@ -552,7 +552,7 @@
     },
     {
       "type": "stat",
-      "title": "Alarmas activas",
+      "title": "Alarmas",
       "description": "Alarmas sin resolver ahora mismo. El detalle está en el tablero Alarmas.",
       "datasource": {
         "type": "influxdb",
@@ -1023,7 +1023,7 @@
     },
     {
       "type": "bargauge",
-      "title": "Temperatura ahora por planta",
+      "title": "Temperatura por planta",
       "description": "Temperatura media de las oficinas de cada planta (sin el cuarto de servidores). Verde: cómoda (21–26 °C); naranja o rojo: calor; azul: frío.",
       "datasource": {
         "type": "influxdb",

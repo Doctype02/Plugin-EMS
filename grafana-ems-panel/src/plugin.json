@@ -5,7 +5,7 @@
   "id": "doctype02-ems-panel",
   "info": {
     "keywords": ["panel", "ems", "energy", "smart building", "3d"],
-    "description": "Edificio inteligente en 3D con el estado de las 26 zonas, cargas, alarmas y resultados del EMS",
+    "description": "Edificio inteligente en 3D para un EMS: 5 plantas, 26 zonas, VRF y paneles en la azotea, planta de respaldo, flujo de energía, control, alarmas y simulación de eventos",
     "author": {
       "name": "Doctype02"
     },

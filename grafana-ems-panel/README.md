@@ -9,8 +9,6 @@ EMS (ocupación, HVAC, iluminación, potencia, alarmas). Reutiliza la base técn
 (`Doctype02/Plugin-BMS`): scaffolding de Grafana, encabezado de indicadores, insignias de estado,
 sparklines y pantalla completa. El plano y los equipos son propios del edificio del EMS.
 
-> Las capturas son de la versión 1.1 (edificio de 2 plantas); la escena actual tiene 5 plantas.
-
 ### El edificio
 
 | Planta | Zonas                                                                                                                                                 | Climatización                                               |
@@ -24,23 +22,31 @@ Los datos del panel (`src/building/modelData.ts`) **no se editan a mano**: los g
 una prueba compara los parámetros térmicos del panel con los de `ems/config.py::zonas`
 (`src/building/__fixtures__/thermal_ref.json`, generado por el mismo script).
 
-![Vista en corte con interiores animados](docs/vista_estado_oscuro.png)
+![Planta 2 con interiores animados y flujo de energía](docs/vista_estado_oscuro.png)
 
-| Detalle y control de zona                  | Control del edificio (deslastre manual)      |
+| Vista de conjunto con la planta de respaldo          | Corte de red: el edificio en la planta y los paneles |
+| ---------------------------------------------------- | ---------------------------------------------------- |
+| ![Edificio y planta](docs/vista_edificio_planta.png) | ![Corte de energía](docs/vista_corte_energia.png)    |
+
+| Toma de carga escalonada tras la transferencia | Falla de una unidad VRF (azotea)       |
+| ---------------------------------------------- | -------------------------------------- |
+| ![Toma de carga](docs/vista_toma_de_carga.png) | ![Falla VRF](docs/vista_falla_vrf.png) |
+
+| Detalle y control de una zona              | Control del edificio                         |
 | ------------------------------------------ | -------------------------------------------- |
 | ![Detalle](docs/vista_detalle_control.png) | ![Control](docs/vista_control_deslastre.png) |
 
-| Incendio simulado (evacuación, HVAC detenido) | Falla de una unidad VRF (popup de la azotea) |
-| --------------------------------------------- | -------------------------------------------- |
-| ![Incendio](docs/vista_incendio.png)          | ![Falla VRF](docs/vista_falla_vrf.png)       |
+| Controladores VRF/PTAC                         | ¿Qué pasaría si…? una zona a 28 °C durante 8 h |
+| ---------------------------------------------- | ---------------------------------------------- |
+| ![Controladores](docs/vista_controladores.png) | ![Qué pasaría si](docs/vista_que_pasaria.png)  |
 
-| ¿Qué pasaría si…? oficina a 28 °C durante 8 h | Servidores sin enfriamiento: minutos hasta cada umbral |
-| --------------------------------------------- | ------------------------------------------------------ |
-| ![Qué pasaría si](docs/vista_que_pasaria.png) | ![Sin enfriamiento](docs/vista_sin_enfriamiento.png)   |
+| Vista exterior de noche                 |
+| --------------------------------------- |
+| ![Noche](docs/vista_exterior_noche.png) |
 
-| Corte de energía (UPS)                 | Vista exterior de noche                 |
-| -------------------------------------- | --------------------------------------- |
-| ![Corte](docs/vista_corte_energia.png) | ![Noche](docs/vista_exterior_noche.png) |
+Capturas de la versión 1.7 (modo demostración). La planta de respaldo (grupo electrógeno, tanque de diésel con su
+nivel y tablero de transferencia) aparece junto al edificio en la vista de conjunto, y la tarjeta «Fuentes de
+energía» muestra por dónde circula la potencia: red, planta, paneles y UPS de los servidores.
 
 ## Uso rápido
 

@@ -314,7 +314,7 @@
         "kind": "Panel",
         "spec": {
           "id": 12,
-          "title": "Temperatura ahora por planta",
+          "title": "Temperatura por planta",
           "description": "Temperatura media de las oficinas de cada planta (sin el cuarto de servidores). Verde: cómoda (21–26 °C); naranja o rojo: calor; azul: frío.",
           "links": [],
           "data": {
@@ -1100,7 +1100,7 @@
         "kind": "Panel",
         "spec": {
           "id": 2,
-          "title": "Potencia ahora",
+          "title": "Potencia",
           "description": "Potencia que usa el edificio en este momento (mediana de los últimos 15 min). La aguja llega al rojo al acercarse al límite contratado de 170 kW.",
           "links": [],
           "data": {
@@ -2665,7 +2665,7 @@
         "kind": "Panel",
         "spec": {
           "id": 3,
-          "title": "Solar ahora",
+          "title": "Solar",
           "description": "Potencia que generan ahora los paneles fotovoltaicos (0 de noche).",
           "links": [],
           "data": {
@@ -3997,7 +3997,7 @@
         "kind": "Panel",
         "spec": {
           "id": 4,
-          "title": "Energía usada hoy",
+          "title": "Energía hoy",
           "description": "Energía que ha consumido el edificio desde la medianoche.",
           "links": [],
           "data": {
@@ -5669,7 +5669,7 @@
         "kind": "Panel",
         "spec": {
           "id": 6,
-          "title": "Red eléctrica",
+          "title": "Red",
           "description": "Verde: suministro de la red. Naranja: corte de red, el edificio funciona con la planta de respaldo y los paneles. Rojo: sin planta, sólo el UPS de los servidores.",
           "links": [],
           "data": {
@@ -5782,7 +5782,7 @@
         "kind": "Panel",
         "spec": {
           "id": 7,
-          "title": "Alarmas activas",
+          "title": "Alarmas",
           "description": "Alarmas sin resolver ahora mismo. El detalle está en el tablero Alarmas.",
           "links": [],
           "data": {

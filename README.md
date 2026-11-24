@@ -5,10 +5,19 @@ UTP · Facultad de Ingeniería Eléctrica · Producción de la Energía Eléctri
 Sistema de Gestión de Energía (EMS) para el edificio de oficinas del proyecto en **Ciudad de Panamá**
 (5 plantas, 2000 m², 26 zonas acondicionadas, 6 sistemas VRF y 5 PTAC; variante con 55 kWp fotovoltaicos),
 con los parámetros del modelo **OpenStudio/EnergyPlus** del equipo (`Edificio_Sin_EMS` y `Edificio_Sin_EMS_ConPV`,
-importados en `data/energyplus/`, clima EPW Panamá-Albrook TMYx 2011–2025): gemelo digital calibrado y
-validado contra EnergyPlus (ASHRAE Guideline 14), sensores, ocupación, actuadores, cargas y medidor, control por reglas con histéresis,
-respuesta a la demanda, MPC simplificado, pronóstico del día siguiente, alarmas, KPIs técnico-económicos
-y plataforma IoT (MQTT + Node-RED + InfluxDB + Grafana).
+importados en `data/energyplus/`, clima EPW Panamá-Albrook TMYx 2011–2025).
+
+Qué incluye:
+
+- **Gemelo digital** del edificio validado contra EnergyPlus (ASHRAE Guideline 14): modelo térmico de aire y
+  masa por zona, compresores inverter con rampa y pico de arranque, medidor trifásico con las tres líneas.
+- **EMS por reglas** (19 reglas, idénticas en Python y Node-RED): horario y ocupación, encendido escalonado por
+  planta, rampa de consigna, luz natural, corte de standby, límite de demanda, protecciones y modo emergencia.
+- **Planta de respaldo**: generador diésel de 110 kW con transferencia automática, UPS de los servidores y
+  paneles solares en paralelo durante un corte, con toma de carga escalonada.
+- **Plataforma IoT** (MQTT + Node-RED + InfluxDB + Grafana): seis dashboards con pestañas y un panel 3D propio.
+- **Resultados y negocio**: escenarios comparados, pronóstico, KPIs técnico-económicos (VPN, TIR, recuperación).
+- **Operación segura**: HTTPS, órdenes sólo con sesión, auditoría, copias de seguridad y alertas.
 
 - Plan y división del trabajo: [`docs/PLAN.md`](docs/PLAN.md)
 - Contrato de interfaces (MQTT / InfluxDB / variables): [`docs/CONTRATO.md`](docs/CONTRATO.md)
@@ -55,9 +64,28 @@ Seis dashboards con la misma barra de enlaces y pestañas: **Edificio 3D** (geme
 órdenes), **Reglas** (las 19 reglas del EMS, sus parámetros y cuándo actúa cada una) y **Resultados** (con la
 pestaña «Negocio»: ahorro anual, inversión, recuperación, VPN, TIR y flujo de caja a 10 años).
 
+### Capturas
+
+| Tiempo real: consumo en escalones, las tres fuentes y las 3 líneas | Respaldo: planta, combustible, UPS y ficha de diseño |
+|---|---|
+| ![Tiempo real](docs/img/dash_tiempo_real.png) | ![Respaldo](docs/img/dash_respaldo.png) |
+
+| Reglas: qué hace el EMS ahora | Reglas → Secuencia: arranque escalonado y rampas |
+|---|---|
+| ![Reglas](docs/img/dash_reglas.png) | ![Secuencia](docs/img/dash_reglas_secuencia.png) |
+
+| Catálogo de las 19 reglas | Zonas | Alarmas y auditoría |
+|---|---|---|
+| ![Catálogo](docs/img/dash_reglas_catalogo.png) | ![Zonas](docs/img/dash_zonas.png) | ![Alarmas](docs/img/dash_alarmas.png) |
+
 ## Panel 3D de Grafana
 
-![Panel EMS 3D](grafana-ems-panel/docs/vista_estado_oscuro.png)
+| Operación normal (planta 2) | Corte de red: planta de respaldo y paneles |
+|---|---|
+| ![Panel EMS 3D](grafana-ems-panel/docs/vista_estado_oscuro.png) | ![Corte de energía](grafana-ems-panel/docs/vista_corte_energia.png) |
+
+El panel dibuja el edificio de 5 plantas con sus 26 zonas, la azotea con los VRF y los paneles, y la planta de
+respaldo junto a la fachada (grupo electrógeno, tanque de diésel y tablero de transferencia).
 
 Ver [`grafana-ems-panel/README.md`](grafana-ems-panel/README.md) (compilar con `npm ci && npm run build`).
 
