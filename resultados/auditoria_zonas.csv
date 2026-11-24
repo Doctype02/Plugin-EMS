@@ -1,27 +1,27 @@
 zona,nombre,tipo,critica,e_hvac_kwh,e_luces_kwh,e_equipos_kwh,e_total_kwh,area_m2,eui_kwh_m2_anio,participacion_pct,clasificacion,p_max_kw
-Z01,Recepción,recepcion,False,713.47,122.64,172.752,1008.942,54,243.561,2.558,no crítica (gestionable),4.551
-Z02,Cubículos,cubiculos,False,2102.408,525.6,744.816,3372.775,180,244.258,8.55,no crítica (gestionable),14.585
-Z03,Sala de conferencias,conferencia,False,1052.474,196.12,147.264,1396.057,78,233.315,3.539,no crítica (gestionable),6.777
-Z04,Pasillo PB,pasillo,False,47.688,52.56,0.0,100.248,36,36.3,0.254,no crítica (gestionable),0.688
-Z05,Baños PB,bano,False,59.73,29.2,0.0,88.938,36,32.205,0.225,no crítica (gestionable),0.81
-Z06,Cuarto de servidores,servidores,True,554.065,40.32,1209.6,1803.984,12,1959.685,4.573,crítica,2.975
-Z07,Oficina 1 P1,oficina,False,1454.167,262.8,345.504,2062.575,90,298.746,5.229,no crítica (gestionable),7.763
-Z08,Oficina 2 P1,oficina,False,1428.65,262.8,345.504,2037.055,90,295.05,5.164,no crítica (gestionable),7.874
-Z09,Oficina abierta P1,oficina_abierta,False,2106.833,321.2,424.8,2852.858,135,275.474,7.232,no crítica (gestionable),11.315
-Z10,Pasillo P1,pasillo,False,196.922,52.56,0.0,249.482,36,90.338,0.632,no crítica (gestionable),0.959
-Z11,Baños P1,bano,False,168.433,29.2,0.0,197.614,45,57.245,0.501,no crítica (gestionable),1.234
-Z12,Oficina 1 P2,oficina,False,1492.322,262.8,345.504,2100.729,90,304.272,5.325,no crítica (gestionable),7.979
-Z13,Oficina 2 P2,oficina,False,1458.191,262.8,345.504,2066.609,90,299.33,5.239,no crítica (gestionable),7.929
-Z14,Oficina abierta P2,oficina_abierta,False,2160.681,321.2,424.8,2906.711,135,280.674,7.368,no crítica (gestionable),11.547
-Z15,Pasillo P2,pasillo,False,210.205,52.56,0.0,262.765,36,95.148,0.666,no crítica (gestionable),0.965
-Z16,Baños P2,bano,False,178.346,29.2,0.0,207.523,45,60.116,0.526,no crítica (gestionable),1.331
-Z17,Oficina 1 P3,oficina,False,1504.401,262.8,345.504,2112.816,90,306.023,5.356,no crítica (gestionable),7.708
-Z18,Oficina 2 P3,oficina,False,1467.935,262.8,345.504,2076.352,90,300.741,5.264,no crítica (gestionable),7.661
-Z19,Oficina abierta P3,oficina_abierta,False,2171.871,321.2,424.8,2917.894,135,281.754,7.397,no crítica (gestionable),11.812
-Z20,Pasillo P3,pasillo,False,214.633,52.56,0.0,267.193,36,96.752,0.677,no crítica (gestionable),1.093
-Z21,Baños P3,bano,False,181.651,29.2,0.0,210.834,45,61.075,0.534,no crítica (gestionable),1.368
-Z22,Oficina 1 P4,oficina,False,1659.685,262.8,345.504,2268.094,90,328.514,5.75,no crítica (gestionable),8.705
-Z23,Oficina 2 P4,oficina,False,1631.152,262.8,345.504,2239.558,90,324.38,5.677,no crítica (gestionable),8.641
-Z24,Oficina abierta P4,oficina_abierta,False,2427.72,321.2,424.8,3173.768,135,306.462,8.045,no crítica (gestionable),12.905
-Z25,Pasillo P4,pasillo,False,285.833,52.56,0.0,338.393,36,122.533,0.858,no crítica (gestionable),1.309
-Z26,Baños P4,bano,False,287.214,29.2,0.0,316.391,45,91.653,0.802,no crítica (gestionable),1.56
+Z01,Recepción,recepcion,False,1289.243,122.654,172.757,1584.722,54,382.555,3.632,no crítica (gestionable),4.943
+Z02,Cubículos,cubiculos,False,3883.205,525.6,744.811,5153.561,180,373.224,11.811,no crítica (gestionable),16.141
+Z03,Sala de conferencias,conferencia,False,1799.478,196.14,147.264,2143.154,78,358.174,4.912,no crítica (gestionable),6.998
+Z04,Pasillo PB,pasillo,False,310.747,52.557,0.0,363.307,36,131.555,0.833,no crítica (gestionable),0.884
+Z05,Baños PB,bano,False,238.374,29.211,0.0,267.596,36,96.897,0.613,no crítica (gestionable),0.832
+Z06,Cuarto de servidores,servidores,True,569.304,40.32,1209.6,1819.243,12,1976.261,4.17,crítica,2.933
+Z07,Oficina 1 P1,oficina,False,1534.226,262.805,345.514,2142.673,90,310.347,4.911,no crítica (gestionable),7.139
+Z08,Oficina 2 P1,oficina,False,1503.812,262.805,345.514,2112.233,90,305.939,4.841,no crítica (gestionable),7.287
+Z09,Oficina abierta P1,oficina_abierta,False,2190.194,321.211,424.79,2936.221,135,283.524,6.73,no crítica (gestionable),10.134
+Z10,Pasillo P1,pasillo,False,210.122,52.557,0.0,262.68,36,95.117,0.602,no crítica (gestionable),0.804
+Z11,Baños P1,bano,False,166.445,29.189,0.0,195.626,45,56.669,0.448,no crítica (gestionable),0.963
+Z12,Oficina 1 P2,oficina,False,1549.544,262.805,345.514,2157.957,90,312.561,4.946,no crítica (gestionable),7.035
+Z13,Oficina 2 P2,oficina,False,1512.214,262.805,345.514,2120.631,90,307.155,4.86,no crítica (gestionable),7.258
+Z14,Oficina abierta P2,oficina_abierta,False,2211.105,321.211,424.79,2957.132,135,285.543,6.777,no crítica (gestionable),10.216
+Z15,Pasillo P2,pasillo,False,214.218,52.557,0.0,266.776,36,96.601,0.611,no crítica (gestionable),0.825
+Z16,Baños P2,bano,False,170.066,29.189,0.0,199.24,45,57.716,0.457,no crítica (gestionable),1.018
+Z17,Oficina 1 P3,oficina,False,1557.829,262.805,345.514,2166.247,90,313.762,4.965,no crítica (gestionable),7.089
+Z18,Oficina 2 P3,oficina,False,1519.205,262.805,345.514,2127.614,90,308.166,4.876,no crítica (gestionable),7.199
+Z19,Oficina abierta P3,oficina_abierta,False,2220.699,321.211,424.79,2966.728,135,286.47,6.799,no crítica (gestionable),10.361
+Z20,Pasillo P3,pasillo,False,216.101,52.557,0.0,268.659,36,97.282,0.616,no crítica (gestionable),0.868
+Z21,Baños P3,bano,False,173.94,29.189,0.0,203.116,45,58.839,0.466,no crítica (gestionable),0.994
+Z22,Oficina 1 P4,oficina,False,1696.576,262.805,345.514,2305.026,90,333.863,5.283,no crítica (gestionable),7.751
+Z23,Oficina 2 P4,oficina,False,1660.751,262.805,345.514,2269.21,90,328.675,5.201,no crítica (gestionable),7.848
+Z24,Oficina abierta P4,oficina_abierta,False,2449.105,321.211,424.79,3195.133,135,308.525,7.323,no crítica (gestionable),11.369
+Z25,Pasillo P4,pasillo,False,281.821,52.557,0.0,334.38,36,121.08,0.766,no crítica (gestionable),1.113
+Z26,Baños P4,bano,False,272.394,29.189,0.0,301.568,45,87.359,0.691,no crítica (gestionable),1.366

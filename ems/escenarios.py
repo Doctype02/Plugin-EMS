@@ -84,7 +84,10 @@ def _casos(cfg: dict) -> list[dict]:
         {"id": "P07", "nombre": "Falla del terminal VRF de la Oficina 1 P2 Z12 (10–14 h)", "dias": 3,
          "anomalias": [Anomalia("falla_hvac", d + 10, d + 14, "Z12")],
          "esperado": ["TEMP_ALTA"], "criterios": {}},
-        {"id": "P08", "nombre": "Pico de carga +25 kW en Oficina 2 P2 Z13 (13–15 h)", "dias": 3,
+        # con el límite de 170 kW el edificio nunca lo alcanza: la respuesta a la demanda se prueba con un
+        # límite contratado menor (100 kW), que el pico de carga sí supera
+        {"id": "P08", "nombre": "Pico de carga +25 kW en Oficina 2 P2 Z13 (13–15 h) con límite de 100 kW", "dias": 3,
+         "set": {"ems.limite_demanda_kw": 100},
          "anomalias": [Anomalia("carga_extra", d + 13, d + 15, "Z13", {"kw": 25.0})],
          "esperado": ["DR_ACTIVO"], "criterios": {"respuesta_dr": (d + 13, 2)}},
         {"id": "P09", "nombre": "Pérdida del 30 % de comandos", "dias": 3,
@@ -106,7 +109,9 @@ def pruebas(cfg: dict, controlador: str = "reglas_dr") -> tuple[pd.DataFrame, li
     # sin FV: los criterios de demanda se refieren al consumo del edificio (como en comparar)
     cfg = m_config.aplicar(cfg, {"fv.habilitado": False}) if cfg.get("fv") else cfg
     filas, detalle = [], []
-    for caso in _casos(cfg):
+    cfg_base = cfg
+    for caso in _casos(cfg_base):
+        cfg = m_config.aplicar(cfg_base, caso["set"]) if caso.get("set") else cfg_base
         t_ini = time.perf_counter()
         r = simular(cfg, controlador, dias=caso["dias"], anomalias=caso["anomalias"], nombre=caso["id"])
         dur = time.perf_counter() - t_ini

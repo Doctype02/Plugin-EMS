@@ -119,49 +119,54 @@ RC se calibran contra la serie horaria de E+ (`python -m ems calibrar`).
 
 | Uso final anual | EnergyPlus | Gemelo digital | Diferencia |
 |---|---|---|---|
-| Enfriamiento | 318.9 MWh | 275.1 MWh | −13.7 % |
+| Enfriamiento | 318.9 MWh | 286.2 MWh | −10.3 % |
 | Ventiladores | 74.9 MWh | 76.0 MWh | +1.6 % |
 | Iluminación | 60.6 MWh | 60.9 MWh | +0.5 % |
 | Equipos (incl. ascensor) | 98.1 MWh | 87.7 MWh | −10.6 % |
-| **Total** | **552.5 MWh** | **510.8 MWh** | **−7.5 %** |
+| **Total** | **552.5 MWh** | **521.4 MWh** | **−5.6 %** |
 
-Serie horaria anual: NMBE 7.5 %, CV(RMSE) 21.2 % → **cumple ASHRAE Guideline 14** (±10 %, ≤ 30 %).
-Pico anual: 132.7 kW (E+) frente a 119.2 kW. FV (variante ConPV): NMBE < 1 % frente a la generación de E+
-(101 MWh/año). El modelo de un nodo por zona subestima la carga nocturna de E+ (inercia de los muros), así que
-la línea base queda algo baja y los ahorros del EMS son conservadores. `python -m ems validar` regenera la
-tabla y la figura.
+Serie horaria anual: NMBE 5.6 %, CV(RMSE) 13.5 % → **cumple ASHRAE Guideline 14** (±10 %, ≤ 30 %).
+Pico anual: 132.7 kW (E+) frente a 114.3 kW. FV (variante ConPV): NMBE < 1 % frente a la generación de E+
+(101 MWh/año). El gemelo usa un modelo de dos nodos por zona (aire + masa térmica) con compresores inverter en
+rampa; para compararse con E+ usa el terreno a 18 °C del modelo original y para operar, 27 °C.
+`python -m ems validar` regenera la tabla y la figura.
 
 ## Resultados principales (4 semanas tipo con el EPW, `python -m ems todo`)
 
-Sin paneles (energía y demanda = consumo del edificio):
+Tarifa única de 0,15672 USD/kWh. Sin paneles (energía y demanda = consumo del edificio):
 
-| Escenario | Energía 4 sem. (kWh) | Demanda máx. 15 min (kW) | Confort (%) | Ahorro (%) | Pico evitado (kW) | Payback (años) |
-|---|---|---|---|---|---|---|
-| Línea base (operación del modelo E+) | 39 448 | 138.0 | 98.8 | — | — | — |
-| Reglas | 19 359 | 109.7 | 98.9 | 50.9 | 28.3 | 1.2 |
-| Reglas + DR (límite 170 kW) | 19 359 | 109.7 | 98.9 | 50.9 | 28.3 | 1.2 |
-| MPC | 19 524 | 113.5 | 99.1 | 50.5 | 24.6 | 1.2 |
+| Escenario | Energía 4 sem. (kWh) | Demanda máx. 15 min (kW) | Confort (%) | Ahorro (%) | Pico evitado (kW) | Ahorro anual (USD) | Payback (años) |
+|---|---|---|---|---|---|---|---|
+| Línea base (operación del modelo E+) | 43 632 | 131.6 | 100.0 | — | — | — | — |
+| Reglas | 21 925 | 125.7 | 99.3 | 49.8 | 5.9 | 45 729 | 1.5 |
+| Reglas + DR (límite 170 kW) | 21 925 | 125.7 | 99.3 | 49.8 | 5.9 | 45 729 | 1.5 |
+| MPC | 21 783 | 117.8 | 99.5 | 50.1 | 13.8 | 47 860 | 1.4 |
 
 Con paneles (energía y demanda de la acometida, netas de 7.3 MWh FV en las 4 semanas; ahorro frente a la
 línea base con FV):
 
-| Escenario | Energía de red (kWh) | Demanda máx. 15 min (kW) | Ahorro (%) | Pico evitado (kW) | Payback (años) |
-|---|---|---|---|---|---|
-| Línea base + FV | 32 139 | 110.3 | — | — | — |
-| Reglas + FV | 13 374 | 82.5 | 58.4 | 27.9 | 1.2 |
-| Reglas + DR + FV | 13 374 | 82.5 | 58.4 | 27.9 | 1.2 |
-| MPC + FV | 13 507 | 81.8 | 58.0 | 28.5 | 1.2 |
+| Escenario | Energía de red (kWh) | Demanda máx. 15 min (kW) | Ahorro (%) | Pico evitado (kW) | Ahorro anual (USD) | Payback (años) |
+|---|---|---|---|---|---|---|
+| Línea base + FV | 36 323 | 112.2 | — | — | — | — |
+| Reglas + FV | 16 435 | 115.3 | 54.8 | −3.1 | 42 271 | 1.6 |
+| Reglas + DR + FV | 16 435 | 115.3 | 54.8 | −3.1 | 42 271 | 1.6 |
+| MPC + FV | 16 295 | 104.4 | 55.1 | 7.7 | 45 100 | 1.5 |
 
-Los ahorros vienen sobre todo de eliminar el enfriamiento nocturno y de fin de semana (el modelo mantiene 22 °C
-las 24 h con los ventiladores encendidos), del setpoint 24 °C con ocupación, del apagado de luces y del corte de
-standby sin ocupación. Con el límite de demanda de 170 kW (potencia máxima del edificio) la respuesta a la demanda no llega a
-actuar: el pico del edificio es 138 kW sin EMS y 110 kW con reglas, así que «Reglas + DR» coincide con «Reglas».
-(Con el límite anterior de 90 kW el DR recortaba 45 kW del pico.)
+Estrategia desplegada (Reglas + DR): VPN a 10 años ≈ 246 000 USD, TIR 68 %, 88 t de CO₂ evitadas al año.
+
+Los ahorros vienen de apagar el aire fuera de horario (el modelo sin EMS mantiene 22 °C las 24 h con los
+ventiladores encendidos), del setpoint de 24 °C con ocupación, del apagado de luces y del corte de standby.
+
+**El pico apenas baja con las reglas** (125,7 kW frente a 131,6 kW), y con paneles incluso sube 3 kW: como el
+aire queda apagado el fin de semana, el lunes por la mañana el edificio arranca caliente y la recuperación
+concentra la demanda antes de que haya sol. El arranque es gradual (rampa de consigna y 2 terminales cada 5 min),
+pero no reduce la energía que hay que retirar. El MPC lo reparte mejor (117,8 kW). Con el límite de 170 kW la
+respuesta a la demanda no llega a actuar, así que «Reglas + DR» coincide con «Reglas».
 
 Pronóstico día siguiente (regresión ridge): sobre el año de EnergyPlus MAE 2.3 kW, RMSE 3.0 kW; sobre el gemelo
-con ocupación estocástica MAE 3.2 kW, RMSE 5.3 kW (persistencia semanal 3.7 / 6.5 kW). Pruebas: 10/10
-superadas, confiabilidad de la lógica 100 %, latencia de decisión ≈ 3 ms (p99); paridad exacta Python ⇄
-Node-RED en 2016 pasos. Detalle en `resultados/RESUMEN.md`.
+con ocupación estocástica MAE 2.8 kW, RMSE 6.1 kW (persistencia semanal 3.1 / 6.7 kW). Pruebas: 10/10
+superadas (la respuesta a la demanda se prueba con un límite de 100 kW), latencia de decisión ≈ 4 ms (p99);
+paridad exacta Python ⇄ Node-RED en 2016 pasos. Detalle en `resultados/RESUMEN.md`.
 
 ## Supuestos y limitaciones
 
