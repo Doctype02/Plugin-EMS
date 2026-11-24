@@ -84,6 +84,10 @@ class Supervisor:
             al.append({"ts": t.isoformat(), "nivel": nivel, "codigo": codigo, "zona": zona,
                        "mensaje": msg, "valor": valor})
 
+        # el pre-enfriamiento (hasta `precool_max_min` antes de la entrada) enciende el aire sin gente a propósito
+        o = self.cfg["ocupacion"]
+        adelanto = max(self.e.get("precool_max_min", 0), self.e.get("precool_min", 0)) / 60
+        en_precool = t.dayofweek < 5 and o["hora_entrada"] - adelanto <= hora(t) < o["hora_entrada"] + 0.5
         for z in tel:
             zid, tm = z["zona"], z["temp_c"]
             valido = self.sensor_valido(zid, tm)
@@ -99,7 +103,7 @@ class Supervisor:
             if z["tipo"] == "servidores" and self._cond((zid, "SERVIDOR_TEMP"), tm > self.e["alarma_servidor_c"], 2):
                 add("crit", "SERVIDOR_TEMP", zid, f"Cuarto de servidores a {tm:.1f} °C", tm)
             if not z["critica"] and self._cond(
-                    (zid, "HVAC_SIN_OCUP"), z["hvac_on"] and not z["ocupado"], int(60 / self.paso)):
+                    (zid, "HVAC_SIN_OCUP"), z["hvac_on"] and not z["ocupado"] and not en_precool, int(60 / self.paso)):
                 add("info", "HVAC_ON_SIN_OCUPACION", zid, "HVAC encendido > 60 min sin ocupación")
         if self._cond(("EDIF", "PICO"), med["demanda_15min_kw"] > limite_kw):
             add("warn", "PICO_DEMANDA", "EDIF", f"Demanda 15 min {med['demanda_15min_kw']:.1f} kW > {limite_kw} kW",
@@ -144,15 +148,27 @@ class Controlador:
         o = self.cfg["ocupacion"]
         return t.dayofweek < 5 and o["hora_entrada"] - 0.5 <= hora(t) < o["hora_salida"] + 0.5
 
-    def precool(self, t) -> bool:
+    def precool(self, t, temp_c: float | None = None) -> bool:
+        """Pre-enfriamiento antes de la entrada. Con la temperatura de la zona aplica el arranque óptimo: cuanto
+        más caliente está (lunes tras el fin de semana apagado), antes empieza, hasta `precool_max_min`."""
         o = self.cfg["ocupacion"]
         h = hora(t)
-        return t.dayofweek < 5 and o["hora_entrada"] - self.e["precool_min"] / 60 <= h < o["hora_entrada"]
+        adelanto = self.e["precool_min"]
+        if temp_c is not None:
+            exceso = temp_c - (self.e["setpoint_ocupado_c"] + self.e.get("precool_margen_c", 1.5))
+            adelanto = min(adelanto + max(exceso, 0.0) * self.e.get("precool_min_por_grado", 0.0),
+                           max(self.e.get("precool_max_min", adelanto), adelanto))
+        return t.dayofweek < 5 and o["hora_entrada"] - adelanto / 60 <= h < o["hora_entrada"]
+
+    def antes_de_entrada(self, t) -> bool:
+        """Madrugada de un día laborable: el edificio aún no abre (tope de potencia del pre-enfriamiento)."""
+        return t.dayofweek < 5 and hora(t) < self.cfg["ocupacion"]["hora_entrada"]
 
     # ------------------------------------------------------------------ interfaz
     def decidir(self, t: pd.Timestamp, tel: list[dict], med: dict) -> dict[str, dict]:
         self.alarmas = self.sup.evaluar(t, tel, med, self.limite_kw, self.dr_activo)
         self.emergencia = med.get("modo_energia") == "generador"
+        self._t = t
         cmds = self._decidir(t, tel, med)
         if self.secuencial:
             self._secuenciar(tel, cmds)
@@ -256,18 +272,26 @@ class Controlador:
                 # el terminal VRF modula con el error dentro de la banda (misma ley que el termostato)
                 pide = fraccion_carga(z["temp_c"], sp, banda) if quiere else 0.0
             if pide > 0:
+                # el confort sólo tiene prioridad sobre el límite donde hay gente
                 solicitudes.append((z["temp_c"] - sp, zid, pide * p.hvac_kw / max(cop, 1.0), p.hvac_kw / max(cop, 1.0),
-                                    z["temp_c"] > self.e["confort_max_c"] - self.e["dr_margen_confort_c"]))
+                                    bool(z["ocupado"]) and z["temp_c"] > self.e["confort_max_c"] - self.e["dr_margen_confort_c"],
+                                    bool(z["hvac_on"])))
         # en emergencia el límite es la planta de respaldo (carga máxima) y la potencia medida, la de la planta
         limite = self.limite_kw
         p_medida = med.get("p_red_kw", med["p_total_kw"])
+        precool_tope = self.e.get("limite_precool_kw")
+        if not self.emergencia and precool_tope and self.antes_de_entrada(self._t):
+            # antes de abrir no hay prisa: el pre-enfriamiento se reparte bajo un tope de potencia
+            limite = min(limite, float(precool_tope))
         if self.emergencia:
             g = self.resp.get("generador") or {}
             limite = float(g.get("potencia_kw", limite)) * float(g.get("carga_max", 0.8))
             p_medida = med.get("p_gen_kw", med["p_total_kw"])
         presupuesto = limite - 3.0 - (p_medida - p_comp_actual)
         forzadas = 0
-        for urg, zid, kw, kw_max, emergencia in sorted(solicitudes, key=lambda x: (not x[4], -x[0])):
+        # orden: confort con gente, luego los compresores que ya están en marcha (terminan su trabajo antes de
+        # ceder el turno: rotarlos en cada paso los dejaría siempre arrancando en rampa) y después por urgencia
+        for urg, zid, kw, kw_max, emergencia, _en_marcha in sorted(solicitudes, key=lambda x: (not x[4], not x[5], -x[0], x[1])):
             c = cmds[zid]
             if emergencia or kw <= presupuesto:
                 presupuesto -= kw
@@ -337,8 +361,15 @@ class Reglas(Controlador):
         elif ocup:
             r["vacancia"] += 1
         em = self.resp.get("emergencia") or {} if self.emergencia else None
-        if ocup or self.precool(t):
+        # arranque óptimo con enclavamiento: una vez iniciado, el pre-enfriamiento sigue hasta la entrada
+        # (si no, al enfriarse el aire la zona se apagaría y la masa del edificio seguiría caliente al abrir)
+        pre = self.precool(t, z["temp_c"]) or (
+            self.antes_de_entrada(t) and bool(z["hvac_enable"]) and z["setpoint_c"] < self.e["setpoint_desocupado_c"]
+            and hora(t) >= self.cfg["ocupacion"]["hora_entrada"] - self.e.get("precool_max_min", self.e["precool_min"]) / 60)
+        if ocup or pre:
             sp, en = self.e["setpoint_ocupado_c"], True
+            if not ocup:
+                r["precool"] += 1
             if em is not None:
                 # con la planta de respaldo: consigna de emergencia (nunca por debajo del mínimo)
                 sp = max(float(em.get("setpoint_c", 25.0)), float(em.get("setpoint_min_c", 24.0)), sp)
@@ -381,7 +412,7 @@ class Reglas(Controlador):
     def _decidir(self, t, tel, med):
         self.reglas = {k: 0 for k in ("ocupadas", "vacancia", "setback", "apagadas", "proteccion_alta",
                                       "proteccion_baja", "luz_natural", "standby", "emergencia")}
-        self.reglas.update({"precool": int(self.precool(t)), "fuera_horario": int(not self.horario_laboral(t))})
+        self.reglas.update({"precool": 0, "fuera_horario": int(not self.horario_laboral(t))})
         return {z["zona"]: self._reglas_zona(t, z) for z in tel if not z["critica"]}
 
 

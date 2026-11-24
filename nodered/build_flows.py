@@ -41,6 +41,8 @@ def _desde_config(codigo: str) -> str:
         "sp_emergencia": cfg["respaldo"]["emergencia"]["setpoint_c"],
         "sp_emergencia_min": cfg["respaldo"]["emergencia"]["setpoint_min_c"],
         "luces_emergencia": cfg["respaldo"]["emergencia"]["luces_nivel"],
+        "precool_margen": e["precool_margen_c"], "precool_min_grado": e["precool_min_por_grado"],
+        "precool_max_min": e["precool_max_min"], "limite_precool_kw": e["limite_precool_kw"],
     }
     bloque = codigo[codigo.index("const P = Object.assign({"): codigo.index("}, flow.get(\"parametros\")")]
     nuevo = bloque

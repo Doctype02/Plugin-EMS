@@ -54,6 +54,8 @@ class ControladorNodeRed(Controlador):
             "rampa_sp_c_h": e.get("rampa_setpoint_c_h", 0.0), "arranques_max": e.get("arranques_max_paso", 0),
             "paso_min": cfg["edificio"]["paso_min"],
             **_respaldo(cfg),
+            "precool_margen": e.get("precool_margen_c", 1.5), "precool_min_grado": e.get("precool_min_por_grado", 0.0),
+            "precool_max_min": e.get("precool_max_min", e["precool_min"]), "limite_precool_kw": e.get("limite_precool_kw", 0),
             "hvac": {z.id: [z.hvac_kw, z.cop, z.fan_kw] for z in self.zonas},
         })
 

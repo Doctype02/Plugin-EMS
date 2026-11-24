@@ -139,7 +139,12 @@ ems:
   setpoint_ocupado_c: 24.0
   setpoint_desocupado_c: 27.0
   setpoint_baseline_c: 22.0        # setpoint del modelo E+ (constante)
-  precool_min: 90                  # pre-enfriamiento escalonado antes de la entrada
+  precool_min: 90                  # pre-enfriamiento escalonado antes de la entrada (mínimo)
+  # arranque óptimo: cada zona empieza antes cuanto más caliente está (lunes tras el fin de semana apagado)
+  precool_margen_c: 1.5            # por encima de consigna + 1.5 °C…
+  precool_min_por_grado: 70        # …70 min más por cada °C…
+  precool_max_min: 420             # …hasta 7 h antes de la entrada (la masa del edificio tarda en enfriarse)
+  limite_precool_kw: 90            # tope de potencia antes de abrir ≈ pico de un día normal (reparte el pre-enfriamiento)
   rampa_setpoint_c_h: 3.0          # la consigna cambia como máximo 3 °C por hora (0.25 °C por paso)
   arranques_max_paso: 2            # terminales que pueden arrancar en un mismo paso de 5 min
   t_proteccion_max_c: 32.0         # fuera de horario el aire está apagado salvo que la zona pase de 32 °C…

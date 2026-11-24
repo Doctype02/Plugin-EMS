@@ -24,6 +24,18 @@ def _puerto_libre() -> int:
         return s.getsockname()[1]
 
 
+def _esperar_puerto(port: int, segundos: float = 20.0):
+    """Espera a que un servicio local acepte conexiones (en vez de una pausa fija: con el equipo cargado tarda más)."""
+    fin = time.time() + segundos
+    while time.time() < fin:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                return
+        except OSError:
+            time.sleep(0.2)
+    raise AssertionError(f"el puerto {port} no respondió en {segundos:.0f} s")
+
+
 def test_resolver_inicio():
     tz = "America/Panama"
     assert resolver_inicio(None, tz).endswith("00:00")
@@ -39,7 +51,8 @@ def test_lazo_en_vivo_guarda_estado_y_alarmas_y_respeta_overrides(monkeypatch):
     stub = subprocess.Popen([sys.executable, str(RAIZ / "tools" / "nodered_stub.py"), "--port", str(mqtt_port),
                              "--http-port", str(http_port), "--duracion", "60"], stderr=subprocess.DEVNULL)
     try:
-        time.sleep(1.5)
+        _esperar_puerto(mqtt_port)
+        _esperar_puerto(http_port)
         from ems import influx, live
 
         registro = {"zona": [], "medidor": [], "ems": [], "alarma": [], "unidad": []}
@@ -66,6 +79,9 @@ def test_lazo_en_vivo_guarda_estado_y_alarmas_y_respeta_overrides(monkeypatch):
 
             def pronostico(self, *a, **k):
                 pass
+
+            def auditoria(self, a):
+                registro.setdefault("auditoria", []).append(a)
 
             def flush(self, forzar=False):
                 pass

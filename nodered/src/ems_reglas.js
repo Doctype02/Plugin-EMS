@@ -9,6 +9,8 @@ const P = Object.assign({
     banda: 0.5, sp_ocupado: 24.0, sp_desocupado: 27.0,
     t_prot_max: 32.0, t_prot_retorno: 30.0, rampa_sp_c_h: 3.0, arranques_max: 2, paso_min: 5,
     precool_min: 90, entrada: 8.0, salida: 18.0,
+    // arranque óptimo (cada zona empieza antes cuanto más caliente está) y tope de potencia antes de abrir
+    precool_margen: 1.5, precool_min_grado: 70, precool_max_min: 420, limite_precool_kw: 90,
     lux_objetivo: 500, lux_artificial: 500,
     luces_desocupado: 0.0, equipos_desocupado: 0.1, retardo_vacancia_min: 15,
     limite_kw: 30, dr_hist_kw: 3, dr_luces: 0.7, dr_equipos: 0.85, dr_margen_confort: 0.75,
@@ -38,10 +40,19 @@ const h = loc.getUTCHours() + loc.getUTCMinutes() / 60;
 const dow = loc.getUTCDay();                // 0 = domingo
 const laborable = dow >= 1 && dow <= 5;
 const horarioLaboral = laborable && h >= P.entrada - 0.5 && h < P.salida + 0.5;
-const precool = laborable && h >= P.entrada - P.precool_min / 60 && h < P.entrada;
+const antesDeEntrada = laborable && h < P.entrada;
+// arranque óptimo: el adelanto crece con el exceso de temperatura de la zona (igual que Controlador.precool)
+function precoolZona(temp) {
+    const exceso = temp - (P.sp_ocupado + P.precool_margen);
+    const adelanto = Math.min(P.precool_min + Math.max(exceso, 0) * P.precool_min_grado, Math.max(P.precool_max_min, P.precool_min));
+    return laborable && h >= P.entrada - adelanto / 60 && h < P.entrada;
+}
 
 // edificio alimentado por la planta de respaldo (corte de red): reglas de emergencia
 const emergencia = med.modo_energia === "generador";
+
+// el pre-enfriamiento enciende el aire sin gente a propósito: no es una alarma
+const enPrecool = laborable && h >= P.entrada - Math.max(P.precool_max_min, P.precool_min) / 60 && h < P.entrada + 0.5;
 
 const alarmas = [];
 function cond(clave, activa, pasos) {
@@ -76,7 +87,7 @@ for (const zid of Object.keys(zonas)) {
         alarma("info", "TEMP_BAJA", zid, `${z.temp_c.toFixed(1)} °C < ${P.confort_min} °C con ocupación`, z.temp_c);
     if (z.tipo === "servidores" && cond(zid + ":SRV", z.temp_c > P.alarma_servidor, 2))
         alarma("crit", "SERVIDOR_TEMP", zid, `Cuarto de servidores a ${z.temp_c.toFixed(1)} °C`, z.temp_c);
-    if (!z.critica && cond(zid + ":HVAC_SIN_OCUP", z.hvac_on && !z.ocupado, 12))
+    if (!z.critica && cond(zid + ":HVAC_SIN_OCUP", z.hvac_on && !z.ocupado && !enPrecool, 12))
         alarma("info", "HVAC_ON_SIN_OCUPACION", zid, "HVAC encendido > 60 min sin ocupación");
 }
 if (cond("EDIF:PICO", med.demanda_15min_kw > P.limite_kw))
@@ -85,7 +96,7 @@ if (cond("EDIF:PICO", med.demanda_15min_kw > P.limite_kw))
 // ---------------------------------------------------------------- reglas por zona
 // contadores de cada regla (zonas afectadas en este paso) → dashboard «Reglas del EMS»
 const R = { ocupadas: 0, vacancia: 0, setback: 0, apagadas: 0, proteccion_alta: 0, proteccion_baja: 0,
-            luz_natural: 0, standby: 0, emergencia: 0, precool: precool ? 1 : 0, fuera_horario: horarioLaboral ? 0 : 1 };
+            luz_natural: 0, standby: 0, emergencia: 0, precool: 0, fuera_horario: horarioLaboral ? 0 : 1 };
 const cmds = {};
 const tMs = d.getTime();
 for (const zid of Object.keys(zonas)) {
@@ -95,8 +106,12 @@ for (const zid of Object.keys(zonas)) {
     const ocup = z.ocupado || (st.ultimoOcup[zid] !== undefined && tMs - st.ultimoOcup[zid] <= P.retardo_vacancia_min * 60000);
     if (z.ocupado) R.ocupadas++; else if (ocup) R.vacancia++;
     let sp, en;
+    // enclavamiento: una vez iniciado, el pre-enfriamiento sigue hasta la entrada
+    const precool = precoolZona(z.temp_c) || (antesDeEntrada && !!z.hvac_enable && z.setpoint_c < P.sp_desocupado
+        && h >= P.entrada - Math.max(P.precool_max_min, P.precool_min) / 60);
     if (ocup || precool) {
         sp = P.sp_ocupado; en = true;
+        if (!ocup) R.precool++;
         if (emergencia) sp = Math.max(P.sp_emergencia, P.sp_emergencia_min, sp);
     }
     else if (horarioLaboral) { sp = P.sp_desocupado; en = true; R.setback++; }
@@ -186,13 +201,19 @@ for (const zid of Object.keys(cmds)) {
     const pideManual = z.temp_c > c.setpoint_c + P.banda || (z.hvac_on && z.temp_c > c.setpoint_c - P.banda);
     if (manual[zid]) { if (pideManual) reservado += fraccionCarga(z.temp_c, c.setpoint_c) * cap / cop; continue; } // el operador manda
     const pide = z.temp_c > c.setpoint_c + P.banda || (z.hvac_on && z.temp_c > c.setpoint_c - P.banda);
-    if (pide) sol.push({ zid, urg: z.temp_c - c.setpoint_c, kw: fraccionCarga(z.temp_c, c.setpoint_c) * cap / cop, emerg: z.temp_c > P.confort_max - P.dr_margen_confort });
+    // el confort sólo tiene prioridad sobre el límite donde hay gente
+    if (pide) sol.push({ zid, urg: z.temp_c - c.setpoint_c, kw: fraccionCarga(z.temp_c, c.setpoint_c) * cap / cop,
+        emerg: !!z.ocupado && z.temp_c > P.confort_max - P.dr_margen_confort, enMarcha: !!z.hvac_on });
 }
-const limite = emergencia ? P.gen_kw * P.gen_carga_max : P.limite_kw;
+// antes de abrir no hay prisa: el pre-enfriamiento se reparte bajo un tope de potencia
+const limiteNormal = (antesDeEntrada && P.limite_precool_kw) ? Math.min(P.limite_kw, P.limite_precool_kw) : P.limite_kw;
+const limite = emergencia ? P.gen_kw * P.gen_carga_max : limiteNormal;
 const pMedida = emergencia ? (med.p_gen_kw ?? med.p_total_kw) : (med.p_red_kw ?? med.p_total_kw);
 let presupuesto = limite - 3 - (pMedida - pCompActual) - reservado;
 let forzadas = 0;
-sol.sort((a, b) => (a.emerg === b.emerg ? b.urg - a.urg : (a.emerg ? -1 : 1)));
+// orden: confort con gente, luego los compresores en marcha (terminan antes de ceder el turno) y por urgencia
+sol.sort((a, b) => (a.emerg !== b.emerg ? (a.emerg ? -1 : 1) : a.enMarcha !== b.enMarcha ? (a.enMarcha ? -1 : 1)
+    : (b.urg - a.urg) || (a.zid < b.zid ? -1 : a.zid > b.zid ? 1 : 0)));
 for (const s of sol) {
     if (s.emerg || s.kw <= presupuesto) { presupuesto -= s.kw; continue; }
     cmds[s.zid].hvac_mod = 0.0;
