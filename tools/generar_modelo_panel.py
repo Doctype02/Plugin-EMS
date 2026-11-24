@@ -79,7 +79,7 @@ def ts(obj, indent: int = 0) -> str:
     if obj is None:
         return "undefined"
     if isinstance(obj, float):
-        return repr(num(obj))
+        return repr(num(obj, 8))
     if isinstance(obj, int):
         return str(obj)
     return "'" + str(obj).replace("\\", "\\\\").replace("'", "\\'") + "'"
@@ -251,7 +251,7 @@ def generar(cfg: dict) -> tuple[str, dict]:
         "absenteeism": num(o.get("ausentismo", 0.08)), "noise": num(o.get("ruido", 0.1)),
     }
     tariff = {
-        "peakUsdKwh": num(t["precio_punta_usd_kwh"]), "offPeakUsdKwh": num(t["precio_fuera_punta_usd_kwh"]),
+        "peakUsdKwh": num(t["precio_punta_usd_kwh"], 5), "offPeakUsdKwh": num(t["precio_fuera_punta_usd_kwh"], 5),
         "peakHours": [num(h) for h in t["hora_punta"]], "demandUsdKwMonth": num(t["cargo_demanda_usd_kw_mes"]),
         "co2KgKwh": num(t["factor_co2_kg_kwh"]), "exportUsdKwh": num(t.get("precio_excedente_usd_kwh", 0)),
     }

@@ -110,8 +110,9 @@ ocupacion:
 
 # Precios y factores para Panamá (supuestos; actualice con pliego tarifario ASEP vigente)
 tarifa:
-  precio_punta_usd_kwh: 0.245      # lunes-viernes 09:00-17:00
-  precio_fuera_punta_usd_kwh: 0.185
+  # Tarifa única: 0.15672 USD/kWh a todas las horas (los dos precios iguales; hora_punta ya no cambia el precio)
+  precio_punta_usd_kwh: 0.15672
+  precio_fuera_punta_usd_kwh: 0.15672
   hora_punta: [9, 17]
   cargo_demanda_usd_kw_mes: 19.50
   factor_co2_kg_kwh: 0.31

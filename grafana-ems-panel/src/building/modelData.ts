@@ -646,7 +646,7 @@ export const ENVELOPE = {
   capacitancePerM2: 0.095,
   solarFactor: 0.5,
   skyDeltaT: 3,
-  ventilationPerPerson: 0.0094,
+  ventilationPerPerson: 0.00944,
   copFactor: 1.3,
   latentFraction: 0.1,
   standbyFraction: 0.1,
@@ -946,8 +946,8 @@ export const EMS_RULES = {
 };
 
 export const TARIFF = {
-  peakUsdKwh: 0.245,
-  offPeakUsdKwh: 0.185,
+  peakUsdKwh: 0.15672,
+  offPeakUsdKwh: 0.15672,
   peakHours: [9, 17],
   demandUsdKwMonth: 19.5,
   co2KgKwh: 0.31,
