@@ -1,8 +1,8 @@
 {
-  "pruebas_superadas": 10,
+  "pruebas_superadas": 9,
   "pruebas_total": 10,
-  "confiabilidad_logica_pct": 100.0,
+  "confiabilidad_logica_pct": 97.36842105263158,
   "disponibilidad_pct": 100.0,
-  "latencia_media_ms": 2.2461,
-  "latencia_p99_ms": 5.371
+  "latencia_media_ms": 2.3630000000000004,
+  "latencia_p99_ms": 3.865
 }

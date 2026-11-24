@@ -10,13 +10,16 @@ probó sobre un gemelo digital del edificio validado contra EnergyPlus.
 
 | Indicador (4 semanas tipo del año) | Sin EMS | Con EMS (reglas) | Diferencia |
 |---|---|---|---|
-| Energía | 43 632 kWh | 22 110 kWh | **−49,3 %** |
-| Demanda máxima de 15 min | 131,6 kW | 106,0 kW | **−25,6 kW** |
-| Costo de la energía | 6 838 USD | 3 465 USD | −49 % |
-| Tiempo en confort (21–26 °C con ocupación) | 100,0 % | 99,9 % | sin cambio apreciable |
+| Energía | 43 632 kWh | 21 740 kWh | **−50,2 %** |
+| Demanda máxima de 15 min | 131,6 kW | 129,7 kW | −1,9 kW |
+| Costo de la energía | 6 838 USD | 3 407 USD | −50 % |
+| Tiempo en confort (21–26 °C con ocupación) | 100,0 % | 97,7 % | −2,3 puntos |
 
-Ahorro anual estimado: **49 964 USD**. Inversión: 63 800 USD. Recuperación: **1,4 años**. Valor presente neto a
-10 años: 277 000 USD (tasa del 8 %). Tasa interna de retorno: 75 %. CO₂ evitado: 87 t al año.
+Ahorro anual estimado: **45 066 USD**. Inversión: 63 800 USD. Recuperación: **1,5 años**. Valor presente neto a
+10 años: 241 000 USD (tasa del 8 %). Tasa interna de retorno: 68 %. CO₂ evitado: 88 t al año.
+
+El EMS ahorra la mitad de la energía, pero con el encendido escalonado por planta de las 7:00 casi no reduce el
+pico: el lunes el edificio arranca caliente (sección 4).
 
 Estas cifras son de simulación con datos de sensores simulados y con tarifas e inversión supuestas (sección 9).
 
@@ -26,8 +29,8 @@ Estas cifras son de simulación con datos de sensores simulados y con tarifas e 
 - Climatización: 5 sistemas VRF de planta (54–62 kW térmicos), uno para el cuarto de servidores y 5 PTAC en baños.
 - Envolvente del modelo OpenStudio/EnergyPlus del equipo: muro U 2,48, cubierta U 0,61, vidrio tintado U 5,71 /
   SHGC 0,50, con un 69 % de fachada acristalada.
-- Servicio eléctrico de 480 V trifásico. Límite de demanda: 170 kW. Tarifa única de 0,15672 USD/kWh más
-  19,50 USD/kW·mes de demanda.
+- Servicio eléctrico de 480 V trifásico. Límite de demanda: 170 kW. Tarifa: 0,15672 USD/kWh, 15,03 USD/kW·mes
+  de demanda máxima y 10,03 USD/mes de cargo fijo.
 - Fotovoltaica en la azotea: 55 kWp (variante «ConPV» del modelo).
 
 ## 3. Gemelo digital
@@ -73,7 +76,7 @@ que ambas dan exactamente el mismo resultado (0 diferencias en 2 016 pasos, tamb
 
 | Grupo | Reglas |
 |---|---|
-| Horario y confort | horario laboral; pre-enfriamiento con arranque óptimo; aire apagado fuera de horario; consigna de 24 °C con ocupación; retardo de vacancia de 15 min; espera a 27 °C sin ocupación |
+| Horario y confort | horario laboral; encendido escalonado por planta; aire apagado fuera de horario; consigna de 24 °C con ocupación; retardo de vacancia de 15 min; espera a 27 °C sin ocupación |
 | Secuencia | rampa de consigna (3 °C/h); arranque escalonado (2 terminales cada 5 min); arranque suave del compresor; llegada gradual |
 | Iluminación y enchufes | atenuación por luz natural (500 lux); corte de standby |
 | Demanda | rotación de compresores; deslastre de luces y enchufes |
@@ -83,17 +86,30 @@ Prioridad: protección y seguridad → control manual del operador → límite d
 ocupación e iluminación. El dashboard «Reglas» muestra las 19 reglas con sus parámetros y cuántas zonas maneja
 cada una en cada momento.
 
-### La regla que más costó: el lunes por la mañana
+### El encendido de la mañana y el problema del lunes
 
-Apagar el aire el fin de semana es lo que más energía ahorra, pero el lunes el edificio amanece a 28–30 °C. Con
-un pre-enfriamiento fijo de 90 minutos, la recuperación se juntaba con la llegada del personal y el pico subía a
-143 kW, más que sin EMS. La solución fue el **arranque óptimo**: cada zona empieza antes cuanto más caliente está
-(hasta 7 horas antes de la entrada), los terminales entran por turnos y, mientras el edificio está cerrado, la
-potencia no pasa de 90 kW. El lunes queda en 89 kW, como una tarde normal, con un 1,4 % más de energía.
+El EMS enciende el VRF de una planta cada 15 minutos: PB a las 7:00, P1 a las 7:15, P2 a las 7:30, P3 a las 7:45
+y P4 a las 8:00, sin pasillos ni baños y con consigna de 24 °C. De 6:00 a 8:00 las reglas que dependen de la
+temperatura quedan desactivadas: sólo manda ese horario. Dentro de cada planta los terminales entran de 2 en 2 y
+la consigna baja en rampa, así que la potencia sube en escalones.
+
+De martes a viernes el resultado es bueno: pico de 80–97 kW y oficinas a 24 °C a la entrada. El lunes no: apagar
+el aire el fin de semana es lo que más energía ahorra, pero el edificio amanece a 28–30 °C y una hora de
+enfriamiento no alcanza. La recuperación se junta con la llegada del personal, el pico sube a ≈ 141 kW y las
+oficinas reciben a la gente a 26–27 °C.
+
+| Encendido de la mañana | Pico del lunes | Pico de las 4 semanas | Confort | Energía |
+|---|---|---|---|---|
+| Por planta desde las 7:00 (desplegado) | ≈ 141 kW | 129,7 kW | 97,7 % | 21 740 kWh |
+| Arranque óptimo (alternativa implementada) | 89 kW | 106,0 kW | 99,9 % | 22 110 kWh |
+
+El arranque óptimo hace que cada zona empiece antes cuanto más caliente está (hasta 7 horas antes de la entrada),
+por turnos y sin pasar de 90 kW mientras el edificio está cerrado. Cuesta un 1,7 % más de energía y evita 24 kW
+de pico. Se activa quitando el bloque `ems.arranque_por_planta` de la configuración.
 
 Un detalle aprendido en el camino: con un tope de potencia, rotar los compresores en cada paso es
 contraproducente, porque todos quedan siempre arrancando en rampa y ninguno entrega su capacidad. El limitador da
-ahora prioridad a los que ya están en marcha.
+prioridad a los que ya están en marcha.
 
 ## 5. Resultados
 
@@ -103,25 +119,26 @@ clima y la misma ocupación para todas las estrategias.
 | Escenario | Energía (kWh) | Demanda máx. (kW) | Confort (%) | Ahorro (%) | Ahorro anual (USD) | Recuperación (años) |
 |---|---|---|---|---|---|---|
 | Sin EMS | 43 632 | 131,6 | 100,0 | — | — | — |
-| Reglas | 22 111 | 106,0 | 99,9 | 49,3 | 49 962 | 1,4 |
-| Reglas + respuesta a la demanda | 22 110 | 106,0 | 99,9 | 49,3 | 49 965 | 1,4 |
-| Control predictivo (MPC) | 21 900 | 111,8 | 99,9 | 49,8 | 49 016 | 1,4 |
+| Reglas | 21 740 | 129,7 | 97,7 | 50,2 | 45 066 | 1,5 |
+| Reglas + respuesta a la demanda | 21 740 | 129,7 | 97,7 | 50,2 | 45 066 | 1,5 |
+| Control predictivo (MPC) | 21 620 | 139,8 | 98,2 | 50,4 | 43 495 | 1,6 |
 | Sin EMS, con paneles | 36 323 (red) | 112,2 | 100,0 | — | — | — |
-| Reglas + DR, con paneles | 16 620 (red) | 86,3 | 99,9 | 54,2 | 48 680 | 1,4 |
+| Reglas + DR, con paneles | 16 251 (red) | 111,3 | 97,7 | 55,3 | 43 534 | 1,6 |
 
 Lectura:
 
 - Las tres estrategias ahorran casi lo mismo en energía. El ahorro viene de dejar de climatizar un edificio
   vacío, no de la sofisticación del algoritmo.
-- El control predictivo no mejora a las reglas en este edificio: ahorra un 0,5 % más de energía y deja el pico
-  6 kW más alto.
-- Con el límite de 170 kW, la respuesta a la demanda casi no actúa: el edificio no se acerca a ese valor. Su
-  funcionamiento se comprueba aparte con un límite de 100 kW (prueba P08).
+- El pico casi no baja, y con el control predictivo sube: todas comparten el encendido de las 7:00 y el
+  problema del lunes.
+- Con el límite de 170 kW, la respuesta a la demanda no llega a actuar. Su funcionamiento se comprueba aparte
+  con un límite de 100 kW (prueba P08).
 
-Otras comprobaciones: 10 de 10 pruebas de aceptación (operación normal, ola de calor, sensores congelados o
-fuera de rango, falla de un terminal, pico de carga, pérdida del 30 % de las órdenes y sobrecalentamiento de
-servidores); latencia de decisión de unos 5 ms (percentil 99); pronóstico de demanda del día siguiente con un
-error medio de 3,2 kW.
+Otras comprobaciones: 9 de 10 pruebas de aceptación (operación normal, sensores congelados o fuera de rango,
+falla de un terminal, pico de carga, pérdida del 30 % de las órdenes y sobrecalentamiento de servidores). Falla
+la de ola de calor: con el encendido a las 7:00 el confort queda 2,8 puntos por debajo del de la línea base; con
+el arranque óptimo pasaban las 10. Latencia de decisión de unos 4 ms (percentil 99); pronóstico de demanda del
+día siguiente con un error medio de 2,6 kW.
 
 ## 6. Planta de respaldo
 
@@ -155,7 +172,7 @@ sensores / gemelo ──MQTT──► Node-RED (reglas) ──MQTT──► actu
 
 ## 8. Calidad
 
-- 62 pruebas automáticas en Python y 128 en el panel.
+- 63 pruebas automáticas en Python y 128 en el panel.
 - Paridad exacta entre la lógica de Python y la de Node-RED.
 - Validación del modelo contra EnergyPlus dentro de ASHRAE Guideline 14.
 

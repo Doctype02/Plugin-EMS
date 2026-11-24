@@ -162,14 +162,15 @@ rampa; para compararse con E+ usa el terreno a 18 °C del modelo original y para
 
 ## Resultados principales (4 semanas tipo con el EPW, `python -m ems todo`)
 
-Tarifa única de 0,15672 USD/kWh. Sin paneles (energía y demanda = consumo del edificio):
+Tarifa: 0,15672 USD/kWh, cargo por demanda de 15,03 USD/kW·mes y cargo fijo de 10,03 USD/mes. Sin paneles
+(energía y demanda = consumo del edificio):
 
 | Escenario | Energía 4 sem. (kWh) | Demanda máx. 15 min (kW) | Confort (%) | Ahorro (%) | Pico evitado (kW) | Ahorro anual (USD) | Payback (años) |
 |---|---|---|---|---|---|---|---|
 | Línea base (operación del modelo E+) | 43 632 | 131.6 | 100.0 | — | — | — | — |
-| Reglas | 22 111 | 106.0 | 99.9 | 49.3 | 25.6 | 49 962 | 1.4 |
-| Reglas + DR (límite 170 kW) | 22 110 | 106.0 | 99.9 | 49.3 | 25.6 | 49 965 | 1.4 |
-| MPC | 21 900 | 111.8 | 99.9 | 49.8 | 19.7 | 49 016 | 1.4 |
+| Reglas | 21 740 | 129.7 | 97.7 | 50.2 | 1.9 | 45 066 | 1.5 |
+| Reglas + DR (límite 170 kW) | 21 740 | 129.7 | 97.7 | 50.2 | 1.9 | 45 066 | 1.5 |
+| MPC | 21 620 | 139.8 | 98.2 | 50.4 | −8.2 | 43 495 | 1.6 |
 
 Con paneles (energía y demanda de la acometida, netas de 7.3 MWh FV en las 4 semanas; ahorro frente a la
 línea base con FV):
@@ -177,25 +178,30 @@ línea base con FV):
 | Escenario | Energía de red (kWh) | Demanda máx. 15 min (kW) | Ahorro (%) | Pico evitado (kW) | Ahorro anual (USD) | Payback (años) |
 |---|---|---|---|---|---|---|
 | Línea base + FV | 36 323 | 112.2 | — | — | — | — |
-| Reglas + FV | 16 621 | 87.6 | 54.2 | 24.5 | 48 363 | 1.4 |
-| Reglas + DR + FV | 16 620 | 86.3 | 54.2 | 25.9 | 48 680 | 1.4 |
-| MPC + FV | 16 412 | 84.8 | 54.8 | 27.4 | 49 462 | 1.4 |
+| Reglas + FV | 16 251 | 111.3 | 55.3 | 0.9 | 43 534 | 1.6 |
+| Reglas + DR + FV | 16 251 | 111.3 | 55.3 | 0.9 | 43 534 | 1.6 |
+| MPC + FV | 16 132 | 126.6 | 55.6 | −14.5 | 41 012 | 1.7 |
 
-Estrategia desplegada (Reglas + DR): VPN a 10 años ≈ 277 000 USD, TIR 75 %, 87 t de CO₂ evitadas al año.
+Estrategia desplegada (Reglas + DR): VPN a 10 años ≈ 241 000 USD, TIR 68 %, 88 t de CO₂ evitadas al año.
 
 Los ahorros de energía vienen de apagar el aire fuera de horario (el modelo sin EMS mantiene 22 °C las 24 h con
 los ventiladores encendidos), del setpoint de 24 °C con ocupación, del apagado de luces y del corte de standby.
 
-El pico baja 25,6 kW gracias al **arranque óptimo**: como el aire queda apagado el fin de semana, el lunes el
-edificio amanece caliente; cada zona empieza a enfriar antes cuanto más caliente está (hasta 7 h antes de la
-entrada), por turnos y sin pasar de 90 kW antes de abrir. Sin esa regla el pico del lunes llegaba a 143 kW; con
-ella queda en 89 kW, como una tarde normal, a cambio de un 1,4 % más de energía. Con el límite de 170 kW la
-respuesta a la demanda sólo actúa de forma marginal.
+**Encendido de la mañana.** El EMS enciende el VRF de una planta cada 15 minutos (PB 7:00, P1 7:15, P2 7:30,
+P3 7:45, P4 8:00), sin pasillos ni baños, y de 6:00 a 8:00 no actúan las reglas de temperatura
+(`ems.arranque_por_planta`). De martes a viernes funciona bien: el pico queda en 80–97 kW y las oficinas están a
+24 °C a las 8:00. **El lunes es el punto débil**: tras el fin de semana apagado el edificio amanece a 28–30 °C y
+una hora no basta, así que el pico sube a ≈ 141 kW (casi el de no tener EMS) y las oficinas reciben a la gente a
+26–27 °C. Por eso el pico evitado es de sólo 1,9 kW y el confort baja al 97,7 %. La alternativa ya implementada
+es el arranque óptimo (cada zona empieza antes cuanto más caliente está, hasta 7 h antes, sin pasar de 90 kW):
+deja el pico del lunes en 89 kW, el de las 4 semanas en 106 kW y el confort en 99,9 %, con un 1,4 % más de
+energía. Se activa quitando el bloque `ems.arranque_por_planta` de `config/edificio.yaml`.
 
 Pronóstico día siguiente (regresión ridge): sobre el año de EnergyPlus MAE 2.3 kW, RMSE 3.0 kW; sobre el gemelo
-con ocupación estocástica MAE 3.2 kW, RMSE 6.7 kW (persistencia semanal 3.4 / 7.3 kW). Pruebas: 10/10
-superadas (la respuesta a la demanda se prueba con un límite de 100 kW), latencia de decisión ≈ 5 ms (p99);
-paridad exacta Python ⇄ Node-RED en 2016 pasos. Detalle en `resultados/RESUMEN.md`.
+con ocupación estocástica MAE 2.6 kW, RMSE 5.5 kW (persistencia semanal 2.9 / 6.2 kW). Pruebas: 9/10 superadas:
+falla la de ola de calor (P02), porque con el encendido a las 7:00 el confort queda 2,8 puntos por debajo del de
+la línea base; con el arranque óptimo pasaban las 10. Latencia de decisión ≈ 4 ms (p99); paridad exacta
+Python ⇄ Node-RED en 2016 pasos. Detalle en `resultados/RESUMEN.md`.
 
 ## Supuestos y limitaciones
 

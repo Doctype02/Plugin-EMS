@@ -9,7 +9,7 @@
 - **demanda_max_15min_kw**: 131.582
 - **factor_carga**: 0.493
 - **fp_medio**: 0.909
-- **costo_anual_usd**: 119,928.274
+- **costo_anual_usd**: 112,870.198
 - **co2_anual_t**: 176.319
 - **confort_pct**: 100.000
 
@@ -36,13 +36,13 @@
 | escenario | energia_kwh | demanda_max_15min_kw | confort_pct | ahorro_pct | energia_ahorrada_kwh | pico_evitado_kw | ahorro_total_usd_anio | vpn_usd | payback_anios | roi_pct | costo_kwh_evitado_usd | co2_evitado_t_anio |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | baseline | 43,631.85 | 131.58 | 100.00 | nan | nan | nan | nan | nan | nan | nan | nan | nan |
-| reglas | 22,110.46 | 105.96 | 99.87 | 49.32 | 21,521.39 | 25.62 | 49,962.44 | 276,967.04 | 1.35 | 706.00 | 0.04 | 86.97 |
-| reglas_dr | 22,110.01 | 105.96 | 99.87 | 49.33 | 21,521.84 | 25.62 | 49,964.45 | 276,981.67 | 1.35 | 706.03 | 0.04 | 86.97 |
-| mpc | 21,899.70 | 111.85 | 99.93 | 49.81 | 21,732.15 | 19.74 | 49,016.40 | 270,102.43 | 1.38 | 689.76 | 0.04 | 87.82 |
+| reglas | 21,740.22 | 129.69 | 97.73 | 50.17 | 21,891.64 | 1.90 | 45,065.64 | 241,435.11 | 1.51 | 621.95 | 0.04 | 88.47 |
+| reglas_dr | 21,740.22 | 129.69 | 97.73 | 50.17 | 21,891.64 | 1.90 | 45,065.64 | 241,435.11 | 1.51 | 621.95 | 0.04 | 88.47 |
+| mpc | 21,620.02 | 139.75 | 98.20 | 50.45 | 22,011.83 | -8.17 | 43,495.27 | 230,040.23 | 1.56 | 595.00 | 0.04 | 88.95 |
 | baseline_fv | 36,322.61 | 112.16 | 100.00 | nan | nan | nan | nan | nan | nan | nan | nan | nan |
-| reglas_fv | 16,620.84 | 87.62 | 99.87 | 54.24 | 19,701.77 | 24.54 | 48,363.28 | 265,363.33 | 1.40 | 678.55 | 0.05 | 79.62 |
-| reglas_dr_fv | 16,620.39 | 86.27 | 99.87 | 54.24 | 19,702.22 | 25.89 | 48,680.12 | 267,662.38 | 1.39 | 683.99 | 0.05 | 79.62 |
-| mpc_fv | 16,411.46 | 84.77 | 99.93 | 54.82 | 19,911.15 | 27.39 | 49,461.56 | 273,332.62 | 1.37 | 697.40 | 0.05 | 80.46 |
+| reglas_fv | 16,250.59 | 111.30 | 97.73 | 55.26 | 20,072.02 | 0.86 | 43,533.84 | 230,320.09 | 1.56 | 595.66 | 0.05 | 81.11 |
+| reglas_dr_fv | 16,250.59 | 111.30 | 97.73 | 55.26 | 20,072.02 | 0.86 | 43,533.84 | 230,320.09 | 1.56 | 595.66 | 0.05 | 81.11 |
+| mpc_fv | 16,131.78 | 126.63 | 98.20 | 55.59 | 20,190.83 | -14.47 | 41,012.20 | 212,022.67 | 1.67 | 552.39 | 0.05 | 81.59 |
 
 ## Pronóstico día siguiente
 
@@ -51,67 +51,67 @@
 | EnergyPlus (año 2006, 4 semanas de validación) | regresion | 2.29 | 3.02 | 3.71 | -2.37 | 0.99 |
 | EnergyPlus (año 2006, 4 semanas de validación) | persistencia | 3.31 | 4.49 | 5.41 | 0.00 | 0.98 |
 | EnergyPlus (año 2006, 4 semanas de validación) | sarimax | 2.87 | 6.20 | 5.02 | 2.08 | 0.96 |
-| Gemelo digital (reglas_dr, 1 semana de validación) | regresion | 3.16 | 6.72 | 27.17 | 4.22 | 0.96 |
-| Gemelo digital (reglas_dr, 1 semana de validación) | persistencia | 3.41 | 7.30 | 23.01 | 5.75 | 0.96 |
-| Gemelo digital (reglas_dr, 1 semana de validación) | sarimax | 14.09 | 27.49 | 194.86 | -6.48 | 0.39 |
+| Gemelo digital (reglas_dr, 1 semana de validación) | regresion | 2.60 | 5.48 | 7.88 | 34.13 | 0.98 |
+| Gemelo digital (reglas_dr, 1 semana de validación) | persistencia | 2.88 | 6.19 | 5.55 | 37.40 | 0.97 |
+| Gemelo digital (reglas_dr, 1 semana de validación) | sarimax | 15.05 | 31.27 | 209.90 | -6.56 | 0.27 |
 
 ## Pruebas normales y anómalas
 
 | id | prueba | superada | confort_pct | demanda_max_kw | detalle_checks |
 |---|---|---|---|---|---|
-| P01 | Perfil normal (semana) | True | 99.95 | 92.40 | confort=OK;demanda_max=OK;estabilidad=OK;disponibilidad=OK |
-| P02 | Ola de calor +4 °C | True | 100.00 | 105.80 | confort=OK;confort_vs_baseline=OK;energia_menor_baseline=OK;estabilidad=OK;disponibilidad=OK |
-| P03 | Ocupación fuera de horario (evento nocturno en la sala de conferencias Z03) | True | 100.00 | 91.50 | recuperacion=OK;estabilidad=OK;disponibilidad=OK |
-| P04 | Sensor congelado en cubículos Z02 (4 h) | True | 100.00 | 91.50 | alarma_SENSOR_CONGELADO=OK;temp_real_acotada=OK;estabilidad=OK;disponibilidad=OK |
-| P05 | Sensor fuera de rango en Oficina 2 P1 Z08 (85 °C) | True | 100.00 | 91.50 | alarma_SENSOR_FUERA_RANGO=OK;temp_real_acotada=OK;estabilidad=OK;disponibilidad=OK |
-| P06 | Sensor ruidoso en Oficina 1 P1 Z07 (σ = 2 °C) | True | 100.00 | 91.50 | alarma_SENSOR_FUERA_RANGO=OK;temp_real_acotada=OK;estabilidad=OK;disponibilidad=OK |
-| P07 | Falla del terminal VRF de la Oficina 1 P2 Z12 (10–14 h) | True | 99.72 | 91.50 | alarma_TEMP_ALTA=OK;estabilidad=OK;disponibilidad=OK |
-| P08 | Pico de carga +25 kW en Oficina 2 P2 Z13 (13–15 h) con límite de 100 kW | True | 99.80 | 102.10 | alarma_DR_ACTIVO=OK;respuesta_dr=OK;estabilidad=OK;disponibilidad=OK |
-| P09 | Pérdida del 30 % de comandos | True | 100.00 | 91.50 | confort=OK;demanda_max=OK;estabilidad=OK;disponibilidad=OK |
-| P10 | Sobrecalentamiento del cuarto de servidores (falla del VRF-SRV, 2 h) | True | 100.00 | 91.50 | alarma_SERVIDOR_TEMP=OK;estabilidad=OK;disponibilidad=OK |
+| P01 | Perfil normal (semana) | True | 99.52 | 97.40 | confort=OK;demanda_max=OK;estabilidad=OK;disponibilidad=OK |
+| P02 | Ola de calor +4 °C | False | 97.21 | 123.70 | confort=OK;confort_vs_baseline=FALLA;energia_menor_baseline=OK;estabilidad=OK;disponibilidad=OK |
+| P03 | Ocupación fuera de horario (evento nocturno en la sala de conferencias Z03) | True | 99.57 | 97.00 | recuperacion=OK;estabilidad=OK;disponibilidad=OK |
+| P04 | Sensor congelado en cubículos Z02 (4 h) | True | 99.56 | 97.00 | alarma_SENSOR_CONGELADO=OK;temp_real_acotada=OK;estabilidad=OK;disponibilidad=OK |
+| P05 | Sensor fuera de rango en Oficina 2 P1 Z08 (85 °C) | True | 99.56 | 97.00 | alarma_SENSOR_FUERA_RANGO=OK;temp_real_acotada=OK;estabilidad=OK;disponibilidad=OK |
+| P06 | Sensor ruidoso en Oficina 1 P1 Z07 (σ = 2 °C) | True | 99.56 | 97.00 | alarma_SENSOR_FUERA_RANGO=OK;temp_real_acotada=OK;estabilidad=OK;disponibilidad=OK |
+| P07 | Falla del terminal VRF de la Oficina 1 P2 Z12 (10–14 h) | True | 99.25 | 97.00 | alarma_TEMP_ALTA=OK;estabilidad=OK;disponibilidad=OK |
+| P08 | Pico de carga +25 kW en Oficina 2 P2 Z13 (13–15 h) con límite de 100 kW | True | 99.37 | 102.70 | alarma_DR_ACTIVO=OK;respuesta_dr=OK;estabilidad=OK;disponibilidad=OK |
+| P09 | Pérdida del 30 % de comandos | True | 99.56 | 97.00 | confort=OK;demanda_max=OK;estabilidad=OK;disponibilidad=OK |
+| P10 | Sobrecalentamiento del cuarto de servidores (falla del VRF-SRV, 2 h) | True | 99.56 | 97.00 | alarma_SERVIDOR_TEMP=OK;estabilidad=OK;disponibilidad=OK |
 
 ## Confiabilidad, disponibilidad y latencia
 
-- **pruebas_superadas**: 10
+- **pruebas_superadas**: 9
 - **pruebas_total**: 10
-- **confiabilidad_logica_pct**: 100.000
+- **confiabilidad_logica_pct**: 97.368
 - **disponibilidad_pct**: 100.000
-- **latencia_media_ms**: 2.246
-- **latencia_p99_ms**: 5.371
+- **latencia_media_ms**: 2.363
+- **latencia_p99_ms**: 3.865
 
 ## Paridad Python ⇄ Node-RED
 
 - **pasos**: 2016
 - **pasos_distintos**: 0
 - **max_dif_kw**: 0.000
-- **alarmas_python**: 2
-- **alarmas_nodered**: 2
-- **latencia_media_nodered_ms**: 2.339
+- **alarmas_python**: 14
+- **alarmas_nodered**: 14
+- **latencia_media_nodered_ms**: 4.918
 
 ## Escalamiento en Panamá (mejor escenario por VPN)
 
 | adopcion_pct | area_m2 | edificios_equivalentes | energia_ahorrada_gwh_anio | demanda_evitada_mw | ahorro_musd_anio | inversion_musd | co2_evitado_kt_anio |
 |---|---|---|---|---|---|---|---|
-| 5.00 | 300,000.00 | 151.52 | 42.51 | 3.88 | 7.57 | 9.67 | 13.18 |
-| 15.00 | 900,000.00 | 454.55 | 127.52 | 11.65 | 22.71 | 29.00 | 39.53 |
-| 30.00 | 1,800,000.00 | 909.09 | 255.05 | 23.30 | 45.42 | 58.00 | 79.06 |
+| 5.00 | 300,000.00 | 151.52 | 43.24 | 0.29 | 6.83 | 9.67 | 13.40 |
+| 15.00 | 900,000.00 | 454.55 | 129.72 | 0.86 | 20.48 | 29.00 | 40.21 |
+| 30.00 | 1,800,000.00 | 909.09 | 259.43 | 1.72 | 40.97 | 58.00 | 80.42 |
 
 ## Sensibilidad
 
 | parametro | valor | ahorro_pct | energia_ahorrada_anual_kwh | pico_evitado_kw | ahorro_total_usd_anio | vpn_usd | payback_anios | roi_pct | costo_kwh_evitado_usd | confort_pct |
 |---|---|---|---|---|---|---|---|---|---|---|
-| referencia | - | 54.25 | 256,092.16 | 25.89 | 48,610.72 | 267,158.80 | 1.39 | 682.80 | 0.05 | nan |
-| tarifa | 70% | 54.25 | 256,092.16 | 25.89 | 34,027.51 | 161,340.62 | 2.03 | 432.51 | 0.05 | nan |
-| capex | 70% | 54.25 | 256,092.16 | 25.89 | 48,610.72 | 286,298.80 | 0.98 | 1,018.28 | 0.04 | nan |
-| tarifa | 130% | 54.25 | 256,092.16 | 25.89 | 63,193.94 | 372,976.99 | 1.06 | 933.08 | 0.05 | nan |
-| capex | 130% | 54.25 | 256,092.16 | 25.89 | 48,610.72 | 248,018.80 | 1.80 | 502.15 | 0.06 | nan |
-| ems.setpoint_ocupado_c | 23.00 | 50.13 | 236,640.12 | 22.50 | 44,770.09 | 239,290.53 | 1.52 | 616.88 | 0.05 | 99.92 |
-| ems.setpoint_ocupado_c | 25.00 | 58.31 | 275,250.87 | 29.19 | 52,365.60 | 294,404.78 | 1.29 | 747.24 | 0.05 | 98.00 |
-| ems.limite_demanda_kw | 153 | 54.25 | 256,092.16 | 25.89 | 48,610.72 | 267,158.80 | 1.39 | 682.80 | 0.05 | 99.81 |
-| ems.limite_demanda_kw | 187 | 54.25 | 256,092.16 | 25.89 | 48,610.72 | 267,158.80 | 1.39 | 682.80 | 0.05 | 99.81 |
-| ems.equipos_desocupado_ems | 0.20 | 53.88 | 254,340.83 | 25.86 | 48,307.49 | 264,958.46 | 1.40 | 677.59 | 0.05 | 99.81 |
-| ems.equipos_desocupado_ems | 0.40 | 53.15 | 250,888.38 | 25.85 | 47,720.27 | 260,697.53 | 1.42 | 667.51 | 0.05 | 99.81 |
-| edificio.t_suelo_c | 24.00 | 54.80 | 250,964.25 | 25.88 | 47,811.43 | 261,358.98 | 1.42 | 669.08 | 0.05 | 99.91 |
-| edificio.t_suelo_c | 30.00 | 53.64 | 260,750.13 | 25.81 | 49,310.34 | 272,235.33 | 1.37 | 694.80 | 0.05 | 99.38 |
-| ocupacion | 80% | 56.18 | 263,592.53 | 26.41 | 49,908.50 | 276,575.68 | 1.35 | 705.07 | 0.05 | 99.96 |
-| ocupacion | 120% | 53.30 | 252,916.18 | 24.38 | 47,761.59 | 260,997.33 | 1.42 | 668.22 | 0.05 | 99.88 |
+| referencia | - | 55.31 | 261,103.42 | 0.86 | 43,494.29 | 230,033.15 | 1.56 | 594.99 | 0.05 | nan |
+| tarifa | 70% | 55.31 | 261,103.42 | 0.86 | 30,446.00 | 135,352.66 | 2.29 | 371.04 | 0.05 | nan |
+| capex | 70% | 55.31 | 261,103.42 | 0.86 | 43,494.29 | 249,173.15 | 1.10 | 892.84 | 0.04 | nan |
+| tarifa | 130% | 55.31 | 261,103.42 | 0.86 | 56,542.58 | 324,713.64 | 1.19 | 818.93 | 0.05 | nan |
+| capex | 130% | 55.31 | 261,103.42 | 0.86 | 43,494.29 | 210,893.15 | 2.03 | 434.60 | 0.06 | nan |
+| ems.setpoint_ocupado_c | 23.00 | 51.77 | 244,403.05 | -12.35 | 38,493.96 | 193,749.93 | 1.78 | 509.17 | 0.05 | 97.50 |
+| ems.setpoint_ocupado_c | 25.00 | 58.90 | 278,047.52 | 16.78 | 48,998.61 | 269,973.36 | 1.38 | 689.45 | 0.04 | 94.05 |
+| ems.limite_demanda_kw | 153 | 55.31 | 261,103.42 | 0.86 | 43,494.29 | 230,033.15 | 1.56 | 594.99 | 0.05 | 97.23 |
+| ems.limite_demanda_kw | 187 | 55.31 | 261,103.42 | 0.86 | 43,494.29 | 230,033.15 | 1.56 | 594.99 | 0.05 | 97.23 |
+| ems.equipos_desocupado_ems | 0.20 | 54.96 | 259,433.38 | 0.48 | 43,141.16 | 227,470.78 | 1.58 | 588.93 | 0.05 | 97.21 |
+| ems.equipos_desocupado_ems | 0.40 | 54.23 | 256,008.73 | -0.24 | 42,430.60 | 222,314.84 | 1.61 | 576.73 | 0.05 | 97.16 |
+| edificio.t_suelo_c | 24.00 | 55.68 | 255,029.26 | 4.09 | 43,130.50 | 227,393.40 | 1.58 | 588.74 | 0.05 | 98.17 |
+| edificio.t_suelo_c | 30.00 | 54.99 | 267,309.65 | -3.55 | 43,658.84 | 231,227.15 | 1.56 | 597.81 | 0.05 | 94.19 |
+| ocupacion | 80% | 57.31 | 268,913.03 | 4.57 | 45,386.56 | 243,763.73 | 1.50 | 627.46 | 0.05 | 98.20 |
+| ocupacion | 120% | 54.36 | 257,906.09 | 0.29 | 42,890.03 | 225,648.54 | 1.59 | 584.62 | 0.05 | 97.12 |
