@@ -75,7 +75,7 @@ if (b.tipo === "ocupacion") {
 }
 if (b.tipo === "evento") {
     // simulación de fallas y accidentes en el gemelo digital (ems/eventos.py)
-    const tipos = ["incendio", "corte_energia", "falla_vrf", "falla_terminal", "puerta_abierta", "sensor",
+    const tipos = ["incendio", "corte_energia", "falla_generador", "falla_vrf", "falla_terminal", "puerta_abierta", "sensor",
         "ola_calor", "sobreocupacion", "pico_carga"];
     if (b.accion === "detener") {
         return [{ topic: `${base}/sim/control`, payload: { accion: "evento", operacion: "detener", id: String(b.id || "*") } },

@@ -22,6 +22,15 @@ def disponible() -> bool:
     return shutil.which("node") is not None
 
 
+def _respaldo(cfg: dict) -> dict:
+    """Parámetros del modo emergencia (planta de respaldo) para la lógica de Node-RED."""
+    r = cfg.get("respaldo") or {}
+    g, em = r.get("generador") or {}, r.get("emergencia") or {}
+    return {"gen_kw": g.get("potencia_kw", 100), "gen_carga_max": g.get("carga_max", 0.8),
+            "sp_emergencia": em.get("setpoint_c", 25.0), "sp_emergencia_min": em.get("setpoint_min_c", 24.0),
+            "luces_emergencia": em.get("luces_nivel", 0.7), "sin_hvac_emergencia": em.get("tipos_sin_hvac") or []}
+
+
 class ControladorNodeRed(Controlador):
     nombre = "nodered"
 
@@ -44,6 +53,7 @@ class ControladorNodeRed(Controlador):
             "t_prot_max": e.get("t_proteccion_max_c", 32.0), "t_prot_retorno": e.get("t_proteccion_retorno_c", 30.0),
             "rampa_sp_c_h": e.get("rampa_setpoint_c_h", 0.0), "arranques_max": e.get("arranques_max_paso", 0),
             "paso_min": cfg["edificio"]["paso_min"],
+            **_respaldo(cfg),
             "hvac": {z.id: [z.hvac_kw, z.cop, z.fan_kw] for z in self.zonas},
         })
 

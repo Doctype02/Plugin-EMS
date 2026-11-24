@@ -132,6 +132,12 @@ class Edificio:
         self.e_fv_kwh = 0.0
         self._hist_p: list[float] = []
         self._vt = self.e.get("vt", 0.252)  # transmitancia visible del vidrio del modelo
+        # planta de respaldo (generador + UPS): ver docs/PLANTA_RESPALDO.md
+        self.resp = cfg.get("respaldo") or {}
+        self.gen = self.resp.get("generador") or {}
+        self.ptac = {z for uid, zs in self.unidades.items() if self.sistemas[uid].get("tipo") == "ptac" for z in zs}
+        self.combustible_l = float(self.gen.get("tanque_l", 0.0))
+        self.e_gen_kwh = 0.0
         self.reset()
 
     # ------------------------------------------------------------------ estado
@@ -152,7 +158,8 @@ class Edificio:
         """Estado físico mínimo para continuar tras un reinicio sin arrancar «en frío»."""
         return {"zonas": {zid: {k: v for k, v in asdict(s).items() if k in self._CAMPOS_ESTADO}
                           for zid, s in self.estado.items()},
-                "e_kwh": self.e_kwh, "e_fv_kwh": self.e_fv_kwh, "hist_p": self._hist_p[-12:]}
+                "e_kwh": self.e_kwh, "e_fv_kwh": self.e_fv_kwh, "hist_p": self._hist_p[-12:],
+                "combustible_l": self.combustible_l, "e_gen_kwh": self.e_gen_kwh}
 
     def restaurar_estado(self, d: dict) -> int:
         """Restaura lo exportado con `exportar_estado`; ignora zonas o campos desconocidos. Devuelve zonas restauradas."""
@@ -169,6 +176,8 @@ class Edificio:
             n += 1
         self.e_kwh = float(d.get("e_kwh", self.e_kwh))
         self.e_fv_kwh = float(d.get("e_fv_kwh", self.e_fv_kwh))
+        self.combustible_l = float(d.get("combustible_l", self.combustible_l))
+        self.e_gen_kwh = float(d.get("e_gen_kwh", self.e_gen_kwh))
         self._hist_p = [float(x) for x in d.get("hist_p", [])][-12:]
         return n
 
@@ -306,6 +315,9 @@ class Edificio:
         ids = list(self.eventos) if ev_id == "*" else [ev_id]
         for i in ids:
             ev = self.eventos.pop(i, None)
+            if ev and ev.tipo == "corte_energia":
+                # vuelve la red: retransferencia y repostaje del tanque de la planta
+                self.combustible_l = float(self.gen.get("tanque_l", 0.0))
             if ev and ev.tipo == "sensor" and self.falla_sensor.get(ev.zona, {}).get("evento") == ev.id:
                 self.falla_sensor.pop(ev.zona, None)
 
@@ -345,7 +357,7 @@ class Edificio:
 
     def _efectos(self) -> dict:
         """Efectos agregados de los eventos activos."""
-        ef = {"sin_frio": set(), "fuego": {}, "evac": None, "corte": None, "puerta": {}, "dt_ext": 0.0,
+        ef = {"sin_frio": set(), "fuego": {}, "evac": None, "corte": None, "falla_gen": False, "puerta": {}, "dt_ext": 0.0,
               "sobre": {}, "extra_kw": {}}
         for ev in self.eventos.values():
             if ev.tipo == "incendio":
@@ -354,7 +366,8 @@ class Edificio:
                 ef["evac"] = max(ef["evac"] or 0.0, ev.transcurrido)
             elif ev.tipo == "corte_energia":
                 ef["corte"] = ev
-                ef["sin_frio"].update(self.estado)
+            elif ev.tipo == "falla_generador":
+                ef["falla_gen"] = True
             elif ev.tipo == "falla_vrf":
                 ef["sin_frio"].update(self.unidades.get(ev.unidad, []))
             elif ev.tipo == "falla_terminal":
@@ -367,6 +380,12 @@ class Edificio:
                 ef["sobre"][ev.zona] = ef["sobre"].get(ev.zona, 0.0) + (ev.intensidad or 50) / 100
             elif ev.tipo == "pico_carga":
                 ef["extra_kw"][ev.zona] = ef["extra_kw"].get(ev.zona, 0.0) + (ev.intensidad or 10)
+        # corte de red: con la planta de respaldo en marcha sólo quedan sin frío los equipos fuera del tablero
+        # de emergencia (PTAC de los baños); sin planta (falla o sin combustible), todo el edificio
+        ef["gen"] = bool(ef["corte"] is not None and self.gen.get("habilitado") and not ef["falla_gen"]
+                         and self.combustible_l > 0.0)
+        if ef["corte"] is not None:
+            ef["sin_frio"].update(self.ptac if ef["gen"] else self.estado)
         return ef
 
     def _avanzar_eventos(self) -> list[Evento]:
@@ -455,7 +474,13 @@ class Edificio:
         t_ext = clima["t_ext_c"] + ef["dt_ext"]
         ghi = clima["irr_wm2"]
         corte = ef["corte"]
-        ups_ok = corte is not None and corte.transcurrido < (corte.intensidad or 30)
+        gen_on = ef["gen"]                       # planta de respaldo alimentando el tablero de emergencia
+        ups_min = float((self.resp.get("ups") or {}).get("autonomia_min", 0) or (corte.intensidad if corte else 30) or 30)
+        ups_ok = corte is not None and (gen_on or corte.transcurrido < ups_min)
+        if corte is not None and corte.transcurrido == 0:
+            # transferencia: los compresores se desconectan y vuelven a tomar carga en rampa
+            for s0 in self.estado.values():
+                s0.mod_real = 0.0
         irr = {o: clima.get(f"irr_{o}", ghi * 0.4) for o in ("N", "E", "S", "W")}
         irr["H"] = clima.get("irr_H", ghi)
         hora = minuto_del_dia / 60.0
@@ -497,7 +522,7 @@ class Edificio:
             # el detector de presencia (que puede estar forzado) decide el ventilador en modo DCV
             ocupado_det = self._detectar_presencia(z.id, ocupado)
             # la central de incendio / el corte desenergizan el terminal (ventilador incluido)
-            sin_energia_hvac = bool(ef["fuego"]) or corte is not None
+            sin_energia_hvac = bool(ef["fuego"]) or (corte is not None and (not gen_on or z.id in self.ptac))
             uid = self.unidad_de.get(z.id)
             aj = self.ajustes_unidad.get(uid) if uid else None
             cop = z.cop * (1 - 0.012 * (t_ext - 30.0)) * (aj.get("cop_factor", 1.0) if aj else 1.0)
@@ -528,8 +553,13 @@ class Edificio:
             p_eq = (z.p_equipos_max_kw * f_eq * max(s.equipos_nivel, z.min_equipos) + self.carga_extra_kw.get(z.id, 0.0)
                     + ef["extra_kw"].get(z.id, 0.0))
             p_it = z.it_kw * (1 + 0.02 * math.sin(minuto_del_dia / 1440 * 2 * math.pi)) if z.it_kw else 0.0
-            if corte is not None:
-                # sin red: sólo las cargas críticas (UPS) mientras dure su autonomía
+            if corte is not None and gen_on:
+                # planta de respaldo: iluminación y servidores (UPS en línea); los tomacorrientes de oficina
+                # no están en el tablero de emergencia
+                if not z.critica:
+                    p_eq = 0.0
+            elif corte is not None:
+                # sin red ni planta: sólo las cargas críticas (UPS) mientras dure su autonomía
                 if z.critica and ups_ok:
                     p_luces *= 0.3
                 else:
@@ -634,7 +664,7 @@ class Edificio:
             f_edif = sum(ocupantes.get(z.id, 0) for z in no_crit) / max(sum(z.ocupantes for z in no_crit), 1)
             if "horario" in cf:
                 p = cf["kw"] * horario(self.cfg, cf["horario"], dia_semana, hora)
-                if corte is not None and not (cf.get("critica") and ups_ok):
+                if corte is not None and not ((cf.get("critica") and ups_ok) or (gen_on and cf.get("respaldo"))):
                     p = 0.0
             elif "kw_noche" in cf:
                 p = cf["kw_noche"] if ghi < 5 else 0.0
@@ -646,12 +676,32 @@ class Edificio:
                 p_crit += p
 
         p_edificio = sum(tot.values()) + p_fija
-        # durante un corte el medidor de la acometida lee cero; el UPS alimenta las cargas críticas
-        p_total = 0.0 if corte is not None else p_edificio
-        # fotovoltaica (variante ConPV): el inversor se desconecta sin red (anti-isla)
-        p_fv = 0.0 if (corte is not None or not self.fv) else potencia_fv_kw(self.cfg, irr["H"])
-        p_red = p_total - p_fv
-        if corte is not None:
+        # sin red ni planta el medidor lee cero (el UPS alimenta las cargas críticas); con la planta de respaldo
+        # el edificio sigue consumiendo, pero de la planta y de los paneles, no de la acometida
+        p_total = p_edificio if (corte is None or gen_on) else 0.0
+        p_fv_disp = potencia_fv_kw(self.cfg, irr["H"]) if self.fv else 0.0
+        p_gen = p_fv_rec = 0.0
+        if corte is None:
+            p_fv = p_fv_disp
+            p_red = p_total - p_fv
+        elif gen_on:
+            # híbrido FV–diésel: el inversor se reconecta `fv_reconexion_min` después de que la planta forma la
+            # red (IEEE 1547) y se recorta para que la planta no baje de su carga mínima (evita el «wet stacking»)
+            p_nom = float(self.gen["potencia_kw"])
+            if corte.transcurrido < float(self.resp.get("fv_reconexion_min", 5)):
+                p_fv_disp = 0.0
+            p_fv = max(0.0, min(p_fv_disp, p_total - float(self.gen.get("carga_min", 0.3)) * p_nom))
+            p_fv_rec = p_fv_disp - p_fv
+            p_gen = p_total - p_fv
+            litros = (float(self.gen.get("consumo_vacio_l_h_kw", 0.03)) * p_nom
+                      + float(self.gen.get("consumo_l_kwh", 0.24)) * p_gen) * self.paso_h
+            self.combustible_l = max(0.0, self.combustible_l - litros)
+            self.e_gen_kwh += p_gen * self.paso_h
+            p_red = 0.0
+        else:
+            p_fv = 0.0   # sin red ni planta el inversor se desconecta (anti-isla)
+            p_red = 0.0
+        if corte is not None and not gen_on:
             q_kvar = 0.0
         s_kva = math.hypot(p_total, q_kvar)
         self.e_kwh += p_total * self.paso_h
@@ -668,18 +718,32 @@ class Edificio:
             "p_hvac_kw": round(tot["hvac"], 3), "p_luces_kw": round(tot["luces"], 3),
             "p_equipos_kw": round(tot["equipos"] + tot["it"], 3), "p_fija_kw": round(p_fija, 3),
             "q_kvar": round(q_kvar, 3), "s_kva": round(s_kva, 3), "fp": round(p_total / s_kva, 4) if s_kva else 1.0,
-            "v_ll": 0.0 if corte is not None else self.e["v_ll"],
+            "v_ll": 0.0 if (corte is not None and not gen_on) else self.e["v_ll"],
             "i_a": round(s_kva * 1000 / (math.sqrt(3) * self.e["v_ll"]), 2),
             "e_kwh": round(self.e_kwh, 3), "demanda_15min_kw": round(dem15, 3),
             "t_ext_c": round(t_ext, 2), "hr_pct": round(clima.get("hr_pct", 0), 1), "irr_wm2": round(ghi, 1),
             **{f"irr_{o}": round(v, 1) for o, v in irr.items() if o != "H"},
             "red_ok": corte is None,
+            "modo_energia": "red" if corte is None else "generador" if gen_on else "ups" if ups_ok else "sin_energia",
         }
+        if self.gen.get("habilitado"):
+            p_nom = float(self.gen["potencia_kw"])
+            l_h = (float(self.gen.get("consumo_vacio_l_h_kw", 0.03)) * p_nom + float(self.gen.get("consumo_l_kwh", 0.24)) * p_gen)
+            tanque = float(self.gen.get("tanque_l", 0.0)) or 1.0
+            medidor.update({
+                "p_gen_kw": round(p_gen, 3), "gen_carga_pct": round(100.0 * p_gen / p_nom, 1),
+                "gen_combustible_l": round(self.combustible_l, 1),
+                "gen_combustible_pct": round(100.0 * self.combustible_l / tanque, 1),
+                "gen_consumo_l_h": round(l_h if gen_on else 0.0, 2),
+                "gen_autonomia_h": round(self.combustible_l / l_h, 1) if gen_on and l_h > 0 else 0.0,
+                "e_gen_kwh": round(self.e_gen_kwh, 3), "p_fv_recortada_kw": round(p_fv_rec, 3),
+            })
         if self.fv:
             medidor.update({"p_fv_kw": round(p_fv, 3), "p_red_kw": round(p_red, 3), "e_fv_kwh": round(self.e_fv_kwh, 3)})
         if corte is not None:
-            medidor["ups_kw"] = round(p_edificio, 3)
-            medidor["ups_min"] = round(max(0.0, (corte.intensidad or 30) - corte.transcurrido), 1)
+            # el UPS de los servidores: en línea con la planta (autonomía completa) o descargándose sin ella
+            medidor["ups_kw"] = round(p_crit if gen_on else p_edificio, 3)
+            medidor["ups_min"] = round(ups_min if gen_on else max(0.0, ups_min - corte.transcurrido), 1)
         if self.eventos:
             medidor["eventos"] = sorted({ev.tipo for ev in self.eventos.values()})
         if self.ajustes_unidad:
@@ -690,7 +754,7 @@ class Edificio:
         self.fin_ajustes = (m_ctl.descontar(self.ajustes_unidad, self.e["paso_min"])
                             + m_ctl.descontar(self.sensor_forzado, self.e["paso_min"]))
         # estado de las unidades con los ajustes vigentes después del paso (restante ya descontado)
-        self._actualizar_unidades(acum_u, corte is not None)
+        self._actualizar_unidades(acum_u, corte is not None and not gen_on)
         for zid in list(self._lecturas):
             if zid not in self.sensor_forzado:
                 self._lecturas.pop(zid)

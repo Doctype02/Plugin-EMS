@@ -37,6 +37,10 @@ def _desde_config(codigo: str) -> str:
         "t_prot_max": e["t_proteccion_max_c"], "t_prot_retorno": e["t_proteccion_retorno_c"],
         "rampa_sp_c_h": e["rampa_setpoint_c_h"], "arranques_max": e["arranques_max_paso"],
         "paso_min": cfg["edificio"]["paso_min"],
+        "gen_kw": cfg["respaldo"]["generador"]["potencia_kw"], "gen_carga_max": cfg["respaldo"]["generador"]["carga_max"],
+        "sp_emergencia": cfg["respaldo"]["emergencia"]["setpoint_c"],
+        "sp_emergencia_min": cfg["respaldo"]["emergencia"]["setpoint_min_c"],
+        "luces_emergencia": cfg["respaldo"]["emergencia"]["luces_nivel"],
     }
     bloque = codigo[codigo.index("const P = Object.assign({"): codigo.index("}, flow.get(\"parametros\")")]
     nuevo = bloque

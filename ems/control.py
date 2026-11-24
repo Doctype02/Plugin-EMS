@@ -129,6 +129,8 @@ class Controlador:
         self.ultimo_ocupado: dict[str, pd.Timestamp] = {}
         self.modo_seguro: set[str] = set()
         self.reglas: dict[str, int] = {}
+        self.emergencia = False   # edificio alimentado por la planta de respaldo (sin red)
+        self.resp = (cfg.get("respaldo") or {})
 
     # ---------------------------------------------------------------- utilidades
     def ocupado_efectivo(self, t, z: dict) -> bool:
@@ -150,6 +152,7 @@ class Controlador:
     # ------------------------------------------------------------------ interfaz
     def decidir(self, t: pd.Timestamp, tel: list[dict], med: dict) -> dict[str, dict]:
         self.alarmas = self.sup.evaluar(t, tel, med, self.limite_kw, self.dr_activo)
+        self.emergencia = med.get("modo_energia") == "generador"
         cmds = self._decidir(t, tel, med)
         if self.secuencial:
             self._secuenciar(tel, cmds)
@@ -255,7 +258,14 @@ class Controlador:
             if pide > 0:
                 solicitudes.append((z["temp_c"] - sp, zid, pide * p.hvac_kw / max(cop, 1.0), p.hvac_kw / max(cop, 1.0),
                                     z["temp_c"] > self.e["confort_max_c"] - self.e["dr_margen_confort_c"]))
-        presupuesto = self.limite_kw - 3.0 - (med.get("p_red_kw", med["p_total_kw"]) - p_comp_actual)
+        # en emergencia el límite es la planta de respaldo (carga máxima) y la potencia medida, la de la planta
+        limite = self.limite_kw
+        p_medida = med.get("p_red_kw", med["p_total_kw"])
+        if self.emergencia:
+            g = self.resp.get("generador") or {}
+            limite = float(g.get("potencia_kw", limite)) * float(g.get("carga_max", 0.8))
+            p_medida = med.get("p_gen_kw", med["p_total_kw"])
+        presupuesto = limite - 3.0 - (p_medida - p_comp_actual)
         forzadas = 0
         for urg, zid, kw, kw_max, emergencia in sorted(solicitudes, key=lambda x: (not x[4], -x[0])):
             c = cmds[zid]
@@ -269,10 +279,10 @@ class Controlador:
                 c["hvac_mod"] = 0.0
             forzadas += 1
 
-        d = med["demanda_15min_kw"]
-        if d > self.limite_kw:
+        d = med["p_gen_kw"] if self.emergencia else med["demanda_15min_kw"]
+        if d > limite:
             self.dr_etapa, self._dr_cont = 2, 0
-        elif self.dr_etapa == 2 and d < self.limite_kw - self.e["dr_histeresis_kw"]:
+        elif self.dr_etapa == 2 and d < limite - self.e["dr_histeresis_kw"]:
             self._dr_cont += 1
             if self._dr_cont >= 3:
                 self.dr_etapa, self._dr_cont = 0, 0
@@ -326,8 +336,12 @@ class Reglas(Controlador):
             r["ocupadas"] += 1
         elif ocup:
             r["vacancia"] += 1
+        em = self.resp.get("emergencia") or {} if self.emergencia else None
         if ocup or self.precool(t):
             sp, en = self.e["setpoint_ocupado_c"], True
+            if em is not None:
+                # con la planta de respaldo: consigna de emergencia (nunca por debajo del mínimo)
+                sp = max(float(em.get("setpoint_c", 25.0)), float(em.get("setpoint_min_c", 24.0)), sp)
         elif self.horario_laboral(t):
             sp, en = self.e["setpoint_desocupado_c"], True
             r["setback"] += 1
@@ -355,12 +369,18 @@ class Reglas(Controlador):
             # aire exterior para recuperar temperatura, sin compresor
             en, vent = True, "fija"
             r["proteccion_baja"] += 1
+        if em is not None:
+            # emergencia: iluminación limitada y terminales de pasillo apagados
+            luces = min(luces, float(em.get("luces_nivel", 0.7)))
+            if z["tipo"] in (em.get("tipos_sin_hvac") or []):
+                en = False
+            r["emergencia"] += 1
         return {"hvac_enable": en, "setpoint_c": sp, "ventilacion": vent,
                 "luces_nivel": luces, "equipos_nivel": equipos}
 
     def _decidir(self, t, tel, med):
         self.reglas = {k: 0 for k in ("ocupadas", "vacancia", "setback", "apagadas", "proteccion_alta",
-                                      "proteccion_baja", "luz_natural", "standby")}
+                                      "proteccion_baja", "luz_natural", "standby", "emergencia")}
         self.reglas.update({"precool": int(self.precool(t)), "fuera_horario": int(not self.horario_laboral(t))})
         return {z["zona"]: self._reglas_zona(t, z) for z in tel if not z["critica"]}
 

@@ -287,3 +287,71 @@ def test_arranque_escalonado_y_rampa_de_setpoint(cfg, semana):
     m = r.medidor
     manana = m[(m.index.dayofweek < 5) & (m.index.hour >= 6) & (m.index.hour < 9)]
     assert manana.p_total_kw.diff().max() < 15
+
+
+def _corte(cfg, ctrl="reglas_dr", inicio="2026-11-05 09:00", horas=6, falla_gen=False):
+    """Simula un corte de red (con la planta de respaldo, o sin ella si `falla_gen`)."""
+    from ems import clima as m_clima, ocupacion as m_ocup
+
+    ini = pd.Timestamp(inicio, tz="America/Panama")
+    idx = m_clima.indice((ini - pd.Timedelta(hours=30)).strftime("%Y-%m-%d %H:%M"), (30 + horas + 2) / 24, 5, "America/Panama")
+    cl = m_clima.generar(cfg, idx).to_dict("records")
+    oc = m_ocup.generar(config.zonas(cfg), idx, cfg["ocupacion"], cfg=cfg).to_dict("records")
+    ed, c = Edificio(cfg), control.crear(ctrl, cfg)
+    tel = med = None
+    meds, zonas_ = [], []
+    for i, t in enumerate(idx):
+        if t == ini:
+            ed.iniciar_evento({"evento": "corte_energia", "duracion_min": horas * 60, "id": "corte"})
+            if falla_gen:
+                ed.iniciar_evento({"evento": "falla_generador", "duracion_min": horas * 60, "id": "gen"})
+        if tel is not None:
+            ed.aplicar(c.decidir(t, tel, med))
+        tel, med = ed.paso(cl[i], oc[i], t.hour * 60 + t.minute, t.dayofweek)
+        meds.append({**med, "ts": t})
+        zonas_.extend({**z, "ts": t} for z in tel)
+    m = pd.DataFrame(meds).set_index("ts")
+    z = pd.DataFrame(zonas_)
+    fin = ini + pd.Timedelta(hours=horas) - pd.Timedelta(minutes=5)
+    return m.loc[ini:fin], z[(z.ts >= ini) & (z.ts <= fin)], m.loc[fin + pd.Timedelta(minutes=5):]
+
+
+def test_corte_con_planta_de_respaldo_y_paneles(cfg):
+    g = cfg["respaldo"]["generador"]
+    em = cfg["respaldo"]["emergencia"]
+    m, z, despues = _corte(cfg)
+    assert (m.modo_energia == "generador").all() and not m.red_ok.any()
+    assert (m.p_red_kw == 0).all()                                   # nada de la acometida
+    # balance: carga = planta + paneles; los paneles siguen aportando (tras la reconexión)
+    assert np.allclose(m.p_total_kw, m.p_gen_kw + m.p_fv_kw, atol=1e-2)
+    assert m.p_fv_kw.iloc[0] == 0 and m.p_fv_kw.max() > 5
+    # la planta nunca baja de su carga mínima por culpa de los paneles ni pasa de su carga máxima
+    con_fv = m[m.p_fv_kw > 0.01]
+    assert (con_fv.p_gen_kw >= g["carga_min"] * g["potencia_kw"] - 1e-6).all()
+    assert m.p_gen_kw.max() <= g["carga_max"] * g["potencia_kw"] + 3
+    assert m.p_gen_kw.diff().max() < 20                              # toma de carga gradual
+    # consumo de diésel coherente con la curva de la planta
+    litros = g["tanque_l"] - m.gen_combustible_l.iloc[-1]
+    esperado = (g["consumo_vacio_l_h_kw"] * g["potencia_kw"] * len(m) + g["consumo_l_kwh"] * m.p_gen_kw.sum()) / 12
+    assert litros == pytest.approx(esperado, rel=0.02)
+    # tablero de emergencia: sin tomacorrientes de oficina ni PTAC; ascensor y servidores con servicio
+    nc = z[~z.critica]
+    assert nc.p_equipos_kw.max() == 0 and z[z.tipo == "bano"].p_hvac_kw.max() == 0
+    assert m.p_fija_kw.max() > 1 and z[z.critica].temp_real_c.max() < cfg["ems"]["alarma_servidor_c"]
+    # reglas de emergencia: luces ≤ 70 %, consigna ≥ 25 °C con ocupación, pasillos sin aire
+    estable = nc[nc.ts > nc.ts.min() + pd.Timedelta(minutes=30)]
+    assert estable.luces_nivel.max() <= em["luces_nivel"] + 1e-9
+    assert estable[estable.hvac_enable].setpoint_c.min() >= em["setpoint_min_c"]
+    assert not estable[estable.tipo == "pasillo"].hvac_enable.any()
+    assert estable[estable.ocupado & (estable.tipo != "pasillo")].temp_real_c.mean() < 26.5
+    # vuelve la red: se reposta el tanque y el edificio vuelve a la acometida
+    assert despues.modo_energia.iloc[1] == "red" and despues.gen_combustible_l.iloc[1] == g["tanque_l"]
+
+
+def test_corte_sin_planta_solo_ups_de_servidores(cfg):
+    m, z, _ = _corte(cfg, horas=1, falla_gen=True)
+    ups = cfg["respaldo"]["ups"]["autonomia_min"]
+    assert (m.p_gen_kw == 0).all() and (m.p_fv_kw == 0).all() and (m.p_total_kw == 0).all()
+    assert set(m.modo_energia) == {"ups", "sin_energia"}
+    assert (m.modo_energia == "ups").sum() == ups // 5              # el UPS aguanta su autonomía
+    assert z[~z.critica].p_total_kw.max() == 0

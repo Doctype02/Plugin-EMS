@@ -15,7 +15,10 @@ CAMPOS_UNIDAD = ["p_kw", "q_frio_kw", "carga_pct", "cop", "modo", "encendido", "
                  "cop_factor", "forzado", "restante_min", "falla", "sin_energia"]
 CAMPOS_MEDIDOR = ["p_total_kw", "p_critica_kw", "p_no_critica_kw", "p_hvac_kw", "p_luces_kw", "p_equipos_kw",
                   "p_fija_kw", "q_kvar", "s_kva", "fp", "v_ll", "i_a", "e_kwh", "demanda_15min_kw", "t_ext_c",
-                  "hr_pct", "irr_wm2", "precio_usd_kwh", "p_fv_kw", "p_red_kw", "e_fv_kwh", "red_ok", "ups_kw", "ups_min"]
+                  "hr_pct", "irr_wm2", "precio_usd_kwh", "p_fv_kw", "p_red_kw", "e_fv_kwh", "red_ok", "ups_kw", "ups_min",
+                  # planta de respaldo (docs/PLANTA_RESPALDO.md)
+                  "modo_energia", "p_gen_kw", "gen_carga_pct", "gen_combustible_l", "gen_combustible_pct",
+                  "gen_consumo_l_h", "gen_autonomia_h", "e_gen_kwh", "p_fv_recortada_kw"]
 
 
 def _num(v):

@@ -6,7 +6,10 @@ llegan desde el panel por `POST /ems/control {tipo: "evento"}` → Node-RED → 
 
 - incendio: la central de incendio para la climatización de todo el edificio (NFPA 90A, control de humo),
   el edificio se evacúa y la zona afectada se calienta rápidamente.
-- corte_energia: sin red; las cargas críticas siguen con el UPS durante su autonomía, sin climatización.
+- corte_energia: sin red; la planta de respaldo (generador diésel + transferencia automática) alimenta el
+  tablero de emergencia (VRF, ascensor, iluminación y servidores) y los paneles solares siguen aportando. El UPS
+  de los servidores cubre el arranque de la planta. Ver docs/PLANTA_RESPALDO.md.
+- falla_generador: la planta no arranca (o se detiene): durante un corte sólo queda el UPS de los servidores.
 - falla_vrf / falla_terminal: la unidad exterior (todas sus zonas) o el terminal de una zona deja de enfriar.
 - puerta_abierta: entra aire exterior (sensible + latente).
 - sensor: la lectura de temperatura se congela (el supervisor la detecta y pasa la zona a modo seguro).
@@ -21,6 +24,7 @@ from dataclasses import dataclass, field
 TIPOS = {
     "incendio": {"nivel": "crit", "objetivo": "zona"},
     "corte_energia": {"nivel": "crit", "objetivo": "edificio", "intensidad": 30},
+    "falla_generador": {"nivel": "crit", "objetivo": "edificio"},
     "falla_vrf": {"nivel": "crit", "objetivo": "unidad"},
     "falla_terminal": {"nivel": "warn", "objetivo": "zona"},
     "puerta_abierta": {"nivel": "warn", "objetivo": "zona", "intensidad": 50},
@@ -87,9 +91,13 @@ def alarmas_inicio(ev: Evento, zonas_unidad: list[str] | None = None) -> list[di
                  "mensaje": "Alarma de incendio: evacuación y paro de la climatización (NFPA 90A)"}]
     if ev.tipo == "corte_energia":
         return [{"nivel": "crit", "codigo": "CORTE_ENERGIA", "zona": "EDIF",
-                 "mensaje": "Sin tensión en la acometida: VRF, iluminación y tomacorrientes sin servicio"},
-                {"nivel": "warn", "codigo": "EN_UPS", "zona": "EDIF",
-                 "mensaje": f"Cargas críticas en UPS, autonomía ≈ {ev.intensidad:.0f} min", "valor": ev.intensidad}]
+                 "mensaje": "Sin tensión en la acometida: transferencia automática a la planta de respaldo"},
+                {"nivel": "warn", "codigo": "EN_PLANTA", "zona": "EDIF",
+                 "mensaje": "Planta de respaldo en marcha: VRF, ascensor, iluminación y servidores; tomacorrientes "
+                            "de oficina y PTAC sin servicio"}]
+    if ev.tipo == "falla_generador":
+        return [{"nivel": "crit", "codigo": "FALLA_GENERADOR", "zona": "EDIF",
+                 "mensaje": "La planta de respaldo no está disponible: en un corte sólo queda el UPS de los servidores"}]
     if ev.tipo == "falla_vrf":
         return [{"nivel": "crit", "codigo": "FALLA_VRF", "zona": ev.unidad,
                  "mensaje": f"{ev.unidad}: compresor sin respuesta, zonas {', '.join(zonas_unidad or [])} sin enfriamiento"}]

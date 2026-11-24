@@ -164,8 +164,31 @@ ems:
 
 # Cargas sin zona acondicionada: kw × horario (schedule del modelo E+)
 cargas_fijas:
-  - {nombre: Ascensor, kw: 14.86, horario: elevador, fp: 0.85}            # Electric Equipment 3 (14.61 kW) + 4 × 50 W
+  - {nombre: Ascensor, kw: 14.86, horario: elevador, fp: 0.85, respaldo: true}            # Electric Equipment 3 (14.61 kW) + 4 × 50 W
   - {nombre: Extractores de baños, kw: 0.075, horario: extractores, fp: 0.85}  # Fan:ZoneExhaust, 5 × 15 W
+
+# Planta de respaldo para cortes de red (diseño y cálculos en docs/PLANTA_RESPALDO.md).
+# Tablero de emergencia: los 6 sistemas VRF, el ascensor, la iluminación de las zonas y el cuarto de servidores.
+# Fuera del respaldo: tomacorrientes de oficina, PTAC de los baños y extractores.
+respaldo:
+  generador:
+    habilitado: true
+    potencia_kw: 110             # potencia continua (prime): 137.5 kVA a fp 0.8 (clase 150 kVA en emergencia)
+    carga_max: 0.80              # el EMS mantiene la planta por debajo del 80 % de su potencia
+    carga_min: 0.30              # los paneles se recortan para que la planta no baje del 30 % (wet stacking)
+    arranque_s: 15               # arranque + transferencia automática (lo cubre el UPS de los servidores)
+    consumo_vacio_l_h_kw: 0.03   # diésel: L/h por kW nominal en vacío…
+    consumo_l_kwh: 0.24          # …más L por kWh entregado (≈ 30 L/h al 100 %, 16.5 L/h al 50 %)
+    tanque_l: 600
+  ups:
+    potencia_kw: 2.7             # 3 kVA en línea de doble conversión para los servidores (1.8 kW de TI)
+    autonomia_min: 20            # con la carga de TI; cubre el arranque de la planta y un apagado ordenado
+  fv_reconexion_min: 5           # el inversor vuelve 5 min después de que la planta estabiliza la red (IEEE 1547)
+  emergencia:                    # reglas del EMS mientras el edificio está en la planta
+    setpoint_c: 25.0             # consigna con ocupación
+    setpoint_min_c: 24.0         # nadie puede pedir menos de 24 °C (protege la planta)
+    luces_nivel: 0.70            # iluminación al 70 %
+    tipos_sin_hvac: [pasillo]    # terminales que se apagan
 
 # Fotovoltaica de la variante "ConPV": 6 campos sobre la azotea (Generator:Photovoltaic,
 # PhotovoltaicPerformance:Simple, eficiencia fija) e inversor simple. habilitado: valor por defecto;

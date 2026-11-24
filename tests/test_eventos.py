@@ -39,16 +39,32 @@ def test_incendio_evacua_y_para_la_climatizacion(cfg):
     assert med["eventos"] == ["incendio"]
 
 
-def test_corte_de_energia_ups_y_medidor(cfg):
-    ed, tel, med, alarmas = correr(cfg, {"evento": "corte_energia", "duracion_min": 120, "intensidad": 20}, pasos=2)
-    assert {a["codigo"] for a in alarmas} == {"CORTE_ENERGIA", "EN_UPS"}
-    assert med["p_total_kw"] == 0 and med["red_ok"] is False and med["v_ll"] == 0
+def test_corte_de_energia_planta_de_respaldo(cfg):
+    ed, tel, med, alarmas = correr(cfg, {"evento": "corte_energia", "duracion_min": 120}, pasos=2)
+    assert {a["codigo"] for a in alarmas} == {"CORTE_ENERGIA", "EN_PLANTA"}
+    # la planta alimenta el tablero de emergencia: el edificio consume, pero no de la acometida
+    assert med["red_ok"] is False and med["modo_energia"] == "generador" and med["v_ll"] > 0
+    assert med["p_total_kw"] > 0 and med["p_gen_kw"] > 0 and med["p_red_kw"] == 0
+    assert med["ups_kw"] > 1.5                      # servidores a través del UPS en línea
+    assert tel["Z02"]["p_equipos_kw"] == 0          # tomacorrientes de oficina fuera del respaldo
+    assert tel["Z02"]["p_luces_kw"] > 0             # iluminación con servicio
+
+
+def test_corte_sin_planta_ups_y_medidor(cfg):
+    ed, tel, med, alarmas = correr(cfg, {"evento": "falla_generador", "duracion_min": 120}, pasos=1)
+    assert alarmas[0]["codigo"] == "FALLA_GENERADOR"
+    ed.iniciar_evento({"evento": "corte_energia", "duracion_min": 120})
+    ocup = {z.id: z.ocupantes for z in ed.zonas}
+    for _ in range(2):
+        tel, med = ed.paso(CLIMA, ocup, 12 * 60, 1)
+    tel = {z["zona"]: z for z in tel}
+    assert med["p_total_kw"] == 0 and med["red_ok"] is False and med["v_ll"] == 0 and med["modo_energia"] == "ups"
     assert med["ups_kw"] > 1.5  # servidores en UPS
     assert tel["Z02"]["p_total_kw"] == 0
-    # tras agotar la autonomía (20 min) los servidores también se apagan
-    for _ in range(4):
-        tel2, med2 = ed.paso(CLIMA, {z.id: z.ocupantes for z in ed.zonas}, 12 * 60, 1)
-    assert med2["ups_kw"] == 0 and med2["ups_min"] == 0
+    # tras agotar la autonomía del UPS los servidores también se apagan
+    for _ in range(int(cfg["respaldo"]["ups"]["autonomia_min"] // 5)):
+        tel2, med2 = ed.paso(CLIMA, ocup, 12 * 60, 1)
+    assert med2["ups_kw"] == 0 and med2["ups_min"] == 0 and med2["modo_energia"] == "sin_energia"
 
 
 def test_falla_vrf_solo_afecta_sus_zonas(cfg):
