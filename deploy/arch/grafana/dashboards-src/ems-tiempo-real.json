@@ -4059,7 +4059,7 @@
       "panels": [
         {
           "type": "stat",
-          "title": "Fuente de energía",
+          "title": "Fuente",
           "description": "De dónde se alimenta el edificio ahora.",
           "datasource": {
             "type": "influxdb",
@@ -4153,7 +4153,7 @@
         },
         {
           "type": "gauge",
-          "title": "Planta de respaldo",
+          "title": "Planta",
           "description": "Potencia que entrega la planta (110 kW continuos). El EMS la mantiene por debajo del 80 %.",
           "datasource": {
             "type": "influxdb",
@@ -4317,7 +4317,7 @@
           "fieldConfig": {
             "defaults": {
               "noValue": "En espera",
-              "unit": "h",
+              "unit": "suffix: h",
               "decimals": 0,
               "color": {
                 "mode": "thresholds"
@@ -4370,7 +4370,7 @@
         },
         {
           "type": "stat",
-          "title": "Paneles solares",
+          "title": "Paneles",
           "description": "Potencia solar que el edificio está usando.",
           "datasource": {
             "type": "influxdb",
@@ -4438,7 +4438,7 @@
         },
         {
           "type": "stat",
-          "title": "UPS de servidores",
+          "title": "UPS",
           "description": "Autonomía del UPS de los servidores (2.7 kW). Con la planta en marcha el UPS está en línea; sin ella se descarga.",
           "datasource": {
             "type": "influxdb",

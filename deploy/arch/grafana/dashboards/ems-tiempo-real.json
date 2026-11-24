@@ -4082,7 +4082,7 @@
         "kind": "Panel",
         "spec": {
           "id": 40,
-          "title": "Fuente de energía",
+          "title": "Fuente",
           "description": "De dónde se alimenta el edificio ahora.",
           "links": [],
           "data": {
@@ -4193,7 +4193,7 @@
         "kind": "Panel",
         "spec": {
           "id": 41,
-          "title": "Planta de respaldo",
+          "title": "Planta",
           "description": "Potencia que entrega la planta (110 kW continuos). El EMS la mantiene por debajo del 80 %.",
           "links": [],
           "data": {
@@ -4421,7 +4421,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "h",
+                  "unit": "suffix: h",
                   "decimals": 0,
                   "mappings": [
                     {
@@ -4459,7 +4459,7 @@
         "kind": "Panel",
         "spec": {
           "id": 44,
-          "title": "Paneles solares",
+          "title": "Paneles",
           "description": "Potencia solar que el edificio está usando.",
           "links": [],
           "data": {
@@ -4543,7 +4543,7 @@
         "kind": "Panel",
         "spec": {
           "id": 45,
-          "title": "UPS de servidores",
+          "title": "UPS",
           "description": "Autonomía del UPS de los servidores (2.7 kW). Con la planta en marcha el UPS está en línea; sin ella se descarga.",
           "links": [],
           "data": {

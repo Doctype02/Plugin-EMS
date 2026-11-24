@@ -59,21 +59,21 @@ export const EnergyFlow: React.FC<Props> = ({ meter: m, pv }) => {
       {wire('M190,84 H212', C.load, !dark && m.pTotal > 0.05)}
       {wire('M252,104 V122', C.ups, (m.upsKw ?? m.pCritical ?? 0) > 0.05 && mode !== 'sin_energia')}
 
-      {node(6, 4, 'Red eléctrica', mode === 'red' ? kw(gridKw) : 'Sin tensión', C.grid, gridKw > 0.05)}
+      {node(6, 4, 'Red', mode === 'red' ? kw(gridKw) : 'Sin tensión', C.grid, gridKw > 0.05)}
       {node(
         6,
         64,
-        'Planta de respaldo',
+        'Planta',
         mode === 'generador' ? kw(genKw) : mode === 'red' ? 'En espera' : 'Sin servicio',
         C.gen,
         genKw > 0.05,
         // nivel de diésel
-        <g transform="translate(70 8)">
+        <g transform="translate(72 8)">
           <rect width={8} height={24} rx={2} fill="none" stroke={off} />
           <rect x={1} y={1 + (22 * (100 - fuel)) / 100} width={6} height={(22 * fuel) / 100} rx={1} fill={fuel < 20 ? '#F2495C' : '#C9A227'} />
         </g>
       )}
-      {pv && node(6, 124, 'Paneles solares', kw(pvKw), C.pv, pvKw > 0.05)}
+      {pv && node(6, 124, 'Paneles', kw(pvKw), C.pv, pvKw > 0.05)}
 
       {/* transferencia automática */}
       <g transform="translate(150 62)">
@@ -90,7 +90,7 @@ export const EnergyFlow: React.FC<Props> = ({ meter: m, pv }) => {
       {node(
         212,
         122,
-        'UPS servidores',
+        'UPS serv.',
         mode === 'sin_energia' ? 'Agotado' : mode === 'ups' ? `${(m.upsMinutes ?? 0).toFixed(0)} min` : 'En línea',
         C.ups,
         mode !== 'sin_energia'
