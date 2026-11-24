@@ -78,6 +78,10 @@ pestaña «Negocio»: ahorro anual, inversión, recuperación, VPN, TIR y flujo 
 |---|---|---|
 | ![Catálogo](docs/img/dash_reglas_catalogo.png) | ![Zonas](docs/img/dash_zonas.png) | ![Alarmas](docs/img/dash_alarmas.png) |
 
+| Resultados: comparación de estrategias | Negocio: ahorro, inversión y flujo de caja |
+|---|---|
+| ![Resultados](docs/img/dash_resultados.png) | ![Negocio](docs/img/dash_negocio.png) |
+
 ## Panel 3D de Grafana
 
 | Operación normal (planta 2) | Corte de red: planta de respaldo y paneles |
