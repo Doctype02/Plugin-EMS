@@ -446,6 +446,24 @@ class Edificio:
                         self.estado[z].hvac_on = False
         return pre
 
+    def _lineas(self, p_lin: list[float], q_lin: list[float], energizado: bool) -> dict:
+        """Corriente y tensión de cada línea (L1, L2, L3) y desbalance de corriente (NEMA: máx. desviación / media)."""
+        v_ln_nom = self.e["v_ll"] / math.sqrt(3)
+        out = {}
+        corr = []
+        for k in range(3):
+            s_k = math.hypot(p_lin[k], q_lin[k]) if energizado else 0.0
+            i_k = s_k * 1000.0 / v_ln_nom
+            # caída de tensión del alimentador: ≈ 3 % a 300 A
+            v_k = v_ln_nom * (1.0 - 0.03 * min(i_k / 300.0, 1.5)) if energizado else 0.0
+            corr.append(i_k)
+            out[f"i_l{k + 1}_a"] = round(i_k, 2)
+            out[f"v_l{k + 1}_v"] = round(v_k, 1)
+            out[f"p_l{k + 1}_kw"] = round(p_lin[k] if energizado else 0.0, 3)
+        media = sum(corr) / 3.0
+        out["desbalance_pct"] = round(100.0 * max(abs(i - media) for i in corr) / media, 2) if media > 1e-6 else 0.0
+        return out
+
     def _actualizar_unidades(self, acum: dict, corte: bool):
         fallas = {ev.unidad for ev in self.eventos.values() if ev.tipo == "falla_vrf"}
         out = []
@@ -511,7 +529,13 @@ class Edificio:
         tot = {"hvac": 0.0, "luces": 0.0, "equipos": 0.0, "it": 0.0}
         q_kvar = 0.0
         p_crit = 0.0
-        for z in self.zonas:
+        # sistema trifásico de 4 hilos: potencia activa y reactiva por línea (L1, L2, L3). Climatización, ascensor
+        # y cargas fijas son trifásicas equilibradas; iluminación y tomacorrientes de cada zona son monofásicos y
+        # se reparten entre las líneas (zona i → línea i mod 3); el UPS de los servidores cuelga de L1
+        p_lin = [0.0, 0.0, 0.0]
+        q_lin = [0.0, 0.0, 0.0]
+        tanf = {k: math.tan(math.acos(v)) for k, v in FP.items()}
+        for iz, z in enumerate(self.zonas):
             s = self.estado[z.id]
             n = self._ocupantes(z, int(ocupantes.get(z.id, 0)))
             if z.id in ef["sobre"] and z.ocupantes > 0 and z.id not in self.ocupacion_forzada:
@@ -644,6 +668,14 @@ class Edificio:
             tot["it"] += p_it
             q_kvar += sum(p * math.tan(math.acos(FP[k])) for k, p in
                           (("hvac", p_hvac), ("luces", p_luces), ("equipos", p_eq), ("it", p_it)))
+            for k in range(3):
+                p_lin[k] += p_hvac / 3.0
+                q_lin[k] += p_hvac * tanf["hvac"] / 3.0
+            lin = iz % 3
+            p_lin[lin] += p_luces + p_eq
+            q_lin[lin] += p_luces * tanf["luces"] + p_eq * tanf["equipos"]
+            p_lin[0] += p_it
+            q_lin[0] += p_it * tanf["it"]
             if z.critica:
                 p_crit += p_zona
             tel.append({
@@ -672,6 +704,9 @@ class Edificio:
                 p = cf["kw_desocupado"] + (cf["kw_ocupado"] - cf["kw_desocupado"]) * min(f_edif * 1.5, 1.0)
             p_fija += p
             q_kvar += p * math.tan(math.acos(cf.get("fp", 0.9)))
+            for k in range(3):
+                p_lin[k] += p / 3.0
+                q_lin[k] += p * math.tan(math.acos(cf.get("fp", 0.9))) / 3.0
             if cf.get("critica"):
                 p_crit += p
 
@@ -724,6 +759,7 @@ class Edificio:
             "t_ext_c": round(t_ext, 2), "hr_pct": round(clima.get("hr_pct", 0), 1), "irr_wm2": round(ghi, 1),
             **{f"irr_{o}": round(v, 1) for o, v in irr.items() if o != "H"},
             "red_ok": corte is None,
+            **self._lineas(p_lin, q_lin, energizado=p_total > 0 or corte is None),
             "modo_energia": "red" if corte is None else "generador" if gen_on else "ups" if ups_ok else "sin_energia",
         }
         if self.gen.get("habilitado"):

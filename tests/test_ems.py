@@ -355,3 +355,16 @@ def test_corte_sin_planta_solo_ups_de_servidores(cfg):
     assert set(m.modo_energia) == {"ups", "sin_energia"}
     assert (m.modo_energia == "ups").sum() == ups // 5              # el UPS aguanta su autonomía
     assert z[~z.critica].p_total_kw.max() == 0
+
+
+def test_tres_lineas_del_sistema_trifasico(cfg, semana):
+    m = semana["reglas_dr"].medidor
+    # la potencia de las tres líneas suma la del edificio y la corriente media coincide con la trifásica
+    assert np.allclose(m.p_l1_kw + m.p_l2_kw + m.p_l3_kw, m.p_total_kw, atol=0.01)
+    dia = m[m.p_total_kw > 40]
+    media = (dia.i_l1_a + dia.i_l2_a + dia.i_l3_a) / 3
+    assert np.allclose(media, dia.i_a, rtol=0.03)
+    # con el edificio en carga el desbalance es moderado y la tensión se mantiene cerca de 277 V
+    assert dia.desbalance_pct.median() < 6 and dia.desbalance_pct.quantile(0.95) < 15
+    v_ln = cfg["edificio"]["v_ll"] / math.sqrt(3)
+    assert dia[["v_l1_v", "v_l2_v", "v_l3_v"]].min().min() > 0.95 * v_ln

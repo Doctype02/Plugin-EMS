@@ -1142,6 +1142,313 @@
       "id": 13
     },
     {
+      "type": "timeseries",
+      "title": "Las 3 líneas: corriente por fase (L1, L2, L3)",
+      "description": "Corriente de cada línea del sistema trifásico de 480 V. Climatización y ascensor reparten por igual; luces y enchufes son monofásicos y producen el desbalance.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ems-influx"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and (r._field == \"i_l1_a\" or r._field == \"i_l2_a\" or r._field == \"i_l3_a\"))\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 14,
+        "h": 8
+      },
+      "id": 50,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "amp",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "pointSize": 4,
+            "spanNulls": 1800000,
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "barAlignment": 0,
+            "insertNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineStyle": {
+              "fill": "solid"
+            }
+          },
+          "noValue": "Esperando datos (se registran cada 5 min)",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "i_l1_a"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Línea 1 (L1)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F2495C"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "i_l2_a"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Línea 2 (L2)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FADE2A"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "i_l3_a"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Línea 3 (L3)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794F2"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tensión de las 3 líneas (fase–neutro)",
+      "description": "Tensión de cada línea respecto al neutro (nominal 277 V). Baja ligeramente al subir la carga.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ems-influx"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and (r._field == \"v_l1_v\" or r._field == \"v_l2_v\" or r._field == \"v_l3_v\"))\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        }
+      ],
+      "gridPos": {
+        "x": 14,
+        "y": 25,
+        "w": 10,
+        "h": 8
+      },
+      "id": 51,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "volt",
+          "decimals": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "pointSize": 4,
+            "spanNulls": 1800000,
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "barAlignment": 0,
+            "insertNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineStyle": {
+              "fill": "solid"
+            }
+          },
+          "noValue": "Esperando datos (se registran cada 5 min)",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "v_l1_v"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Línea 1 (L1)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F2495C"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "v_l2_v"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Línea 2 (L2)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FADE2A"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "v_l3_v"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Línea 3 (L3)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794F2"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
       "type": "table",
       "title": "Últimas alarmas",
       "description": "Las alarmas más recientes del rango de tiempo, la primera es la última.",
@@ -1161,7 +1468,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 25,
+        "y": 33,
         "w": 24,
         "h": 7
       },
@@ -1330,7 +1637,7 @@
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 32,
+        "y": 40,
         "w": 24,
         "h": 1
       },
@@ -1432,7 +1739,7 @@
           "id": 16,
           "gridPos": {
             "x": 0,
-            "y": 33,
+            "y": 41,
             "w": 5,
             "h": 3
           }
@@ -1518,7 +1825,7 @@
           "id": 17,
           "gridPos": {
             "x": 5,
-            "y": 33,
+            "y": 41,
             "w": 5,
             "h": 3
           }
@@ -1586,7 +1893,7 @@
           "id": 18,
           "gridPos": {
             "x": 10,
-            "y": 33,
+            "y": 41,
             "w": 5,
             "h": 3
           }
@@ -1661,7 +1968,7 @@
           "id": 19,
           "gridPos": {
             "x": 15,
-            "y": 33,
+            "y": 41,
             "w": 5,
             "h": 3
           }
@@ -1730,7 +2037,7 @@
           "id": 20,
           "gridPos": {
             "x": 20,
-            "y": 33,
+            "y": 41,
             "w": 4,
             "h": 3
           }
@@ -1746,7 +2053,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 36,
+            "y": 44,
             "w": 12,
             "h": 9
           },
@@ -1947,7 +2254,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 36,
+            "y": 44,
             "w": 12,
             "h": 9
           },
@@ -2245,7 +2552,7 @@
           "id": 23,
           "gridPos": {
             "x": 0,
-            "y": 45,
+            "y": 53,
             "w": 6,
             "h": 8
           }
@@ -2270,7 +2577,7 @@
           ],
           "gridPos": {
             "x": 6,
-            "y": 45,
+            "y": 53,
             "w": 6,
             "h": 8
           },
@@ -2384,7 +2691,7 @@
           ],
           "gridPos": {
             "x": 12,
-            "y": 45,
+            "y": 53,
             "w": 6,
             "h": 8
           },
@@ -2498,7 +2805,7 @@
           ],
           "gridPos": {
             "x": 18,
-            "y": 45,
+            "y": 53,
             "w": 6,
             "h": 8
           },
@@ -2612,7 +2919,7 @@
           ],
           "gridPos": {
             "x": 0,
-            "y": 53,
+            "y": 61,
             "w": 8,
             "h": 8
           },
@@ -2727,7 +3034,7 @@
           ],
           "gridPos": {
             "x": 8,
-            "y": 53,
+            "y": 61,
             "w": 8,
             "h": 8
           },
@@ -2840,7 +3147,7 @@
           ],
           "gridPos": {
             "x": 16,
-            "y": 53,
+            "y": 61,
             "w": 8,
             "h": 8
           },
@@ -2944,7 +3251,7 @@
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 33,
+        "y": 41,
         "w": 24,
         "h": 1
       },
@@ -3012,7 +3319,7 @@
           "id": 31,
           "gridPos": {
             "x": 0,
-            "y": 34,
+            "y": 42,
             "w": 4,
             "h": 4
           }
@@ -3081,7 +3388,7 @@
           "id": 32,
           "gridPos": {
             "x": 4,
-            "y": 34,
+            "y": 42,
             "w": 4,
             "h": 4
           }
@@ -3149,7 +3456,7 @@
           "id": 33,
           "gridPos": {
             "x": 8,
-            "y": 34,
+            "y": 42,
             "w": 4,
             "h": 4
           }
@@ -3219,7 +3526,7 @@
           "id": 34,
           "gridPos": {
             "x": 12,
-            "y": 34,
+            "y": 42,
             "w": 4,
             "h": 4
           }
@@ -3301,7 +3608,7 @@
           "id": 35,
           "gridPos": {
             "x": 16,
-            "y": 34,
+            "y": 42,
             "w": 4,
             "h": 4
           }
@@ -3383,7 +3690,7 @@
           "id": 36,
           "gridPos": {
             "x": 20,
-            "y": 34,
+            "y": 42,
             "w": 4,
             "h": 4
           }
@@ -3835,7 +4142,7 @@
           "id": 37,
           "gridPos": {
             "x": 0,
-            "y": 38,
+            "y": 46,
             "w": 24,
             "h": 13
           }
@@ -3928,7 +4235,7 @@
           "id": 38,
           "gridPos": {
             "x": 0,
-            "y": 51,
+            "y": 59,
             "w": 12,
             "h": 10
           }
@@ -4037,7 +4344,7 @@
           "id": 39,
           "gridPos": {
             "x": 12,
-            "y": 51,
+            "y": 59,
             "w": 12,
             "h": 10
           }
@@ -4051,7 +4358,7 @@
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 34,
+        "y": 42,
         "w": 24,
         "h": 1
       },
@@ -4077,7 +4384,7 @@
           ],
           "gridPos": {
             "x": 0,
-            "y": 35,
+            "y": 43,
             "w": 4,
             "h": 6
           },
@@ -4171,7 +4478,7 @@
           ],
           "gridPos": {
             "x": 4,
-            "y": 35,
+            "y": 43,
             "w": 4,
             "h": 6
           },
@@ -4240,7 +4547,7 @@
           ],
           "gridPos": {
             "x": 8,
-            "y": 35,
+            "y": 43,
             "w": 4,
             "h": 6
           },
@@ -4309,7 +4616,7 @@
           ],
           "gridPos": {
             "x": 12,
-            "y": 35,
+            "y": 43,
             "w": 4,
             "h": 6
           },
@@ -4388,7 +4695,7 @@
           ],
           "gridPos": {
             "x": 16,
-            "y": 35,
+            "y": 43,
             "w": 4,
             "h": 6
           },
@@ -4456,7 +4763,7 @@
           ],
           "gridPos": {
             "x": 20,
-            "y": 35,
+            "y": 43,
             "w": 4,
             "h": 6
           },
@@ -4532,7 +4839,7 @@
           ],
           "gridPos": {
             "x": 0,
-            "y": 41,
+            "y": 49,
             "w": 14,
             "h": 10
           },
@@ -4721,7 +5028,7 @@
           ],
           "gridPos": {
             "x": 14,
-            "y": 41,
+            "y": 49,
             "w": 10,
             "h": 10
           },
@@ -4851,11 +5158,165 @@
           }
         },
         {
+          "type": "timeseries",
+          "title": "Las 3 líneas: corriente por fase (L1, L2, L3)",
+          "description": "Corriente de cada línea en el tablero del edificio; durante un corte es la que entrega la planta (165 A a plena carga).",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and (r._field == \"i_l1_a\" or r._field == \"i_l2_a\" or r._field == \"i_l3_a\"))\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+            }
+          ],
+          "gridPos": {
+            "x": 0,
+            "y": 59,
+            "w": 24,
+            "h": 8
+          },
+          "id": 52,
+          "fieldConfig": {
+            "defaults": {
+              "unit": "amp",
+              "decimals": 0,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": 1800000,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "barAlignment": 0,
+                "insertNulls": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                },
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineStyle": {
+                  "fill": "solid"
+                }
+              },
+              "noValue": "Esperando datos (se registran cada 5 min)",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "i_l1_a"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Línea 1 (L1)"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#F2495C"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "i_l2_a"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Línea 2 (L2)"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#FADE2A"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "i_l3_a"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Línea 3 (L3)"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#5794F2"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "last"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
           "type": "text",
           "title": "Ficha de diseño",
           "gridPos": {
             "x": 0,
-            "y": 51,
+            "y": 67,
             "w": 24,
             "h": 11
           },
