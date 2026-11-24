@@ -53,6 +53,21 @@ Corriente a plena carga: 137,5 kVA / (√3 · 480 V) = 165 A → interruptor de 
 - **UPS de servidores**: 3 kVA / 2,7 kW, en línea de doble conversión, 20 min de autonomía con la carga de TI
   (1,8 kW = 67 % del UPS). Cubre los 15 s del arranque y da margen para un apagado ordenado si la planta no arranca.
 
+### Secuencia de un corte (nada cambia de golpe)
+
+| Momento | Qué ocurre |
+|---|---|
+| 0 s | Cae la red. El UPS sostiene los servidores; el resto del edificio queda sin tensión |
+| ≈ 15 s | La planta arranca y la transferencia le pasa el tablero de emergencia: vuelven la iluminación (al 70 %) y el ascensor |
+| 3 min | Termina la protección de rearranque de los compresores; el VRF de los servidores vuelve primero |
+| 5 min en adelante | **Toma de carga escalonada**: el EMS devuelve los terminales de 2 en 2 cada 5 min, la zona más caliente primero. La planta sube de ≈ 8 kW a su régimen en unos 50 min |
+| 5 min | Los paneles se resincronizan y empiezan a aportar en cuanto la carga supera el mínimo de la planta |
+| durante la espera | Las zonas se calientan (≈ +1 °C en las ocupadas) y luego se estabilizan en la consigna de emergencia de 25 °C |
+| vuelve la red | Retransferencia: los compresores paran otra vez y vuelven por turnos; la temperatura baja poco a poco a 24 °C |
+
+Cada compresor añade además unos segundos de pico al arrancar (campo `p_pico_kw`); como entran por turnos, nunca
+se suman más de 2–3.
+
 ## 5. Paneles solares en paralelo con la planta
 
 La fotovoltaica de la azotea (55 kW pico) no se desconecta durante el corte: la planta forma la red y el inversor

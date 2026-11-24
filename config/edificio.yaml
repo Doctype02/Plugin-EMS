@@ -191,6 +191,7 @@ respaldo:
   ups:
     potencia_kw: 2.7             # 3 kVA en línea de doble conversión para los servidores (1.8 kW de TI)
     autonomia_min: 20            # con la carga de TI; cubre el arranque de la planta y un apagado ordenado
+  rearranque_min: 3              # protección de los compresores tras un microcorte (transferencia o retorno)
   fv_reconexion_min: 5           # el inversor vuelve 5 min después de que la planta estabiliza la red (IEEE 1547)
   emergencia:                    # reglas del EMS mientras el edificio está en la planta
     setpoint_c: 25.0             # consigna con ocupación

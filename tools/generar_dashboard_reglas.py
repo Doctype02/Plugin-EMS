@@ -250,7 +250,8 @@ def reglas(cfg: dict) -> list[dict]:
           "Capacidad fija (55 %; 100 % en zonas críticas) y alarma", "6 lecturas", "No decidir con un dato falso"),
         R("proteccion", "Modo emergencia (planta de respaldo)", "Corte de red: el edificio pasa a la planta de respaldo",
           f"Luces al {em['luces_nivel'] * 100:g} %, consigna {em['setpoint_c']:g} °C (mínimo {em['setpoint_min_c']:g} °C), pasillos sin "
-          f"aire, arranque escalonado y límite de {gen['potencia_kw'] * gen['carga_max']:g} kW sobre la planta; los paneles siguen aportando",
+          f"aire y límite de {gen['potencia_kw'] * gen['carga_max']:g} kW sobre la planta. Toma de carga escalonada: tras la transferencia "
+          f"(y al volver la red) todos los terminales paran y vuelven de {e['arranques_max_paso']} en {e['arranques_max_paso']} cada {paso} min; los paneles siguen aportando",
           f"{gen['potencia_kw']:g} kW", "Mantener el edificio operando sin sobrecargar la planta"),
         R("proteccion", "Zonas críticas", "Cuarto de servidores", "Nunca se deslastra ni se apaga; consigna fija",
           "22 °C", "Continuidad del servicio"),

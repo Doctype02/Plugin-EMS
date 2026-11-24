@@ -289,7 +289,7 @@ def generar(cfg: dict) -> tuple[str, dict]:
         "startSeconds": num(g.get("arranque_s", 15)), "idleLPerHKw": num(g.get("consumo_vacio_l_h_kw", 0.03)),
         "lPerKwh": num(g.get("consumo_l_kwh", 0.24)), "tankL": num(g.get("tanque_l", 0)),
         "upsKw": num(u.get("potencia_kw", 0)), "upsMinutes": num(u.get("autonomia_min", 30)),
-        "pvReconnectMin": num(r.get("fv_reconexion_min", 5)), "setpoint": num(em.get("setpoint_c", 25)),
+        "pvReconnectMin": num(r.get("fv_reconexion_min", 5)), "restartMin": num(r.get("rearranque_min", 3)), "setpoint": num(em.get("setpoint_c", 25)),
         "setpointMin": num(em.get("setpoint_min_c", 24)), "lights": num(em.get("luces_nivel", 0.7)),
         "noHvacTypes": list(em.get("tipos_sin_hvac") or []),
     }

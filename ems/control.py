@@ -134,6 +134,7 @@ class Controlador:
         self.modo_seguro: set[str] = set()
         self.reglas: dict[str, int] = {}
         self.emergencia = False   # edificio alimentado por la planta de respaldo (sin red)
+        self._modo_prev: str | None = None
         self.resp = (cfg.get("respaldo") or {})
 
     # ---------------------------------------------------------------- utilidades
@@ -413,7 +414,18 @@ class Reglas(Controlador):
         self.reglas = {k: 0 for k in ("ocupadas", "vacancia", "setback", "apagadas", "proteccion_alta",
                                       "proteccion_baja", "luz_natural", "standby", "emergencia")}
         self.reglas.update({"precool": 0, "fuera_horario": int(not self.horario_laboral(t))})
-        return {z["zona"]: self._reglas_zona(t, z) for z in tel if not z["critica"]}
+        cmds = {z["zona"]: self._reglas_zona(t, z) for z in tel if not z["critica"]}
+        # toma de carga escalonada: al pasar a la planta de respaldo (o al volver a la red) todos los terminales
+        # se paran y el arranque escalonado los devuelve por turnos, la zona más caliente primero
+        modo = med.get("modo_energia", "red")
+        self.reglas["rearranque"] = 0
+        if self._modo_prev is not None and modo != self._modo_prev and modo in ("red", "generador"):
+            for c in cmds.values():
+                if c["hvac_enable"]:
+                    c["hvac_enable"] = False
+                    self.reglas["rearranque"] += 1
+        self._modo_prev = modo
+        return cmds
 
 
 class ReglasDR(Reglas):

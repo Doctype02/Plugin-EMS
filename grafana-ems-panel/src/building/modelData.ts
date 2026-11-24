@@ -940,6 +940,7 @@ export const BACKUP = {
   upsKw: 2.7,
   upsMinutes: 20,
   pvReconnectMin: 5,
+  restartMin: 3,
   setpoint: 25,
   setpointMin: 24,
   lights: 0.7,

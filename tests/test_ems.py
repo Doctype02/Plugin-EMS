@@ -383,3 +383,21 @@ def test_pico_de_arranque_de_los_equipos(cfg, semana):
     mayor = max(s["capacidad_kw"] / (s["cop"] * cfg["edificio"]["factor_cop"]) for s in vrf)
     # el mayor pico simultáneo equivale a pocas unidades, muy lejos de las 6 VRF arrancando juntas
     assert m.p_arranque_kw.max() < 3 * 0.5 * mayor + 10
+
+
+def test_transferencia_a_la_planta_es_escalonada(cfg):
+    """Nada cambia de golpe en un corte: los terminales se paran, vuelven por turnos y la temperatura deriva."""
+    m, z, despues = _corte(cfg, inicio="2026-11-05 11:00", horas=2)
+    nc = z[~z.critica]
+    activos = nc.groupby("ts").hvac_enable.sum()
+    assert activos.iloc[1] == 0                                   # tras la transferencia, todos parados
+    assert activos.diff().max() <= cfg["ems"]["arranques_max_paso"]  # vuelven de 2 en 2
+    assert activos.iloc[-1] >= 15
+    # la planta toma la carga poco a poco y nunca arrancan muchos compresores a la vez
+    assert m.p_gen_kw.iloc[1] < 0.5 * m.p_gen_kw.iloc[-1]
+    assert m.p_gen_kw.diff().iloc[2:].max() < 15 and m.n_arranques_equipos.max() <= 3
+    # la temperatura de las zonas ocupadas sube durante la toma de carga y no se dispara
+    ocup = nc[nc.ocupado & (nc.tipo != "pasillo")].groupby("ts").temp_real_c.mean()
+    assert 0.4 < ocup.max() - ocup.iloc[0] < 2.5
+    # al volver la red hay otra parada y otro reingreso por turnos
+    assert despues.modo_energia.iloc[0] == "red"

@@ -317,8 +317,9 @@ class Edificio:
         for i in ids:
             ev = self.eventos.pop(i, None)
             if ev and ev.tipo == "corte_energia":
-                # vuelve la red: retransferencia y repostaje del tanque de la planta
+                # vuelve la red: retransferencia (otro microcorte para los compresores) y repostaje del tanque
                 self.combustible_l = float(self.gen.get("tanque_l", 0.0))
+                self._disparo_compresores()
             if ev and ev.tipo == "sensor" and self.falla_sensor.get(ev.zona, {}).get("evento") == ev.id:
                 self.falla_sensor.pop(ev.zona, None)
 
@@ -447,6 +448,14 @@ class Edificio:
                         self.estado[z].hvac_on = False
         return pre
 
+    def _disparo_compresores(self):
+        """Interrupción de la alimentación (transferencia a la planta o de vuelta a la red): los compresores se
+        desconectan y su protección contra ciclos cortos no los deja rearrancar hasta pasados `rearranque_min`;
+        después vuelven a tomar carga en rampa. Un valor negativo de `mod_real` representa esa espera."""
+        espera = float(self.resp.get("rearranque_min", 3.0)) * float(self.e.get("rampa_compresor_por_min", 0.1))
+        for s0 in self.estado.values():
+            s0.mod_real = -espera
+
     def _lineas(self, p_lin: list[float], q_lin: list[float], energizado: bool) -> dict:
         """Corriente y tensión de cada línea (L1, L2, L3) y desbalance de corriente (NEMA: máx. desviación / media)."""
         v_ln_nom = self.e["v_ll"] / math.sqrt(3)
@@ -497,9 +506,7 @@ class Edificio:
         ups_min = float((self.resp.get("ups") or {}).get("autonomia_min", 0) or (corte.intensidad if corte else 30) or 30)
         ups_ok = corte is not None and (gen_on or corte.transcurrido < ups_min)
         if corte is not None and corte.transcurrido == 0:
-            # transferencia: los compresores se desconectan y vuelven a tomar carga en rampa
-            for s0 in self.estado.values():
-                s0.mod_real = 0.0
+            self._disparo_compresores()
         irr = {o: clima.get(f"irr_{o}", ghi * 0.4) for o in ("N", "E", "S", "W")}
         irr["H"] = clima.get("irr_H", ghi)
         hora = minuto_del_dia / 60.0
@@ -617,7 +624,7 @@ class Edificio:
             q_hvac_sens = 0.0
             for _ in range(sub):
                 mod_r = min(mod, mod_r + sube) if mod > mod_r else mod
-                q_h = mod_r * cap
+                q_h = max(mod_r, 0.0) * cap   # mod_r < 0: esperando la protección de rearranque
                 q_hvac_sens += q_h / sub
                 dTm = (z.ua_muro * (t_eq_muro - tm) + z.ua_techo * (t_eq_techo - tm) + z.ua_suelo * (t_suelo - tm)
                        + z.ua_arriba * (t_arriba - tm) + z.ua_abajo * (t_abajo - tm) + z.h_am * (t - tm) + q_rad) / z.c_masa

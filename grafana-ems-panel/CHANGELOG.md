@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.2
+
+Nada cambia de golpe en un corte simulado (modo demostración), igual que en el gemelo:
+
+- Durante los 15 s de arranque de la planta sólo el UPS sostiene los servidores; después la planta toma primero
+  luces y ascensor.
+- **Toma de carga escalonada**: tras la transferencia (y también al volver la red) los terminales esperan su
+  protección de rearranque y vuelven por turnos, 2 cada 5 min; cada zona se calienta mientras espera y recupera
+  su consigna poco a poco.
+- Un corte fuera de horario ya no hace saltar la temperatura de las zonas que estaban apagadas.
+
 ## 1.7.1
 
 - La «Demanda del día» se dibuja en escalones (cada escalón es un equipo que entra o sale), como las gráficas de

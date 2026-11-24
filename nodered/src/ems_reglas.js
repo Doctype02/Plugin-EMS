@@ -142,6 +142,20 @@ for (const zid of Object.keys(zonas)) {
     cmds[zid] = { hvac_enable: en, setpoint_c: sp, ventilacion: vent, luces_nivel: luces, equipos_nivel: equipos, hvac_mod: null };
 }
 
+// ---------------------------------------------------------------- toma de carga escalonada tras una transferencia
+// al pasar a la planta de respaldo (o al volver a la red) todos los terminales se paran y el arranque
+// escalonado los devuelve por turnos (misma lógica que Reglas._decidir)
+{
+    const modo = med.modo_energia || "red";
+    R.rearranque = 0;
+    if (st.modoPrev !== undefined && st.modoPrev !== null && modo !== st.modoPrev && (modo === "red" || modo === "generador")) {
+        for (const zid of Object.keys(cmds)) {
+            if (cmds[zid].hvac_enable) { cmds[zid].hvac_enable = false; R.rearranque++; }
+        }
+    }
+    st.modoPrev = modo;
+}
+
 // ---------------------------------------------------------------- rampa de setpoint + arranque escalonado
 // (misma lógica que Controlador._secuenciar en ems/control.py)
 {

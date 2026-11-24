@@ -280,6 +280,11 @@ interface ZoneEvents {
   outage?: SimEvent;
   /** Corte de red con la planta de respaldo en marcha (tablero de emergencia con servicio). */
   backup: boolean;
+  /** Tras una transferencia: inicio de la parada y, si ya rearrancó, del período de recuperación. */
+  transferAt?: number;
+  recoverSince?: number;
+  /** La última transferencia fue el retorno a la red tras un corte con planta (la zona venía en emergencia). */
+  afterBackup: boolean;
   /** El UPS se agotó: las cargas críticas también se apagan. */
   upsDepleted: boolean;
   doorFlow: number;
@@ -288,9 +293,50 @@ interface ZoneEvents {
   sensor: boolean;
 }
 
-/** Corte de red con la planta de respaldo disponible (sin el evento «falla_generador»). */
-function backupOn(act: SimEvent[]): boolean {
-  return BACKUP.enabled && act.some((e) => e.kind === 'corte_energia') && !act.some((e) => e.kind === 'falla_generador');
+/**
+ * Corte de red con la planta de respaldo ya en marcha: disponible (sin «falla_generador») y pasados los
+ * segundos de arranque y transferencia, que cubre el UPS de los servidores.
+ */
+function backupOn(act: SimEvent[], t?: number): boolean {
+  const outage = act.find((e) => e.kind === 'corte_energia');
+  if (!BACKUP.enabled || !outage || act.some((e) => e.kind === 'falla_generador')) {
+    return false;
+  }
+  return t === undefined || t - outage.start >= BACKUP.startSeconds * 1000;
+}
+
+/** Tiempo que tarda una zona en recuperar la temperatura tras rearrancar su terminal (constante, min). */
+const RECOVERY_MIN = 20;
+/** Ventana en la que una transferencia sigue afectando a las zonas (toma de carga + recuperación). */
+const TRANSFER_WINDOW = 150 * MIN;
+
+/**
+ * Última transferencia (a la planta al empezar un corte, o de vuelta a la red al terminar) reciente: en ambas
+ * los compresores se desconectan y vuelven por turnos. Sin planta disponible no hay transferencia a ella.
+ */
+function lastTransfer(events: SimEvent[] | undefined, t: number): number | undefined {
+  if (!BACKUP.enabled) {
+    return undefined;
+  }
+  let at: number | undefined;
+  for (const e of events ?? []) {
+    if (e.kind !== 'corte_energia') {
+      continue;
+    }
+    for (const x of [e.start, e.end]) {
+      if (x <= t && t - x < TRANSFER_WINDOW && (at === undefined || x > at)) {
+        at = x;
+      }
+    }
+  }
+  return at;
+}
+
+/** Instante en que el terminal de la zona vuelve a arrancar tras una transferencia (arranque escalonado). */
+function restartAfter(z: Zone, transferAt: number): number {
+  const rank = START_RANK.get(z.id) ?? 0;
+  const turn = z.critical ? 0 : Math.floor(rank / STARTS_PER_STEP) + 1;
+  return transferAt + (BACKUP.restartMin + 5 * turn) * MIN;
 }
 
 const PTAC_SYSTEMS = new Set(HVAC_SYSTEMS.filter((u) => u.kind === 'ptac').map((u) => u.id));
@@ -301,14 +347,19 @@ function zoneEvents(z: Zone, t: number, events?: SimEvent[]): ZoneEvents {
   const mine = act.filter((e) => affectsZone(e, z.id));
   const fireAnywhere = act.find((e) => e.kind === 'incendio');
   const outage = act.find((e) => e.kind === 'corte_energia');
-  const backup = backupOn(act);
+  const backup = backupOn(act, t);
   const upsDepleted = !!outage && !backup && t - outage.start > BACKUP.upsMinutes * MIN;
   // con la planta en marcha sólo quedan sin frío los equipos fuera del tablero de emergencia (PTAC)
   const outageCutsCooling = !!outage && (!backup || isPtac(z));
+  // toma de carga escalonada: tras la transferencia cada terminal espera su turno para rearrancar
+  const transferAt = lastTransfer(events, t);
+  const restartAt = transferAt !== undefined ? restartAfter(z, transferAt) : undefined;
+  const waiting = restartAt !== undefined && t < restartAt && !outageCutsCooling;
   const starts = [
     ...mine.filter((e) => e.kind === 'falla_terminal' || e.kind === 'falla_vrf').map((e) => e.start),
     ...(fireAnywhere ? [fireAnywhere.start] : []),
     ...(outage && outageCutsCooling ? [outage.start] : []),
+    ...(waiting && transferAt !== undefined ? [transferAt] : []),
   ];
   return {
     kinds: [...new Set(mine.map((e) => e.kind))],
@@ -317,6 +368,13 @@ function zoneEvents(z: Zone, t: number, events?: SimEvent[]): ZoneEvents {
     fireAnywhere,
     outage,
     backup,
+    transferAt,
+    afterBackup:
+      transferAt !== undefined &&
+      (events ?? []).some((e) => e.kind === 'corte_energia' && e.end === transferAt) &&
+      !(events ?? []).some((e) => e.kind === 'falla_generador' && e.start < transferAt && e.end >= transferAt),
+    recoverSince:
+      restartAt !== undefined && !waiting && !outageCutsCooling && t < restartAt + 5 * RECOVERY_MIN * MIN ? restartAt : undefined,
     upsDepleted,
     doorFlow: mine
       .filter((e) => e.kind === 'puerta_abierta')
@@ -594,7 +652,16 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     const hours = (t - ev.noCoolingSince) / HOUR;
     // conato de incendio: 150 kW de calor en la zona (mismo valor que ems/eventos.py)
     const gains = occupants * Q_PERSON + pLights + pPlugs + solar * 2 + (ev.fire ? FIRE_KW : 0);
-    temp = freeFloat(z, setpoint, hours, gains, w.tExt, ev.doorFlow * ENVELOPE.rhoCp);
+    // parte de la temperatura que tenía la zona: la de consigna si estaba climatizada, o la de deriva si el
+    // aire ya estaba apagado por horario (así el corte no produce un salto)
+    const scheduledOff = !occupied && !precool && !workHours && z.fixedSetpoint === undefined && !baseline;
+    const spBefore = z.fixedSetpoint ?? (baseline ? setpoint : occupied || precool ? (opts.spOccupied ?? SP_OCC) : SP_UNOCC);
+    const from = scheduledOff
+      ? offTemp(z, ev.noCoolingSince)
+      : ev.afterBackup && !baseline && z.fixedSetpoint === undefined && !ev.outage
+        ? Math.max(spBefore, BACKUP.setpoint) // venía de la consigna de emergencia
+        : spBefore;
+    temp = freeFloat(z, from, hours, gains, w.tExt, ev.doorFlow * ENVELOPE.rhoCp);
     if (ev.fire) {
       temp = Math.min(temp, 95);
     } else if (ev.fireAnywhere && z.floor === ZONE_BY_ID[ev.fireAnywhere.zone ?? '']?.floor) {
@@ -649,6 +716,16 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     }
   }
 
+  // recuperación tras rearrancar (toma de carga escalonada): la zona vuelve poco a poco a su consigna desde
+  // lo que se calentó mientras esperaba su turno, con el compresor entrando en rampa y luego a más carga
+  if (ev.recoverSince !== undefined && ev.transferAt !== undefined && hvacOn && ev.noCoolingSince === undefined) {
+    const offHours = (ev.recoverSince - ev.transferAt) / HOUR;
+    const start = ev.afterBackup && !baseline && z.fixedSetpoint === undefined ? Math.max(spPhys, BACKUP.setpoint) : spPhys;
+    const rise = Math.max(0, Math.min(4, freeFloat(z, start, offHours, ffGains, w.tExt) - spPhys));
+    const k = Math.exp(-(t - ev.recoverSince) / (RECOVERY_MIN * MIN));
+    temp += rise * k;
+    mod = Math.min(1, mod + 0.5 * k) * Math.min(1, (t - ev.recoverSince) / (10 * MIN));
+  }
   if (ev.doorFlow > 0) {
     temp += Math.min(2.5, ev.doorFlow * 3);
   }
@@ -724,7 +801,7 @@ function fixedLoads(t: number, opts: SimOptions) {
   const c = clock(t);
   const act = activeEvents(opts.events, t);
   const outage = act.some((e) => e.kind === 'corte_energia');
-  const backup = backupOn(act);
+  const backup = backupOn(act, t);
   let total = 0;
   let critical = 0;
   let q = 0;
@@ -751,7 +828,7 @@ export function pvKw(t: number, opts: SimOptions): number {
   const act = activeEvents(opts.events, t);
   const outage = act.find((e) => e.kind === 'corte_energia');
   // en un corte el inversor sólo sigue si la planta forma la red, y se reconecta unos minutos después
-  if (!opts.pv || (outage && (!backupOn(act) || t - outage.start < BACKUP.pvReconnectMin * MIN))) {
+  if (!opts.pv || (outage && (!backupOn(act, t) || t - outage.start < BACKUP.pvReconnectMin * MIN))) {
     return 0;
   }
   return pvPowerKw(weather(t, opts.events).irr);
@@ -853,7 +930,7 @@ export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
   }
   // sin red ni planta el medidor lee cero (el UPS alimenta las cargas críticas); con la planta de respaldo el
   // edificio sigue consumiendo, de la planta y de los paneles (recortados para respetar su carga mínima)
-  const backup = !!outage && backupOn(act);
+  const backup = !!outage && backupOn(act, t);
   const dark = !!outage && !backup;
   const upsKw = dark ? now.pTotal : pCritical;
   const pTotal = dark ? 0 : now.pTotal;
@@ -935,7 +1012,7 @@ export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
 export function unitStatuses(t: number, k: Core, opts: SimOptions): Record<string, UnitStatus> {
   const act = activeEvents(opts.events, t);
   const outage = act.some((e) => e.kind === 'corte_energia');
-  const backup = backupOn(act);
+  const backup = backupOn(act, t);
   const out: Record<string, UnitStatus> = {};
   for (const u of HVAC_SYSTEMS) {
     const zs = u.zones.map((id) => k.zones[id]).filter(Boolean);
