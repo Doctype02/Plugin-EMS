@@ -314,9 +314,15 @@ class Puente:
                 self.influx.medidor(t, med)
                 self.influx.flush(forzar=True)  # un paso = un lote (con velocidad 1 hay 1 paso cada 5 min)
                 self._guardar(ed, t)
-                espera = paso * 60 / self.velocidad - (time.time() - t_real)
-                if espera > 0:
-                    time.sleep(espera)
+                # Espera al siguiente paso atendiendo la cola: con velocidad 1 un paso dura 5 min y, si se
+                # durmiera de corrido, los eventos y órdenes del panel tardarían hasta 5 min en aplicarse.
+                # Sus alarmas salen al momento; el efecto en la telemetría, en el paso siguiente.
+                while self.activo and time.time() - t_real < paso * 60 / self.velocidad:
+                    time.sleep(min(0.5, max(0.0, paso * 60 / self.velocidad - (time.time() - t_real))))
+                    _, lats = self._procesar_cola(ed, t)
+                    if lats:
+                        lat_ultima = sum(lats) / len(lats)
+                    self.influx.flush(forzar=True)
             if self.dias > 0:
                 break
             inicio = idx[-1] + pd.Timedelta(minutes=paso)

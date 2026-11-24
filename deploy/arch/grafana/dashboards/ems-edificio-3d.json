@@ -149,7 +149,7 @@
                 "defaultFloor": "auto",
                 "defaultView": "status",
                 "demoController": "reglas_dr",
-                "demoMode": true,
+                "demoMode": false,
                 "demoSpeed": 60,
                 "exploded": true,
                 "limitKw": 170,

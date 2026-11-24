@@ -150,7 +150,7 @@
     {
       "type": "gauge",
       "title": "Potencia",
-      "description": "Potencia que usa el edificio en este momento (mediana de los últimos 15 min). La aguja llega al rojo al acercarse al límite contratado de 170 kW.",
+      "description": "Potencia que usa el edificio en este momento (última muestra de 5 min). La aguja llega al rojo al acercarse al límite contratado de 170 kW.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -162,7 +162,7 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"p_total_kw\")\n  // Mediana de las 3 últimas muestras (15 min): ignora el pico aislado de un reinicio del simulador\n  |> tail(n: 3)\n  |> median()\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"p_total_kw\")\n  // Última muestra: el valor cambia en cuanto el gemelo aplica un evento\n  |> last()\n  |> keep(columns: [\"_value\"])"
         }
       ],
       "gridPos": {
@@ -241,7 +241,7 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"p_fv_kw\")\n  // Mediana de las 3 últimas muestras (15 min): ignora el pico aislado de un reinicio del simulador\n  |> tail(n: 3)\n  |> median()\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"p_fv_kw\")\n  // Última muestra: el valor cambia en cuanto el gemelo aplica un evento\n  |> last()\n  |> keep(columns: [\"_value\"])"
         }
       ],
       "gridPos": {
@@ -802,7 +802,7 @@
     {
       "type": "bargauge",
       "title": "¿En qué se usa la energía ahora?",
-      "description": "Reparto del consumo actual por uso (mediana de los últimos 15 min).",
+      "description": "Reparto del consumo actual por uso (última muestra de 5 min).",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -814,7 +814,7 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_hvac_kw\" or r._field == \"p_luces_kw\" or r._field == \"p_equipos_kw\" or r._field == \"p_fija_kw\")\n  // Mediana de las 3 últimas muestras (15 min): ignora el pico aislado de un reinicio del simulador\n  |> tail(n: 3)\n  |> median()\n  |> group()\n  |> map(fn: (r) => ({uso: if r._field == \"p_hvac_kw\" then \"Climatización\" else if r._field == \"p_luces_kw\" then \"Iluminación\"\n      else if r._field == \"p_equipos_kw\" then \"Equipos y enchufes\" else \"Cargas fijas\", _value: r._value}))\n  |> sort(columns: [\"_value\"], desc: true)"
+          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_hvac_kw\" or r._field == \"p_luces_kw\" or r._field == \"p_equipos_kw\" or r._field == \"p_fija_kw\")\n  // Última muestra: el valor cambia en cuanto el gemelo aplica un evento\n  |> last()\n  |> group()\n  |> map(fn: (r) => ({uso: if r._field == \"p_hvac_kw\" then \"Climatización\" else if r._field == \"p_luces_kw\" then \"Iluminación\"\n      else if r._field == \"p_equipos_kw\" then \"Equipos y enchufes\" else \"Cargas fijas\", _value: r._value}))\n  |> sort(columns: [\"_value\"], desc: true)"
         }
       ],
       "gridPos": {
@@ -883,7 +883,7 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_red_kw\" or r._field == \"p_fv_kw\" or r._field == \"p_gen_kw\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_red_kw\" or r._field == \"p_fv_kw\" or r._field == \"p_gen_kw\")\n  // Promedio de 5 min (una muestra del gemelo): sigue la simulación y los eventos sin retraso\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ],
       "gridPos": {
@@ -1036,7 +1036,7 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "import \"strings\"\n\nplanta = (z) => if z <= \"Z06\" then \"PB\" else if z <= \"Z11\" then \"P1\" else if z <= \"Z16\" then \"P2\" else if z <= \"Z21\" then \"P3\" else \"P4\"\nnombre_planta = (p) => if p == \"PB\" then \"Planta baja\" else \"Planta \" + strings.trimPrefix(v: p, prefix: \"P\")\norden = (p) => if p == \"PB\" then 0 else if p == \"P1\" then 1 else if p == \"P2\" then 2 else if p == \"P3\" then 3 else 4\n\nfrom(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\" and r._field == \"temp_c\" and r.zona != \"Z06\")\n  |> map(fn: (r) => ({r with _value: float(v: r._value)}))\n  // Mediana de las 3 últimas muestras (15 min): ignora el pico aislado de un reinicio del simulador\n  |> tail(n: 3)\n  |> median()\n  |> group()\n  |> map(fn: (r) => ({r with planta: planta(z: r.zona)}))\n  |> group(columns: [\"planta\"])\n  |> mean()\n  |> group()\n  |> map(fn: (r) => ({o: orden(p: r.planta), planta: nombre_planta(p: r.planta), _value: r._value}))\n  |> sort(columns: [\"o\"])\n  |> drop(columns: [\"o\"])"
+          "query": "import \"strings\"\n\nplanta = (z) => if z <= \"Z06\" then \"PB\" else if z <= \"Z11\" then \"P1\" else if z <= \"Z16\" then \"P2\" else if z <= \"Z21\" then \"P3\" else \"P4\"\nnombre_planta = (p) => if p == \"PB\" then \"Planta baja\" else \"Planta \" + strings.trimPrefix(v: p, prefix: \"P\")\norden = (p) => if p == \"PB\" then 0 else if p == \"P1\" then 1 else if p == \"P2\" then 2 else if p == \"P3\" then 3 else 4\n\nfrom(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"zona\" and r.escenario == \"live\" and r._field == \"temp_c\" and r.zona != \"Z06\")\n  |> map(fn: (r) => ({r with _value: float(v: r._value)}))\n  // Última muestra: el valor cambia en cuanto el gemelo aplica un evento\n  |> last()\n  |> group()\n  |> map(fn: (r) => ({r with planta: planta(z: r.zona)}))\n  |> group(columns: [\"planta\"])\n  |> mean()\n  |> group()\n  |> map(fn: (r) => ({o: orden(p: r.planta), planta: nombre_planta(p: r.planta), _value: r._value}))\n  |> sort(columns: [\"o\"])\n  |> drop(columns: [\"o\"])"
         }
       ],
       "gridPos": {
@@ -2019,7 +2019,7 @@
                 "type": "influxdb",
                 "uid": "ems-influx"
               },
-              "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"p_red_kw\")\n  // Mediana de las 3 últimas muestras (15 min): ignora el pico aislado de un reinicio del simulador\n  |> tail(n: 3)\n  |> median()\n  |> keep(columns: [\"_value\"])"
+              "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"p_red_kw\")\n  // Última muestra: el valor cambia en cuanto el gemelo aplica un evento\n  |> last()\n  |> keep(columns: [\"_value\"])"
             }
           ],
           "fieldConfig": {
@@ -2095,7 +2095,7 @@
                 "type": "influxdb",
                 "uid": "ems-influx"
               },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_hvac_kw\" or r._field == \"p_luces_kw\" or r._field == \"p_equipos_kw\" or r._field == \"p_fija_kw\" or r._field == \"p_critica_kw\")\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_hvac_kw\" or r._field == \"p_luces_kw\" or r._field == \"p_equipos_kw\" or r._field == \"p_fija_kw\" or r._field == \"p_critica_kw\")\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
             }
           ],
           "fieldConfig": {
@@ -2603,7 +2603,7 @@
                 "type": "influxdb",
                 "uid": "ems-influx"
               },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_fv_kw\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_fv_kw\")\n  // Promedio de 5 min (una muestra del gemelo): sigue la simulación y los eventos sin retraso\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
             }
           ],
           "gridPos": {
@@ -2717,7 +2717,7 @@
                 "type": "influxdb",
                 "uid": "ems-influx"
               },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"irr_wm2\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"irr_wm2\")\n  // Promedio de 5 min (una muestra del gemelo): sigue la simulación y los eventos sin retraso\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
             }
           ],
           "gridPos": {
@@ -2831,7 +2831,7 @@
                 "type": "influxdb",
                 "uid": "ems-influx"
               },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"precio_usd_kwh\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"precio_usd_kwh\")\n  // Promedio de 5 min (una muestra del gemelo): sigue la simulación y los eventos sin retraso\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
             }
           ],
           "gridPos": {
@@ -2945,7 +2945,7 @@
                 "type": "influxdb",
                 "uid": "ems-influx"
               },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"fp\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"fp\")\n  // Promedio de 5 min (una muestra del gemelo): sigue la simulación y los eventos sin retraso\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
             }
           ],
           "gridPos": {
@@ -3060,7 +3060,7 @@
                 "type": "influxdb",
                 "uid": "ems-influx"
               },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"t_ext_c\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"t_ext_c\")\n  // Promedio de 5 min (una muestra del gemelo): sigue la simulación y los eventos sin retraso\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
             }
           ],
           "gridPos": {
@@ -3173,7 +3173,7 @@
                 "type": "influxdb",
                 "uid": "ems-influx"
               },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"hr_pct\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"hr_pct\")\n  // Promedio de 5 min (una muestra del gemelo): sigue la simulación y los eventos sin retraso\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
             }
           ],
           "gridPos": {
@@ -4286,7 +4286,7 @@
                 "type": "influxdb",
                 "uid": "ems-influx"
               },
-              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"unidad\" and r.escenario == \"live\" and r._field == \"p_kw\")\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"unidad\"])\n  |> group(columns: [\"unidad\"])"
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"unidad\" and r.escenario == \"live\" and r._field == \"p_kw\")\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"unidad\"])\n  |> group(columns: [\"unidad\"])"
             }
           ],
           "fieldConfig": {
