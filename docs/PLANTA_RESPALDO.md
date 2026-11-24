@@ -50,8 +50,24 @@ Corriente a plena carga: 137,5 kVA / (√3 · 480 V) = 165 A → interruptor de 
 
 - **Transferencia automática (ATS)** de 250 A, 480 V, 4 polos. Detecta la falta de red, arranca la planta y
   transfiere el tablero de emergencia en ≈ 15 s; al volver la red, retransfiere y deja la planta enfriando.
-- **UPS de servidores**: 3 kVA / 2,7 kW, en línea de doble conversión, 20 min de autonomía con la carga de TI
-  (1,8 kW = 67 % del UPS). Cubre los 15 s del arranque y da margen para un apagado ordenado si la planta no arranca.
+- **UPS de servidores**: 3 kVA / 2,7 kW, en línea de doble conversión, 20 min de autonomía con la carga de TI.
+
+### Dimensionamiento del UPS
+
+| Paso | Cálculo | Resultado |
+|---|---|---|
+| Carga de TI del cuarto de servidores | del modelo del edificio (zona Z06) | 1,8 kW |
+| Potencia aparente | 1,8 kW ÷ 0,9 (factor de potencia de las fuentes) | 2,0 kVA |
+| Margen de crecimiento del 25 % | 2,0 kVA × 1,25 | 2,5 kVA |
+| **Tamaño comercial** | siguiente tamaño normalizado | **3 kVA / 2,7 kW** |
+| Carga del UPS | 1,8 kW ÷ 2,7 kW | 67 % (recomendado ≤ 80 %) |
+| Autonomía requerida | 15 s de arranque de la planta + apagado ordenado si no arranca | 20 min |
+| Energía de baterías | 1,8 kW × 20 min ÷ 0,90 (rendimiento del inversor) | 0,67 kWh |
+| Con envejecimiento (× 1,25) y descarga al 80 % | 0,67 × 1,25 ÷ 0,80 | **≈ 1,0 kWh** (p. ej. 6 baterías de 12 V y 14 Ah en serie, 72 V) |
+
+Topología en línea de doble conversión (los servidores no ven la transferencia). El UPS sólo alimenta la carga
+de TI; el aire del cuarto de servidores va en el tablero de emergencia, porque 20 minutos sin frío no ponen en
+riesgo los equipos (el cuarto no pasa de 23 °C en un corte con planta). La entrada del UPS cuelga de la línea L1.
 
 ### Secuencia de un corte (nada cambia de golpe)
 

@@ -401,3 +401,27 @@ def test_transferencia_a_la_planta_es_escalonada(cfg):
     assert 0.4 < ocup.max() - ocup.iloc[0] < 2.5
     # al volver la red hay otra parada y otro reingreso por turnos
     assert despues.modo_energia.iloc[0] == "red"
+
+
+def test_encendido_escalonado_por_planta(cfg, semana):
+    """De 6 a 8 no mandan las reglas de temperatura: cada planta enciende en su turno, sin pasillos ni baños."""
+    ap = cfg["ems"]["arranque_por_planta"]
+    z = semana["reglas_dr"].zonas.copy()
+    z["ts"] = pd.to_datetime(z["ts"])
+    planta = {x.id: x.planta for x in config.zonas(cfg)}
+    z["planta"] = z.zona.map(planta)
+    dia = z[(z.ts.dt.dayofweek == 1) & ~z.critica]                      # martes
+    h = dia.ts.dt.hour + dia.ts.dt.minute / 60
+    oficinas = dia[~dia.tipo.isin(ap["excluir_tipos"])]
+    for i, p in enumerate(ap["orden"]):
+        inicio = ap["inicio_h"] + i * ap["intervalo_min"] / 60
+        zp, hp = oficinas[oficinas.planta == p], h[oficinas.index][oficinas.planta == p]
+        assert not zp[(hp >= 6) & (hp < inicio - 0.01)].hvac_enable.any()   # apagada hasta su turno
+        en_turno = zp[(hp >= inicio + 0.2) & (hp < inicio + 0.45)]
+        assert en_turno.hvac_enable.all() and (en_turno.setpoint_c <= 27).all()  # encendida poco después
+    # pasillos y baños no entran en la secuencia
+    excl = dia[dia.tipo.isin(ap["excluir_tipos"])]
+    assert not excl[(h[excl.index] >= 6) & (h[excl.index] < 7.9)].hvac_enable.any()
+    # a la entrada las oficinas de un día normal ya están en confort
+    a_las_8 = oficinas[(h[oficinas.index] >= 8.5) & (h[oficinas.index] < 9) & oficinas.ocupado]
+    assert a_las_8.temp_real_c.mean() < 25.0

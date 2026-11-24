@@ -18,12 +18,16 @@ const P = Object.assign({
     plr_min: 0.15, banda_prop: 2.0,
     // planta de respaldo (modo emergencia): límite = gen_kw × gen_carga_max
     gen_kw: 100, gen_carga_max: 0.8, sp_emergencia: 25.0, sp_emergencia_min: 24.0, luces_emergencia: 0.7,
-    sin_hvac_emergencia: ["pasillo"]
+    sin_hvac_emergencia: ["pasillo"],
+    // encendido escalonado por planta (null = pre-enfriamiento por temperatura con arranque óptimo)
+    arranque: /*@ARRANQUE@*/null/*@FIN@*/
 }, flow.get("parametros") || {});
 
 // Terminal VRF de cada zona: [capacidad total kW, COP estacional del sistema, ventilador kW].
 // Lo genera nodered/build_flows.py desde config/edificio.yaml; se puede reemplazar con flow "parametros" → hvac.
 const HVAC = P.hvac || /*@HVAC@*/{"Z01": [5.76, 1.72, 0.147], "Z02": [19.41, 1.72, 0.435], "Z03": [13.36, 1.72, 0.269], "Z04": [17.04, 2.08, 0.433], "Z05": [16.13, 2.08, 0.397], "Z06": [15.31, 2.08, 0.37], "Z07": [14.54, 2.08, 0.341], "Z08": [3.55, 2.08, 0.099], "Z09": [2.89, 3.08, 0.086], "Z10": [0.16, 1.72, 0.003]}/*@FIN@*/;
+// Planta de cada zona (la genera build_flows.py; se puede reemplazar con flow "parametros" → plantas)
+const PLANTAS = P.plantas || /*@PLANTAS@*/{}/*@FIN@*/;
 // capacidad pedida por el terminal (ley proporcional, igual que ems/edificio.py: fraccion_carga)
 const fraccionCarga = (t, sp) => Math.min(1, Math.max(P.plr_min, (t - sp + P.banda) / P.banda_prop));
 
@@ -42,7 +46,20 @@ const laborable = dow >= 1 && dow <= 5;
 const horarioLaboral = laborable && h >= P.entrada - 0.5 && h < P.salida + 0.5;
 const antesDeEntrada = laborable && h < P.entrada;
 // arranque óptimo: el adelanto crece con el exceso de temperatura de la zona (igual que Controlador.precool)
+// encendido escalonado por planta: [encendido, consigna] dentro de la ventana sin reglas de temperatura, o null
+function arranquePlanta(zid, tipo) {
+    const A = P.arranque;
+    if (!A || !laborable) return null;
+    const ventana = A.sin_reglas_temperatura_h || [A.inicio_h, P.entrada];
+    const orden = A.orden || [];
+    const fin = Math.max(ventana[1], A.inicio_h + (orden.length - 1) * A.intervalo_min / 60 + P.paso_min / 60);
+    if (!(h >= ventana[0] && h < fin - 1e-9)) return null;
+    const i = orden.indexOf(PLANTAS[zid]);
+    if ((A.excluir_tipos || []).includes(tipo) || i < 0) return [false, A.setpoint_c];
+    return [h >= A.inicio_h + i * A.intervalo_min / 60 - 1e-9, A.setpoint_c];
+}
 function precoolZona(temp) {
+    if (P.arranque) return false;
     const exceso = temp - (P.sp_ocupado + P.precool_margen);
     const adelanto = Math.min(P.precool_min + Math.max(exceso, 0) * P.precool_min_grado, Math.max(P.precool_max_min, P.precool_min));
     return laborable && h >= P.entrada - adelanto / 60 && h < P.entrada;
@@ -96,7 +113,7 @@ if (cond("EDIF:PICO", med.demanda_15min_kw > P.limite_kw))
 // ---------------------------------------------------------------- reglas por zona
 // contadores de cada regla (zonas afectadas en este paso) → dashboard «Reglas del EMS»
 const R = { ocupadas: 0, vacancia: 0, setback: 0, apagadas: 0, proteccion_alta: 0, proteccion_baja: 0,
-            luz_natural: 0, standby: 0, emergencia: 0, precool: 0, fuera_horario: horarioLaboral ? 0 : 1 };
+            luz_natural: 0, standby: 0, emergencia: 0, arranque_planta: 0, precool: 0, fuera_horario: horarioLaboral ? 0 : 1 };
 const cmds = {};
 const tMs = d.getTime();
 for (const zid of Object.keys(zonas)) {
@@ -104,6 +121,19 @@ for (const zid of Object.keys(zonas)) {
     if (z.critica) continue;
     if (z.ocupado) st.ultimoOcup[zid] = tMs;
     const ocup = z.ocupado || (st.ultimoOcup[zid] !== undefined && tMs - st.ultimoOcup[zid] <= P.retardo_vacancia_min * 60000);
+    const ap = emergencia ? null : arranquePlanta(zid, z.tipo);
+    if (ap) {
+        // ventana de encendido escalonado: sin reglas de temperatura, sólo el turno de la planta
+        if (z.ocupado) R.ocupadas++; else if (ap[0]) R.arranque_planta++; else R.apagadas++;
+        let lz, ez;
+        if (ocup) {
+            const luxDia = Math.max(z.lux - P.lux_artificial * z.luces_nivel, 0);
+            lz = Math.min(Math.max((P.lux_objetivo - luxDia) / P.lux_artificial, 0.1), 1.0);
+            lz = Math.round(Math.round(lz / 0.05) * 0.05 * 100) / 100; ez = 1.0;
+        } else { lz = P.luces_desocupado; ez = P.equipos_desocupado; R.standby++; }
+        cmds[zid] = { hvac_enable: ap[0], setpoint_c: ap[1], ventilacion: "dcv", luces_nivel: lz, equipos_nivel: ez, hvac_mod: null };
+        continue;
+    }
     if (z.ocupado) R.ocupadas++; else if (ocup) R.vacancia++;
     let sp, en;
     // enclavamiento: una vez iniciado, el pre-enfriamiento sigue hasta la entrada

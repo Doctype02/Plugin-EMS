@@ -959,6 +959,7 @@ export const EMS_RULES = {
   startsPerStep: 2,
   scheduleTransitionMin: 60,
   precoolMin: 90,
+  floorStart: { startH: 7, intervalMin: 15, order: [0, 1, 2, 3, 4], setpoint: 24, exclude: ['pasillo', 'bano'] },
   entry: 8,
   exit: 18,
   luxTarget: 500,
@@ -976,7 +977,7 @@ export const TARIFF = {
   peakUsdKwh: 0.15672,
   offPeakUsdKwh: 0.15672,
   peakHours: [9, 17],
-  demandUsdKwMonth: 19.5,
+  demandUsdKwMonth: 15.03,
   co2KgKwh: 0.31,
   exportUsdKwh: 0.1,
 };

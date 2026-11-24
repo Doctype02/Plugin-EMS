@@ -75,6 +75,8 @@ def anualizar(k: dict, cfg: dict) -> dict:
         "energia_anual_kwh": k["energia_kwh"] * f,
         "costo_energia_anual_usd": k["costo_energia_usd"] * f,
         "costo_demanda_anual_usd": k["demanda_max_15min_kw"] * cargo * 12,
+        # el cargo fijo es igual con y sin EMS: entra en la factura, no en el ahorro
+        "costo_fijo_anual_usd": cfg["tarifa"].get("cargo_fijo_usd_mes", 0.0) * 12,
         "co2_anual_t": k["co2_kg"] * f / 1000,
     }
 

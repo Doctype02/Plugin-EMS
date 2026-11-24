@@ -149,9 +149,33 @@ class Controlador:
         o = self.cfg["ocupacion"]
         return t.dayofweek < 5 and o["hora_entrada"] - 0.5 <= hora(t) < o["hora_salida"] + 0.5
 
+    def arranque_planta(self, t, zid: str, tipo: str) -> tuple[bool, float] | None:
+        """Encendido escalonado por planta (`ems.arranque_por_planta`). Dentro de la ventana sin reglas de
+        temperatura de un día laborable devuelve (encendido, consigna) de la zona; fuera de ella, None."""
+        ap = self.e.get("arranque_por_planta")
+        if not ap or t.dayofweek >= 5:
+            return None
+        h = hora(t)
+        ini, fin = ap.get("sin_reglas_temperatura_h", [ap["inicio_h"], self.cfg["ocupacion"]["hora_entrada"]])
+        orden = list(ap.get("orden", []))
+        # la ventana incluye el paso en que arranca la última planta (si no, competiría por el turno con las
+        # zonas que vuelven a las reglas normales)
+        paso_h = self.cfg["edificio"]["paso_min"] / 60.0
+        fin = max(fin, ap["inicio_h"] + (len(orden) - 1) * ap["intervalo_min"] / 60.0 + paso_h)
+        if not ini <= h < fin - 1e-9:
+            return None
+        planta = self.zmap[zid].planta
+        if tipo in (ap.get("excluir_tipos") or []) or planta not in orden:
+            return False, float(ap["setpoint_c"])
+        inicio = ap["inicio_h"] + orden.index(planta) * ap["intervalo_min"] / 60.0
+        return h >= inicio - 1e-9, float(ap["setpoint_c"])
+
     def precool(self, t, temp_c: float | None = None) -> bool:
         """Pre-enfriamiento antes de la entrada. Con la temperatura de la zona aplica el arranque óptimo: cuanto
-        más caliente está (lunes tras el fin de semana apagado), antes empieza, hasta `precool_max_min`."""
+        más caliente está (lunes tras el fin de semana apagado), antes empieza, hasta `precool_max_min`.
+        Con `ems.arranque_por_planta` no hay pre-enfriamiento por temperatura: manda el horario por planta."""
+        if self.e.get("arranque_por_planta"):
+            return False
         o = self.cfg["ocupacion"]
         h = hora(t)
         adelanto = self.e["precool_min"]
@@ -357,6 +381,19 @@ class Reglas(Controlador):
     def _reglas_zona(self, t, z: dict) -> dict:
         ocup = self.ocupado_efectivo(t, z)
         r = self.reglas
+        ap = self.arranque_planta(t, z["zona"], z["tipo"]) if not self.emergencia else None
+        if ap is not None:
+            # ventana de encendido escalonado: sin reglas de temperatura, sólo el turno de la planta
+            en, sp = ap
+            r["ocupadas" if z["ocupado"] else "arranque_planta" if en else "apagadas"] += 1
+            if ocup:
+                lux_dia = max(z["lux"] - LUX_ARTIFICIAL * z["luces_nivel"], 0.0)
+                luces = float(np.clip((self.e["lux_objetivo"] - lux_dia) / LUX_ARTIFICIAL, 0.1, 1.0))
+                luces, equipos = round(round(luces / 0.05) * 0.05, 2), 1.0
+            else:
+                luces, equipos = self.e["luces_desocupado_ems"], self.e["equipos_desocupado_ems"]
+                r["standby"] += 1
+            return {"hvac_enable": en, "setpoint_c": sp, "ventilacion": "dcv", "luces_nivel": luces, "equipos_nivel": equipos}
         if z["ocupado"]:
             r["ocupadas"] += 1
         elif ocup:
@@ -412,7 +449,7 @@ class Reglas(Controlador):
 
     def _decidir(self, t, tel, med):
         self.reglas = {k: 0 for k in ("ocupadas", "vacancia", "setback", "apagadas", "proteccion_alta",
-                                      "proteccion_baja", "luz_natural", "standby", "emergencia")}
+                                      "proteccion_baja", "luz_natural", "standby", "emergencia", "arranque_planta")}
         self.reglas.update({"precool": 0, "fuera_horario": int(not self.horario_laboral(t))})
         cmds = {z["zona"]: self._reglas_zona(t, z) for z in tel if not z["critica"]}
         # toma de carga escalonada: al pasar a la planta de respaldo (o al volver a la red) todos los terminales

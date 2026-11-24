@@ -422,6 +422,12 @@ const START_RANK = new Map(
 
 /** Hora local (h) en que arranca el pre-enfriamiento de la zona: STARTS_PER_STEP terminales cada 5 min. */
 export function precoolStartH(z: Zone): number {
+  const fs = EMS_RULES.floorStart;
+  if (fs) {
+    // encendido escalonado por planta: una planta cada `intervalMin`; pasillos y baños no entran en la secuencia
+    const i = (fs.order as number[]).indexOf(z.floor);
+    return (fs.exclude as string[]).includes(z.type) || i < 0 ? ENTRY : fs.startH + (i * fs.intervalMin) / 60;
+  }
   const rank = START_RANK.get(z.id) ?? 0;
   return ENTRY - PRECOOL_H + Math.floor(rank / STARTS_PER_STEP) * (5 / 60);
 }

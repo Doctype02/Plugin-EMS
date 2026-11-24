@@ -56,6 +56,7 @@ class ControladorNodeRed(Controlador):
             **_respaldo(cfg),
             "precool_margen": e.get("precool_margen_c", 1.5), "precool_min_grado": e.get("precool_min_por_grado", 0.0),
             "precool_max_min": e.get("precool_max_min", e["precool_min"]), "limite_precool_kw": e.get("limite_precool_kw", 0),
+            "arranque": e.get("arranque_por_planta"), "plantas": {z.id: z.planta for z in self.zonas},
             "hvac": {z.id: [z.hvac_kw, z.cop, z.fan_kw] for z in self.zonas},
         })
 

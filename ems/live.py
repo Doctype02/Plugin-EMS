@@ -149,6 +149,19 @@ class Puente:
                 if "velocidad" in data:
                     self.velocidad = float(data["velocidad"])
 
+    def _corte_programado(self, ed: Edificio, t):
+        """Corte de red diario de demostración (`respaldo.corte_programado`): cada día laborable, después del
+        encendido escalonado de la mañana, se simula un corte para ver la planta de respaldo, la toma de carga
+        escalonada y el retorno a la red. `EMS_CORTE_DIARIO=no` lo desactiva."""
+        cp = (self.cfg.get("respaldo") or {}).get("corte_programado")
+        if not cp or os.getenv("EMS_CORTE_DIARIO", "si").strip().lower() in ("0", "no", "false"):
+            return
+        if cp.get("solo_laborables", True) and t.dayofweek >= 5:
+            return
+        hora = float(cp["hora"])
+        if t.hour == int(hora) and t.minute == int(round((hora % 1) * 60)) and "corte-diario" not in ed.eventos:
+            self._evento(ed, t, {"evento": "corte_energia", "id": "corte-diario", "duracion_min": cp.get("duracion_min", 30)})
+
     def _evento(self, ed: Edificio, t, data: dict):
         """Evento simulado desde el panel (vía Node-RED): iniciar o detener."""
         if data.get("operacion", "iniciar") == "detener":
@@ -268,6 +281,7 @@ class Puente:
                     time.sleep(0.2)
                     self._procesar_cola(ed, t)
                 t_real = time.time()
+                self._corte_programado(ed, t)
                 _, lats = self._procesar_cola(ed, t)
                 if lats:
                     lat_ultima = sum(lats) / len(lats)

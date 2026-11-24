@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.3
+
+- Modo demostración con el **encendido escalonado por planta** del EMS (PB 7:00, P1 7:15, P2 7:30, P3 7:45, P4 8:00,
+  sin pasillos ni baños), tomado de `config/edificio.yaml → ems.arranque_por_planta`.
+
 ## 1.7.2
 
 Nada cambia de golpe en un corte simulado (modo demostración), igual que en el gemelo:

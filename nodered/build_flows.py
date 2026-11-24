@@ -25,6 +25,10 @@ def _desde_config(codigo: str) -> str:
     codigo = re.sub(r"/\*@HVAC@\*/\{.*?\}/\*@FIN@\*/", "/*@HVAC@*/" + json.dumps(hvac) + "/*@FIN@*/",
                     codigo, flags=re.S)
     e, o = cfg["ems"], cfg["ocupacion"]
+    codigo = re.sub(r"/\*@ARRANQUE@\*/.*?/\*@FIN@\*/", "/*@ARRANQUE@*/" + json.dumps(e.get("arranque_por_planta")) + "/*@FIN@*/",
+                    codigo, flags=re.S)
+    codigo = re.sub(r"/\*@PLANTAS@\*/\{.*?\}/\*@FIN@\*/",
+                    "/*@PLANTAS@*/" + json.dumps({z.id: z.planta for z in m_config.zonas(cfg)}) + "/*@FIN@*/", codigo, flags=re.S)
     valores = {
         "banda": e["banda_histeresis_c"], "sp_ocupado": e["setpoint_ocupado_c"], "sp_desocupado": e["setpoint_desocupado_c"],
         "precool_min": e["precool_min"], "entrada": o["hora_entrada"], "salida": o["hora_salida"],

@@ -244,7 +244,11 @@ def generar(cfg: dict) -> tuple[str, dict]:
         "tProtMax": num(m.get("t_proteccion_max_c", 32)), "tProtReturn": num(m.get("t_proteccion_retorno_c", 30)),
         "setpointRampCh": num(m.get("rampa_setpoint_c_h", 0)), "startsPerStep": num(m.get("arranques_max_paso", 0)),
         "scheduleTransitionMin": num(cfg["horarios"].get("transicion_min", 0)),
-        "precoolMin": num(m["precool_min"]), "entry": num(o["hora_entrada"]), "exit": num(o["hora_salida"]),
+        "precoolMin": num(m["precool_min"]),
+        # encendido escalonado por planta (None = pre-enfriamiento por temperatura)
+        "floorStart": ({"startH": num(ap["inicio_h"]), "intervalMin": num(ap["intervalo_min"]), "order": list(ap["orden"]),
+                        "setpoint": num(ap["setpoint_c"]), "exclude": list(ap.get("excluir_tipos") or [])}
+                       if (ap := m.get("arranque_por_planta")) else None), "entry": num(o["hora_entrada"]), "exit": num(o["hora_salida"]),
         "luxTarget": num(m["lux_objetivo"]), "comfortMax": num(m["confort_max_c"]), "comfortMin": num(m["confort_min_c"]),
         "serverAlarm": num(m["alarma_servidor_c"]), "drMarginC": num(m["dr_margen_confort_c"]),
         "drHysteresisKw": num(m["dr_histeresis_kw"]), "plugsUnoccupied": num(m["equipos_desocupado_ems"]),

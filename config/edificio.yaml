@@ -117,7 +117,8 @@ tarifa:
   precio_punta_usd_kwh: 0.15672
   precio_fuera_punta_usd_kwh: 0.15672
   hora_punta: [9, 17]
-  cargo_demanda_usd_kw_mes: 19.50
+  cargo_demanda_usd_kw_mes: 15.03   # cargo por demanda máxima (USD por kW al mes)
+  cargo_fijo_usd_mes: 10.03          # cargo fijo mensual
   factor_co2_kg_kwh: 0.31
   precio_excedente_usd_kwh: 0.10   # energía FV inyectada a la red (medición neta, supuesto)
 
@@ -148,6 +149,18 @@ ems:
   precool_min_por_grado: 70        # …70 min más por cada °C…
   precool_max_min: 420             # …hasta 7 h antes de la entrada (la masa del edificio tarda en enfriarse)
   limite_precool_kw: 90            # tope de potencia antes de abrir ≈ pico de un día normal (reparte el pre-enfriamiento)
+  # Encendido escalonado por planta (sustituye al pre-enfriamiento por temperatura). Cada día laborable se enciende
+  # el VRF de una planta cada `intervalo_min`, sin pasillos ni baños, con consigna fija. Durante la ventana
+  # `sin_reglas_temperatura_h` las reglas que dependen de la temperatura quedan desactivadas (arranque óptimo y
+  # protecciones por calor y por frío): sólo manda el horario de encendido. Quitar este bloque para volver al
+  # arranque óptimo.
+  arranque_por_planta:
+    inicio_h: 7.0                  # 7:00 PB · 7:15 P1 · 7:30 P2 · 7:45 P3 · 8:00 P4
+    intervalo_min: 15
+    orden: [0, 1, 2, 3, 4]         # plantas en orden de encendido
+    setpoint_c: 24.0
+    excluir_tipos: [pasillo, bano] # no se encienden en la secuencia (siguen las reglas normales desde las 8:00)
+    sin_reglas_temperatura_h: [6.0, 8.0]
   rampa_setpoint_c_h: 3.0          # la consigna cambia como máximo 3 °C por hora (0.25 °C por paso)
   arranques_max_paso: 2            # terminales que pueden arrancar en un mismo paso de 5 min
   t_proteccion_max_c: 32.0         # fuera de horario el aire está apagado salvo que la zona pase de 32 °C…
@@ -191,6 +204,10 @@ respaldo:
   ups:
     potencia_kw: 2.7             # 3 kVA en línea de doble conversión para los servidores (1.8 kW de TI)
     autonomia_min: 20            # con la carga de TI; cubre el arranque de la planta y un apagado ordenado
+  corte_programado:              # corte de demostración en vivo, cada día laborable tras el encendido escalonado
+    hora: 10.0                   # 10:00 (EMS_CORTE_DIARIO=no lo desactiva)
+    duracion_min: 30
+    solo_laborables: true
   rearranque_min: 3              # protección de los compresores tras un microcorte (transferencia o retorno)
   fv_reconexion_min: 5           # el inversor vuelve 5 min después de que la planta estabiliza la red (IEEE 1547)
   emergencia:                    # reglas del EMS mientras el edificio está en la planta

@@ -41,6 +41,7 @@ CAMPOS = {
     "r_rotacion_compresores": ("Rotación de compresores", "#E0752D"),
     "r_dr_etapa": ("Etapa de deslastre", "#C4162A"),
     "r_modo_seguro": ("Modo seguro", "#F2495C"),
+    "r_arranque_planta": ("Encendido por planta", "#3274D9"),
     "r_emergencia": ("Emergencia (planta)", "#FF780A"),
     "r_manual": ("Control manual", "#8AB8FF"),
 }
@@ -198,17 +199,25 @@ def reglas(cfg: dict) -> list[dict]:
     hh = lambda x: f"{int(x):02d}:{int(round((x % 1) * 60)):02d}"  # noqa: E731
     comp = ed.get("rampa_compresor_por_min", 0.1) * 100
     gen, em = cfg["respaldo"]["generador"], cfg["respaldo"]["emergencia"]
+    apl = e.get("arranque_por_planta")
+    nombres = ed.get("nombres_plantas") or [f"P{i}" for i in range(ed.get("plantas", 5))]
     R = lambda g, n, c, a, p, w: {"grupo": g, "nombre": n, "cuando": c, "accion": a, "param": p, "para": w}  # noqa: E731
     return [
         R("horario", "Horario laboral", f"Lunes a viernes, {hh(ent - 0.5)}–{hh(sal + 0.5)}",
           "Con gente, consigna de confort; sin gente, espera", f"Entrada {hh(ent)} · salida {hh(sal)}",
           "Climatizar sólo cuando el edificio se usa"),
-        R("horario", "Pre-enfriamiento con arranque óptimo",
+        (R("horario", "Encendido escalonado por planta",
+           f"Días laborables: {', '.join(f'{nombres[p]} a las {hh(apl['inicio_h'] + i * apl['intervalo_min'] / 60)}' for i, p in enumerate(apl['orden']))}",
+           f"Enciende el VRF de cada planta en su turno con consigna de {apl['setpoint_c']:g} °C, sin pasillos ni baños; de "
+           f"{hh(apl['sin_reglas_temperatura_h'][0])} a {hh(apl['sin_reglas_temperatura_h'][1])} no actúan las reglas de temperatura",
+           f"una planta cada {apl['intervalo_min']} min", "Repartir el arranque de la mañana: nunca encienden dos plantas a la vez")
+         if apl else
+         R("horario", "Pre-enfriamiento con arranque óptimo",
           f"Días laborables antes de la entrada: {e['precool_min']} min como mínimo y {e['precool_min_por_grado']:g} min más por "
           f"cada °C que la zona esté sobre {e['setpoint_ocupado_c'] + e['precool_margen_c']:g} °C (hasta {e['precool_max_min'] / 60:g} h antes)",
           f"Las zonas arrancan por turnos hacia {e['setpoint_ocupado_c']:g} °C; antes de abrir el edificio no pasa de "
           f"{e['limite_precool_kw']:g} kW", f"{e['precool_min']}–{e['precool_max_min']} min · {e['limite_precool_kw']:g} kW",
-          "Recibir a la gente en confort sin pico: el lunes, tras el fin de semana apagado, empieza de madrugada"),
+          "Recibir a la gente en confort sin pico: el lunes, tras el fin de semana apagado, empieza de madrugada")),
         R("horario", "Aire apagado fuera de horario", "Noches, sábados y domingos",
           "Aire apagado: la zona sigue al clima exterior (sube de día y baja de noche)",
           f"Protección a {e['t_proteccion_max_c']:g} °C", "Es donde más energía se ahorra"),
