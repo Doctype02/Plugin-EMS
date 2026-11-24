@@ -2833,7 +2833,7 @@
               },
               "custom": {
                 "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "lineInterpolation": "stepAfter",
                 "lineWidth": 2,
                 "fillOpacity": 0,
                 "gradientMode": "opacity",
@@ -3124,7 +3124,7 @@
               },
               "custom": {
                 "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "lineInterpolation": "stepAfter",
                 "lineWidth": 2,
                 "fillOpacity": 0,
                 "gradientMode": "opacity",
@@ -3703,7 +3703,7 @@
               "displayName": "Generación FV",
               "custom": {
                 "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "lineInterpolation": "stepAfter",
                 "lineWidth": 2,
                 "fillOpacity": 8,
                 "gradientMode": "opacity",
@@ -3787,7 +3787,7 @@
               "min": 0,
               "custom": {
                 "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "lineInterpolation": "stepAfter",
                 "lineWidth": 2,
                 "fillOpacity": 0,
                 "gradientMode": "opacity",

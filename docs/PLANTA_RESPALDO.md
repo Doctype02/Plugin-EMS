@@ -38,8 +38,10 @@ La toma de carga es gradual (≤ 10 kW por paso de 5 min) gracias al arranque es
 
 - Carga en el pico de diseño: 87,7 / 110 = **80 %** (criterio habitual: no superar el 80 % de la potencia continua).
 - Contingencia sin EMS: 103,5 kW = 94 % de la potencia continua, dentro de la potencia de emergencia (120 kW).
-- Arranques: los VRF son inverter y el ascensor lleva variador, así que no hay corrientes de arranque directas
-  que obliguen a sobredimensionar.
+- Arranques: los VRF son inverter (≈ 1,5 × la corriente nominal durante unos segundos) y el ascensor lleva
+  variador; sólo los PTAC arrancan de forma directa (≈ 5 ×), pero son equipos de 1 kW. El gemelo simula ese pico
+  (`p_pico_kw`) y, como el EMS arranca como máximo 2 terminales cada 5 min, nunca coinciden más de 2–3 unidades:
+  el pico de arranque no pasa de unos 25–35 kW y no obliga a sobredimensionar la planta.
 - Un equipo mayor no conviene: trabajaría más horas en baja carga y obligaría a desperdiciar más energía solar.
 
 Corriente a plena carga: 137,5 kVA / (√3 · 480 V) = 165 A → interruptor de la planta de 200 A.

@@ -16,6 +16,8 @@ CAMPOS_UNIDAD = ["p_kw", "q_frio_kw", "carga_pct", "cop", "modo", "encendido", "
 CAMPOS_MEDIDOR = ["p_total_kw", "p_critica_kw", "p_no_critica_kw", "p_hvac_kw", "p_luces_kw", "p_equipos_kw",
                   "p_fija_kw", "q_kvar", "s_kva", "fp", "v_ll", "i_a", "e_kwh", "demanda_15min_kw", "t_ext_c",
                   "hr_pct", "irr_wm2", "precio_usd_kwh", "p_fv_kw", "p_red_kw", "e_fv_kwh", "red_ok", "ups_kw", "ups_min",
+                  # pico de arranque de los compresores (potencia y corriente instantáneas)
+                  "p_pico_kw", "p_arranque_kw", "n_arranques_equipos", "i_pico_a",
                   # las tres líneas del sistema trifásico
                   "i_l1_a", "i_l2_a", "i_l3_a", "v_l1_v", "v_l2_v", "v_l3_v", "p_l1_kw", "p_l2_kw", "p_l3_kw",
                   "desbalance_pct",

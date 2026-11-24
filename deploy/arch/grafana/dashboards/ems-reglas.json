@@ -1469,7 +1469,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "### Secuencia: nada cambia de golpe\nReparten en el tiempo los cambios de temperatura y los arranques.\n\n**7. Rampa de consigna** &nbsp;·&nbsp; `3 °C/h`\n- *Cuándo:* Cada vez que cambia la consigna\n- *Qué hace:* Cambia como máximo 3 °C/h (0.25 °C cada 5 min); al arrancar parte de la temperatura medida\n- *Para qué:* La temperatura baja de forma gradual\n\n**8. Arranque escalonado** &nbsp;·&nbsp; `2 por paso`\n- *Cuándo:* Varias zonas quieren arrancar a la vez\n- *Qué hace:* Arrancan como máximo 2 terminales cada 5 min, la más caliente primero\n- *Para qué:* Que no arranquen todos los compresores juntos\n\n**9. Arranque suave del compresor** &nbsp;·&nbsp; `10 %/min`\n- *Cuándo:* Un compresor recibe más carga\n- *Qué hace:* El inverter sube 10 % de capacidad por minuto\n- *Para qué:* La potencia sube en rampa\n\n**10. Llegada gradual** &nbsp;·&nbsp; `60 min`\n- *Cuándo:* Entrada y salida del personal\n- *Qué hace:* Los horarios cambian en rampas de 60 min; cada zona llega ±15 min\n- *Para qué:* Luces y equipos se encienden a medida que llega la gente\n",
+                "content": "### Secuencia: nada cambia de golpe\nReparten en el tiempo los cambios de temperatura y los arranques.\n\n**7. Rampa de consigna** &nbsp;·&nbsp; `3 °C/h`\n- *Cuándo:* Cada vez que cambia la consigna\n- *Qué hace:* Cambia como máximo 3 °C/h (0.25 °C cada 5 min); al arrancar parte de la temperatura medida\n- *Para qué:* La temperatura baja de forma gradual\n\n**8. Arranque escalonado** &nbsp;·&nbsp; `2 por paso`\n- *Cuándo:* Varias zonas quieren arrancar a la vez\n- *Qué hace:* Arrancan como máximo 2 terminales cada 5 min, la más caliente primero\n- *Para qué:* Que no se sumen los picos de arranque de los compresores (≈ 1,5 × su potencia durante unos segundos)\n\n**9. Arranque suave del compresor** &nbsp;·&nbsp; `10 %/min`\n- *Cuándo:* Un compresor recibe más carga\n- *Qué hace:* El inverter sube 10 % de capacidad por minuto\n- *Para qué:* La potencia sube en rampa\n\n**10. Llegada gradual** &nbsp;·&nbsp; `60 min`\n- *Cuándo:* Entrada y salida del personal\n- *Qué hace:* Los horarios cambian en rampas de 60 min; cada zona llega ±15 min\n- *Para qué:* Luces y equipos se encienden a medida que llega la gente\n",
                 "code": {
                   "language": "plaintext",
                   "showLineNumbers": false,
@@ -1624,6 +1624,10 @@
                       {
                         "id": "unit",
                         "value": "kwatt"
+                      },
+                      {
+                        "id": "custom.lineInterpolation",
+                        "value": "stepAfter"
                       }
                     ]
                   },
@@ -2140,7 +2144,7 @@
                   "decimals": 1,
                   "custom": {
                     "drawStyle": "line",
-                    "lineInterpolation": "smooth",
+                    "lineInterpolation": "stepAfter",
                     "lineWidth": 2,
                     "fillOpacity": 8,
                     "gradientMode": "opacity",
@@ -2319,7 +2323,7 @@
                   "decimals": 0,
                   "custom": {
                     "drawStyle": "line",
-                    "lineInterpolation": "smooth",
+                    "lineInterpolation": "stepAfter",
                     "lineWidth": 2,
                     "fillOpacity": 8,
                     "gradientMode": "opacity",

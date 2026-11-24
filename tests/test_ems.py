@@ -368,3 +368,18 @@ def test_tres_lineas_del_sistema_trifasico(cfg, semana):
     assert dia.desbalance_pct.median() < 6 and dia.desbalance_pct.quantile(0.95) < 15
     v_ln = cfg["edificio"]["v_ll"] / math.sqrt(3)
     assert dia[["v_l1_v", "v_l2_v", "v_l3_v"]].min().min() > 0.95 * v_ln
+
+
+def test_pico_de_arranque_de_los_equipos(cfg, semana):
+    """Al encender, cada compresor añade unos segundos de potencia; el escalonamiento evita que se sumen."""
+    for nombre in ("reglas_dr", "baseline"):
+        m = semana[nombre].medidor
+        assert np.allclose(m.p_pico_kw, m.p_total_kw + m.p_arranque_kw, atol=0.01)
+        assert ((m.p_arranque_kw > 0) == (m.n_arranques_equipos > 0)).all()
+    m = semana["reglas_dr"].medidor
+    assert m.n_arranques_equipos.sum() > 20                  # hay arranques cada día
+    assert m.n_arranques_equipos.max() <= 4                  # nunca arrancan todos los equipos a la vez (son 11)
+    vrf = [s for s in cfg["sistemas_vrf"] if s.get("tipo") != "ptac"]
+    mayor = max(s["capacidad_kw"] / (s["cop"] * cfg["edificio"]["factor_cop"]) for s in vrf)
+    # el mayor pico simultáneo equivale a pocas unidades, muy lejos de las 6 VRF arrancando juntas
+    assert m.p_arranque_kw.max() < 3 * 0.5 * mayor + 10

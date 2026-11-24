@@ -226,7 +226,7 @@
                       "viz": false
                     },
                     "insertNulls": false,
-                    "lineInterpolation": "smooth",
+                    "lineInterpolation": "stepAfter",
                     "lineStyle": {
                       "fill": "solid"
                     },
@@ -1353,7 +1353,7 @@
                       "viz": false
                     },
                     "insertNulls": false,
-                    "lineInterpolation": "smooth",
+                    "lineInterpolation": "stepAfter",
                     "lineStyle": {
                       "fill": "solid"
                     },
@@ -1603,7 +1603,7 @@
                       "viz": false
                     },
                     "insertNulls": false,
-                    "lineInterpolation": "linear",
+                    "lineInterpolation": "stepAfter",
                     "lineStyle": {
                       "fill": "solid"
                     },
@@ -1959,7 +1959,7 @@
                       "viz": false
                     },
                     "insertNulls": false,
-                    "lineInterpolation": "smooth",
+                    "lineInterpolation": "stepAfter",
                     "lineStyle": {
                       "fill": "solid"
                     },
@@ -2221,7 +2221,7 @@
                       "viz": false
                     },
                     "insertNulls": false,
-                    "lineInterpolation": "smooth",
+                    "lineInterpolation": "stepAfter",
                     "lineStyle": {
                       "fill": "solid"
                     },
@@ -2353,7 +2353,7 @@
                       "viz": false
                     },
                     "insertNulls": false,
-                    "lineInterpolation": "smooth",
+                    "lineInterpolation": "stepAfter",
                     "lineStyle": {
                       "fill": "solid"
                     },
@@ -3954,7 +3954,7 @@
                       "viz": false
                     },
                     "insertNulls": false,
-                    "lineInterpolation": "smooth",
+                    "lineInterpolation": "stepAfter",
                     "lineStyle": {
                       "fill": "solid"
                     },
@@ -4716,7 +4716,7 @@
                       "viz": false
                     },
                     "insertNulls": false,
-                    "lineInterpolation": "smooth",
+                    "lineInterpolation": "stepAfter",
                     "lineStyle": {
                       "fill": "solid"
                     },
@@ -4922,7 +4922,7 @@
                       "viz": false
                     },
                     "insertNulls": false,
-                    "lineInterpolation": "smooth",
+                    "lineInterpolation": "stepAfter",
                     "lineStyle": {
                       "fill": "solid"
                     },
@@ -5240,7 +5240,7 @@
                       "viz": false
                     },
                     "insertNulls": false,
-                    "lineInterpolation": "smooth",
+                    "lineInterpolation": "stepAfter",
                     "lineStyle": {
                       "fill": "solid"
                     },
@@ -5581,7 +5581,7 @@
                       "viz": false
                     },
                     "insertNulls": false,
-                    "lineInterpolation": "smooth",
+                    "lineInterpolation": "stepAfter",
                     "lineStyle": {
                       "fill": "solid"
                     },
@@ -5886,7 +5886,7 @@
         "spec": {
           "id": 9,
           "title": "Consumo del edificio frente al límite de 170 kW",
-          "description": "Línea azul: potencia que usa el edificio. Línea roja discontinua: límite contratado de 170 kW. Cuanto más lejos esté la azul de la roja, mejor.",
+          "description": "Azul: potencia que usa el edificio, en escalones de 5 minutos (cada escalón es un equipo que entra o sale). Naranja: pico instantáneo al arrancar los compresores (unos segundos). Roja discontinua: límite de 170 kW.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5903,7 +5903,7 @@
                         "name": "ems-influx"
                       },
                       "spec": {
-                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_total_kw\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_total_kw\" or r._field == \"p_pico_kw\")\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: max, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
                       }
                     },
                     "refId": "A",
@@ -5925,7 +5925,7 @@
                   "calcs": [],
                   "displayMode": "list",
                   "placement": "bottom",
-                  "showLegend": false
+                  "showLegend": true
                 },
                 "tooltip": {
                   "mode": "multi",
@@ -5971,7 +5971,7 @@
                       "viz": false
                     },
                     "insertNulls": false,
-                    "lineInterpolation": "smooth",
+                    "lineInterpolation": "stepAfter",
                     "lineStyle": {
                       "fill": "solid"
                     },
@@ -6008,6 +6008,37 @@
                           "fixedColor": "#5794F2",
                           "mode": "fixed"
                         }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "p_pico_kw"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Pico de arranque de equipos"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#FF9830",
+                          "mode": "fixed"
+                        }
+                      },
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 1
+                      },
+                      {
+                        "id": "custom.fillOpacity",
+                        "value": 0
+                      },
+                      {
+                        "id": "custom.lineInterpolation",
+                        "value": "stepAfter"
                       }
                     ]
                   }

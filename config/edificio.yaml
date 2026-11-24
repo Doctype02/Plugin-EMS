@@ -40,6 +40,9 @@ edificio:
   capacitancia_aire_kwh_k_m2: 0.015  # nodo de aire (aire, mobiliario y capa superficial de tabiques) por m2
   h_aire_masa_kw_k_m2: 0.045   # acople aire ↔ masa: 9.1 W/m2K × ≈5 m2 de superficie (losas, muros, mobiliario) por m2
   fraccion_radiante: 0.5       # parte de las ganancias internas y solares que calienta primero la masa
+  arranque:                    # pico de arranque de los compresores (segundos): corriente respecto a la nominal
+    factor_vrf: 1.5            # VRF inverter con arranque suave
+    factor_ptac: 5.0           # PTAC de pared, arranque directo
   rampa_compresor_por_min: 0.10  # el inverter del VRF sube 10 % de capacidad por minuto (0 → 100 % en 10 min)
   factor_solar: 0.5
   delta_t_cielo_c: 3.0         # radiación al cielo: Text equivalente para la conducción de la envolvente

@@ -138,6 +138,7 @@ class Edificio:
         self.ptac = {z for uid, zs in self.unidades.items() if self.sistemas[uid].get("tipo") == "ptac" for z in zs}
         self.combustible_l = float(self.gen.get("tanque_l", 0.0))
         self.e_gen_kwh = 0.0
+        self._sis_on: dict[str, bool] = {}   # unidades con el compresor en marcha en el paso anterior
         self.reset()
 
     # ------------------------------------------------------------------ estado
@@ -739,6 +740,21 @@ class Edificio:
         if corte is not None and not gen_on:
             q_kvar = 0.0
         s_kva = math.hypot(p_total, q_kvar)
+        # --- pico de arranque: al encender, cada compresor toma durante unos segundos más corriente que en
+        # régimen (VRF inverter con arranque suave ≈ 1.5 × nominal; PTAC de arranque directo ≈ 5 ×). No cambia la
+        # energía, pero sí la potencia instantánea que ven la acometida y la planta: por eso el EMS escalona
+        arr = self.e.get("arranque") or {}
+        p_arranque, n_arranques = 0.0, 0
+        for uid, a in acum_u.items():
+            en_marcha = a["p_comp_kw"] > 1e-3 and p_total > 0
+            if en_marcha and not self._sis_on.get(uid, False):
+                sis = self.sistemas[uid]
+                k = float(arr.get("factor_ptac", 5.0) if sis.get("tipo") == "ptac" else arr.get("factor_vrf", 1.5))
+                nominal = sis["capacidad_kw"] / max(sis["cop"] * self.e.get("factor_cop", 1.0), 1.0)
+                p_arranque += (k - 1.0) * nominal
+                n_arranques += 1
+            self._sis_on[uid] = en_marcha
+        p_pico = p_total + p_arranque
         self.e_kwh += p_total * self.paso_h
         self.e_fv_kwh += p_fv * self.paso_h
         # la demanda facturable es la que ve el medidor de la acometida (importación neta)
@@ -755,6 +771,9 @@ class Edificio:
             "q_kvar": round(q_kvar, 3), "s_kva": round(s_kva, 3), "fp": round(p_total / s_kva, 4) if s_kva else 1.0,
             "v_ll": 0.0 if (corte is not None and not gen_on) else self.e["v_ll"],
             "i_a": round(s_kva * 1000 / (math.sqrt(3) * self.e["v_ll"]), 2),
+            # potencia y corriente instantáneas máximas del paso (con el arranque de compresores)
+            "p_pico_kw": round(p_pico, 3), "p_arranque_kw": round(p_arranque, 3), "n_arranques_equipos": n_arranques,
+            "i_pico_a": round((s_kva + p_arranque / 0.6) * 1000 / (math.sqrt(3) * self.e["v_ll"]), 2),
             "e_kwh": round(self.e_kwh, 3), "demanda_15min_kw": round(dem15, 3),
             "t_ext_c": round(t_ext, 2), "hr_pct": round(clima.get("hr_pct", 0), 1), "irr_wm2": round(ghi, 1),
             **{f"irr_{o}": round(v, 1) for o, v in irr.items() if o != "H"},

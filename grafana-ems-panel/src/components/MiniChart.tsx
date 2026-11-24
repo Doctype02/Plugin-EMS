@@ -25,6 +25,20 @@ interface Props {
   xTicks?: number[];
   /** Rellena bajo la primera serie. */
   area?: boolean;
+  /** Dibuja las series en escalones (potencia: cada escalón es un equipo que entra o sale). */
+  step?: boolean;
+}
+
+/** Convierte una serie en escalones: mantiene el valor hasta el punto siguiente. */
+function stepped(points: Array<[number, number]>): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  points.forEach((p, i) => {
+    if (i > 0) {
+      out.push([p[0], points[i - 1][1]]);
+    }
+    out.push(p);
+  });
+  return out;
 }
 
 /** Gráfico de líneas liviano en SVG para las proyecciones (sin dependencias). */
@@ -38,6 +52,7 @@ export const MiniChart: React.FC<Props> = ({
   xDomain,
   xTicks,
   area,
+  step,
 }) => {
   const styles = useStyles2(getStyles);
   const W = 280;
@@ -100,7 +115,7 @@ export const MiniChart: React.FC<Props> = ({
         ))}
         {area && series[0] && series[0].points.length > 1 && (
           <path
-            d={`M${sx(series[0].points[0][0])},${sy(y0)}L${series[0].points
+            d={`M${sx(series[0].points[0][0])},${sy(y0)}L${(step ? stepped(series[0].points) : series[0].points)
               .map(([x, y]) => `${sx(x).toFixed(1)},${sy(y).toFixed(1)}`)
               .join('L')}L${sx(series[0].points[series[0].points.length - 1][0])},${sy(y0)}Z`}
             fill={series[0].color}
@@ -128,7 +143,7 @@ export const MiniChart: React.FC<Props> = ({
             strokeWidth={2}
             strokeDasharray={s.dashed ? '5 4' : undefined}
             strokeLinejoin="round"
-            points={s.points.map(([x, y]) => `${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(' ')}
+            points={(step ? stepped(s.points) : s.points).map(([x, y]) => `${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(' ')}
           />
         ))}
         <text x={2} y={8} className={styles.axis}>

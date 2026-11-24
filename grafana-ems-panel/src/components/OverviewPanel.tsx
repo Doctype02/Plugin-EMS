@@ -120,6 +120,7 @@ export const OverviewPanel: React.FC<Props> = ({
         <MiniChart
           height={130}
           area
+          step
           series={[
             { name: 'Medido', color: theme.visualization.getColorByName('blue'), points: past },
             { name: 'Previsto', color: theme.colors.text.secondary, points: future, dashed: true },

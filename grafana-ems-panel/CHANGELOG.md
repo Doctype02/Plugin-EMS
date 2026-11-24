@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.1
+
+- La «Demanda del día» se dibuja en escalones (cada escalón es un equipo que entra o sale), como las gráficas de
+  potencia de los dashboards.
+
 ## 1.7.0
 
 Planta de respaldo: el corte de red ya no deja el edificio a oscuras.
