@@ -129,3 +129,55 @@ def test_lazo_en_vivo_guarda_estado_y_alarmas_y_respeta_overrides(monkeypatch):
         broker.terminate()
         stub.wait(timeout=5)
         broker.wait(timeout=5)
+
+
+def test_evento_se_aplica_sin_esperar_el_paso(monkeypatch):
+    """Con velocidad 1 un paso dura 5 min: el evento del panel debe aplicarse (y su alarma guardarse) en segundos."""
+    mqtt_port = _puerto_libre()
+    broker = subprocess.Popen(["mosquitto", "-p", str(mqtt_port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        _esperar_puerto(mqtt_port)
+        import paho.mqtt.client as mqtt
+
+        from ems import influx, live
+
+        alarmas, flushes = [], []
+
+        class Grabador(influx.Escritor):
+            def __init__(self, *a, **k):
+                self.habilitado = False
+
+            def alarma(self, a, escenario="live"):
+                alarmas.append(a)
+
+            def flush(self, forzar=False):
+                flushes.append(time.time())
+
+        monkeypatch.setattr(live, "Escritor", Grabador)
+        p = live.Puente(config.cargar(), control="interno", velocidad=1, inicio="ahora", dias=0,
+                        host="127.0.0.1", port=mqtt_port)
+        p.publicar_pronostico = lambda: None
+        hilo = threading.Thread(target=p.correr, daemon=True)
+        hilo.start()
+        eventos = []
+        cli = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        cli.on_message = lambda c, u, m: eventos.append(json.loads(m.payload))
+        cli.connect("127.0.0.1", mqtt_port)
+        cli.subscribe("ems/edificio1/sim/eventos")
+        cli.loop_start()
+        time.sleep(3)  # primer paso hecho; el simulador ya espera los 5 min del siguiente
+        cli.publish("ems/edificio1/sim/control", json.dumps({"accion": "evento", "evento": "corte_energia",
+                                                              "id": "prueba", "duracion_min": 30}))
+        fin = time.time() + 5
+        while time.time() < fin and not any(e.get("activos") for e in eventos):
+            time.sleep(0.1)
+        assert any(any(a["id"] == "prueba" for a in e.get("activos", [])) for e in eventos), \
+            "el evento debe aplicarse sin esperar al siguiente paso de 5 min"
+        assert alarmas, "las alarmas del evento deben guardarse al momento"
+        p.activo = False
+        hilo.join(timeout=5)
+        assert not hilo.is_alive()
+        cli.loop_stop()
+    finally:
+        broker.terminate()
+        broker.wait(timeout=5)
