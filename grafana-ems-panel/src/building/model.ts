@@ -9,6 +9,7 @@
 import { BUILDING, ENVELOPE, FLOORS, HVAC_SYSTEMS, PTAC_UNITS, PV, SURFACES, VRF_UNITS, ZONE_DATA } from './modelData';
 
 export {
+  BACKUP,
   BUILDING,
   CONTROLLER_LIMITS,
   CRITICAL_ZONES,
@@ -141,6 +142,8 @@ export interface FixedLoad {
   schedule: string;
   pf: number;
   critical: boolean;
+  /** Conectada al tablero de emergencia (la alimenta la planta de respaldo). */
+  backup?: boolean;
 }
 
 const withWindows = (d: ZoneData): Zone => ({

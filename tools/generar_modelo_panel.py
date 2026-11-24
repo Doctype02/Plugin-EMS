@@ -232,7 +232,7 @@ def generar(cfg: dict) -> tuple[str, dict]:
     schedules = {nombre: {DIAS[k]: [[num(a), num(b)] for a, b in perfil] for k, perfil in h.items()}
                  for nombre, h in cfg["horarios"].items() if isinstance(h, dict)}
     fixed = [{"name": c["nombre"], "kw": num(c["kw"]), "schedule": c.get("horario"), "pf": num(c.get("fp", 0.9)),
-              "critical": bool(c.get("critica", False))}
+              "critical": bool(c.get("critica", False)), "backup": bool(c.get("respaldo", False))}
              for c in cfg.get("cargas_fijas") or [] if "horario" in c]
     m = cfg["ems"]
     o = cfg["ocupacion"]
@@ -281,6 +281,20 @@ def generar(cfg: dict) -> tuple[str, dict]:
     out.append(f"export const SCHEDULES: Record<string, Schedule> = {ts(schedules)};\n")
     out.append("/** Cargas sin zona acondicionada (kW × horario). */")
     out.append(f"export const FIXED_LOADS: FixedLoad[] = {ts(fixed)};\n")
+    r = cfg.get("respaldo") or {}
+    g, u, em = r.get("generador") or {}, r.get("ups") or {}, r.get("emergencia") or {}
+    backup = {
+        "enabled": bool(g.get("habilitado", False)), "genKw": num(g.get("potencia_kw", 0)),
+        "loadMax": num(g.get("carga_max", 0.8)), "loadMin": num(g.get("carga_min", 0.3)),
+        "startSeconds": num(g.get("arranque_s", 15)), "idleLPerHKw": num(g.get("consumo_vacio_l_h_kw", 0.03)),
+        "lPerKwh": num(g.get("consumo_l_kwh", 0.24)), "tankL": num(g.get("tanque_l", 0)),
+        "upsKw": num(u.get("potencia_kw", 0)), "upsMinutes": num(u.get("autonomia_min", 30)),
+        "pvReconnectMin": num(r.get("fv_reconexion_min", 5)), "setpoint": num(em.get("setpoint_c", 25)),
+        "setpointMin": num(em.get("setpoint_min_c", 24)), "lights": num(em.get("luces_nivel", 0.7)),
+        "noHvacTypes": list(em.get("tipos_sin_hvac") or []),
+    }
+    out.append("/** Planta de respaldo: generador, UPS y reglas de emergencia (config/edificio.yaml → respaldo). */")
+    out.append(f"export const BACKUP = {ts(backup)};\n")
     out.append("/** Parámetros del EMS por reglas (config/edificio.yaml → ems, ocupacion). */")
     out.append(f"export const EMS_RULES = {ts(rules)};\n")
     out.append(f"export const TARIFF = {ts(tariff)};\n")

@@ -436,7 +436,7 @@
                         "name": "ems-influx"
                       },
                       "spec": {
-                        "query": "from(bucket: \"ems\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field =~ /^r_(apagadas|ocupadas|vacancia|setback|rampa_setpoint|arranque_espera|luz_natural|standby|rotacion_compresores|proteccion_alta|proteccion_baja|modo_seguro|manual)$/)\n  |> last()\n  |> group()\n  |> pivot(rowKey: [\"_measurement\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"r_apagadas\", \"r_ocupadas\", \"r_vacancia\", \"r_setback\", \"r_rampa_setpoint\", \"r_arranque_espera\", \"r_luz_natural\", \"r_standby\", \"r_rotacion_compresores\", \"r_proteccion_alta\", \"r_proteccion_baja\", \"r_modo_seguro\", \"r_manual\"])"
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field =~ /^r_(apagadas|ocupadas|vacancia|setback|rampa_setpoint|arranque_espera|luz_natural|standby|rotacion_compresores|proteccion_alta|proteccion_baja|modo_seguro|emergencia|manual)$/)\n  |> last()\n  |> group()\n  |> pivot(rowKey: [\"_measurement\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"r_apagadas\", \"r_ocupadas\", \"r_vacancia\", \"r_setback\", \"r_rampa_setpoint\", \"r_arranque_espera\", \"r_luz_natural\", \"r_standby\", \"r_rotacion_compresores\", \"r_proteccion_alta\", \"r_proteccion_baja\", \"r_modo_seguro\", \"r_emergencia\", \"r_manual\"])"
                       }
                     },
                     "refId": "A",
@@ -463,7 +463,8 @@
                         "r_proteccion_alta": 9,
                         "r_proteccion_baja": 10,
                         "r_modo_seguro": 11,
-                        "r_manual": 12
+                        "r_emergencia": 12,
+                        "r_manual": 13
                       },
                       "renameByName": {
                         "r_apagadas": "3. Aire apagado",
@@ -478,6 +479,7 @@
                         "r_proteccion_alta": "15. Protección por calor",
                         "r_proteccion_baja": "16. Protección por frío",
                         "r_modo_seguro": "17. Modo seguro",
+                        "r_emergencia": "18. Emergencia (planta)",
                         "r_manual": "Control manual"
                       },
                       "excludeByName": {}
@@ -719,6 +721,21 @@
                         "value": {
                           "mode": "fixed",
                           "fixedColor": "#F2495C"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "18. Emergencia (planta)"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#FF780A"
                         }
                       }
                     ]
@@ -2559,7 +2576,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "### Protección y seguridad\nTienen prioridad sobre todas las demás.\n\n**15. Protección por calor** &nbsp;·&nbsp; `32 / 30 °C`\n- *Cuándo:* Fuera de horario la zona pasa de 32 °C\n- *Qué hace:* Enfría hasta 30 °C y vuelve a apagar\n- *Para qué:* Proteger materiales y equipos\n\n**16. Protección por frío** &nbsp;·&nbsp; `22 °C`\n- *Cuándo:* La zona baja de 22 °C\n- *Qué hace:* Ventila con aire exterior, sin compresor\n- *Para qué:* Evitar el sobreenfriamiento\n\n**17. Sensores y modo seguro** &nbsp;·&nbsp; `6 lecturas`\n- *Cuándo:* Sensor fuera de rango, congelado o con saltos\n- *Qué hace:* Capacidad fija (55 %; 100 % en zonas críticas) y alarma\n- *Para qué:* No decidir con un dato falso\n\n**18. Zonas críticas** &nbsp;·&nbsp; `22 °C`\n- *Cuándo:* Cuarto de servidores\n- *Qué hace:* Nunca se deslastra ni se apaga; consigna fija\n- *Para qué:* Continuidad del servicio\n",
+                "content": "### Protección y seguridad\nTienen prioridad sobre todas las demás.\n\n**15. Protección por calor** &nbsp;·&nbsp; `32 / 30 °C`\n- *Cuándo:* Fuera de horario la zona pasa de 32 °C\n- *Qué hace:* Enfría hasta 30 °C y vuelve a apagar\n- *Para qué:* Proteger materiales y equipos\n\n**16. Protección por frío** &nbsp;·&nbsp; `22 °C`\n- *Cuándo:* La zona baja de 22 °C\n- *Qué hace:* Ventila con aire exterior, sin compresor\n- *Para qué:* Evitar el sobreenfriamiento\n\n**17. Sensores y modo seguro** &nbsp;·&nbsp; `6 lecturas`\n- *Cuándo:* Sensor fuera de rango, congelado o con saltos\n- *Qué hace:* Capacidad fija (55 %; 100 % en zonas críticas) y alarma\n- *Para qué:* No decidir con un dato falso\n\n**18. Modo emergencia (planta de respaldo)** &nbsp;·&nbsp; `110 kW`\n- *Cuándo:* Corte de red: el edificio pasa a la planta de respaldo\n- *Qué hace:* Luces al 70 %, consigna 25 °C (mínimo 24 °C), pasillos sin aire, arranque escalonado y límite de 88 kW sobre la planta; los paneles siguen aportando\n- *Para qué:* Mantener el edificio operando sin sobrecargar la planta\n\n**19. Zonas críticas** &nbsp;·&nbsp; `22 °C`\n- *Cuándo:* Cuarto de servidores\n- *Qué hace:* Nunca se deslastra ni se apaga; consigna fija\n- *Para qué:* Continuidad del servicio\n",
                 "code": {
                   "language": "plaintext",
                   "showLineNumbers": false,
@@ -2596,7 +2613,7 @@
                         "name": "ems-influx"
                       },
                       "spec": {
-                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field =~ /^r_(proteccion_alta|proteccion_baja|modo_seguro|manual)$/)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: max, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: if r._field == \"r_proteccion_alta\" then \"Protección por calor\" else if r._field == \"r_proteccion_baja\" then \"Protección por frío\" else if r._field == \"r_modo_seguro\" then \"Modo seguro\" else if r._field == \"r_manual\" then \"Control manual\" else r._field}))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ems\" and r.escenario == \"live\" and r._field =~ /^r_(proteccion_alta|proteccion_baja|modo_seguro|emergencia|manual)$/)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: max, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: if r._field == \"r_proteccion_alta\" then \"Protección por calor\" else if r._field == \"r_proteccion_baja\" then \"Protección por frío\" else if r._field == \"r_modo_seguro\" then \"Modo seguro\" else if r._field == \"r_emergencia\" then \"Emergencia (planta)\" else if r._field == \"r_manual\" then \"Control manual\" else r._field}))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
                       }
                     },
                     "refId": "A",
@@ -2721,6 +2738,21 @@
                         "value": {
                           "mode": "fixed",
                           "fixedColor": "#F2495C"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Emergencia (planta)"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#FF780A"
                         }
                       }
                     ]
@@ -2917,7 +2949,7 @@
         "kind": "Panel",
         "spec": {
           "id": 23,
-          "title": "Las 18 reglas del EMS",
+          "title": "Las 19 reglas del EMS",
           "description": "",
           "links": [],
           "data": {
@@ -2935,7 +2967,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Reglas con las que se construyó el EMS, con sus parámetros actuales (`config/edificio.yaml`).\n\n| # | Grupo | Regla | Cuándo | Qué hace | Parámetro |\n|---|---|---|---|---|---|\n| 1 | Horario y confort | **Horario laboral** | Lunes a viernes, 07:30–18:30 | Con gente, consigna de confort; sin gente, espera | `Entrada 08:00 · salida 18:00` |\n| 2 | Horario y confort | **Pre-enfriamiento escalonado** | Días laborables, 90 min antes de la entrada (06:30–08:00) | Las zonas arrancan por turnos hacia 24 °C | `90 min` |\n| 3 | Horario y confort | **Aire apagado fuera de horario** | Noches, sábados y domingos | Aire apagado: la zona sigue al clima exterior (sube de día y baja de noche) | `Protección a 32 °C` |\n| 4 | Horario y confort | **Consigna por ocupación** | El detector de presencia ve gente | Consigna 24 °C | `Banda ±0.5 °C` |\n| 5 | Horario y confort | **Retardo de vacancia** | La zona lleva menos de 15 min vacía | Mantiene la consigna de confort | `15 min` |\n| 6 | Horario y confort | **Espera sin ocupación** | Horario laboral y zona vacía | Consigna 27 °C | `27 °C` |\n| 7 | Secuencia | **Rampa de consigna** | Cada vez que cambia la consigna | Cambia como máximo 3 °C/h (0.25 °C cada 5 min); al arrancar parte de la temperatura medida | `3 °C/h` |\n| 8 | Secuencia | **Arranque escalonado** | Varias zonas quieren arrancar a la vez | Arrancan como máximo 2 terminales cada 5 min, la más caliente primero | `2 por paso` |\n| 9 | Secuencia | **Arranque suave del compresor** | Un compresor recibe más carga | El inverter sube 10 % de capacidad por minuto | `10 %/min` |\n| 10 | Secuencia | **Llegada gradual** | Entrada y salida del personal | Los horarios cambian en rampas de 60 min; cada zona llega ±15 min | `60 min` |\n| 11 | Iluminación y enchufes | **Luz natural** | Zona ocupada con luz del sol | Atenúa las luces para mantener 500 lux | `500 lux` |\n| 12 | Iluminación y enchufes | **Corte de standby** | Zona vacía | Enchufes al 10 %, luces al 0 % | `10 %` |\n| 13 | Demanda | **Rotación de compresores** | La demanda se acerca a 170 kW | Reparte la capacidad por urgencia; las zonas cerca del límite de confort siempre reciben frío | `Límite 170 kW` |\n| 14 | Demanda | **Deslastre (DR)** | La demanda de 15 min supera 170 kW | Luces al 70 %, enchufes al 85 %; sale con 5 kW de margen | `5 kW` |\n| 15 | Protección | **Protección por calor** | Fuera de horario la zona pasa de 32 °C | Enfría hasta 30 °C y vuelve a apagar | `32 / 30 °C` |\n| 16 | Protección | **Protección por frío** | La zona baja de 22 °C | Ventila con aire exterior, sin compresor | `22 °C` |\n| 17 | Protección | **Sensores y modo seguro** | Sensor fuera de rango, congelado o con saltos | Capacidad fija (55 %; 100 % en zonas críticas) y alarma | `6 lecturas` |\n| 18 | Protección | **Zonas críticas** | Cuarto de servidores | Nunca se deslastra ni se apaga; consigna fija | `22 °C` |\n\n*Orden de prioridad:* protección y seguridad → control manual → limitador de demanda → secuencia → horario, ocupación e iluminación.",
+                "content": "Reglas con las que se construyó el EMS, con sus parámetros actuales (`config/edificio.yaml`).\n\n| # | Grupo | Regla | Cuándo | Qué hace | Parámetro |\n|---|---|---|---|---|---|\n| 1 | Horario y confort | **Horario laboral** | Lunes a viernes, 07:30–18:30 | Con gente, consigna de confort; sin gente, espera | `Entrada 08:00 · salida 18:00` |\n| 2 | Horario y confort | **Pre-enfriamiento escalonado** | Días laborables, 90 min antes de la entrada (06:30–08:00) | Las zonas arrancan por turnos hacia 24 °C | `90 min` |\n| 3 | Horario y confort | **Aire apagado fuera de horario** | Noches, sábados y domingos | Aire apagado: la zona sigue al clima exterior (sube de día y baja de noche) | `Protección a 32 °C` |\n| 4 | Horario y confort | **Consigna por ocupación** | El detector de presencia ve gente | Consigna 24 °C | `Banda ±0.5 °C` |\n| 5 | Horario y confort | **Retardo de vacancia** | La zona lleva menos de 15 min vacía | Mantiene la consigna de confort | `15 min` |\n| 6 | Horario y confort | **Espera sin ocupación** | Horario laboral y zona vacía | Consigna 27 °C | `27 °C` |\n| 7 | Secuencia | **Rampa de consigna** | Cada vez que cambia la consigna | Cambia como máximo 3 °C/h (0.25 °C cada 5 min); al arrancar parte de la temperatura medida | `3 °C/h` |\n| 8 | Secuencia | **Arranque escalonado** | Varias zonas quieren arrancar a la vez | Arrancan como máximo 2 terminales cada 5 min, la más caliente primero | `2 por paso` |\n| 9 | Secuencia | **Arranque suave del compresor** | Un compresor recibe más carga | El inverter sube 10 % de capacidad por minuto | `10 %/min` |\n| 10 | Secuencia | **Llegada gradual** | Entrada y salida del personal | Los horarios cambian en rampas de 60 min; cada zona llega ±15 min | `60 min` |\n| 11 | Iluminación y enchufes | **Luz natural** | Zona ocupada con luz del sol | Atenúa las luces para mantener 500 lux | `500 lux` |\n| 12 | Iluminación y enchufes | **Corte de standby** | Zona vacía | Enchufes al 10 %, luces al 0 % | `10 %` |\n| 13 | Demanda | **Rotación de compresores** | La demanda se acerca a 170 kW | Reparte la capacidad por urgencia; las zonas cerca del límite de confort siempre reciben frío | `Límite 170 kW` |\n| 14 | Demanda | **Deslastre (DR)** | La demanda de 15 min supera 170 kW | Luces al 70 %, enchufes al 85 %; sale con 5 kW de margen | `5 kW` |\n| 15 | Protección | **Protección por calor** | Fuera de horario la zona pasa de 32 °C | Enfría hasta 30 °C y vuelve a apagar | `32 / 30 °C` |\n| 16 | Protección | **Protección por frío** | La zona baja de 22 °C | Ventila con aire exterior, sin compresor | `22 °C` |\n| 17 | Protección | **Sensores y modo seguro** | Sensor fuera de rango, congelado o con saltos | Capacidad fija (55 %; 100 % en zonas críticas) y alarma | `6 lecturas` |\n| 18 | Protección | **Modo emergencia (planta de respaldo)** | Corte de red: el edificio pasa a la planta de respaldo | Luces al 70 %, consigna 25 °C (mínimo 24 °C), pasillos sin aire, arranque escalonado y límite de 88 kW sobre la planta; los paneles siguen aportando | `110 kW` |\n| 19 | Protección | **Zonas críticas** | Cuarto de servidores | Nunca se deslastra ni se apaga; consigna fija | `22 °C` |\n\n*Orden de prioridad:* protección y seguridad → control manual → limitador de demanda → secuencia → horario, ocupación e iluminación.",
                 "code": {
                   "language": "plaintext",
                   "showLineNumbers": false,

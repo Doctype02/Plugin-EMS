@@ -112,7 +112,8 @@ Timestamp = tiempo simulado. Precisión: segundos. En modo `externo` el simulado
 |---|---|---|
 | `zona` | `edificio`, `zona`, `nombre`, `tipo`, `critica` (`si`/`no`), `escenario` | `temp_c`, `setpoint_c`, `ocupantes`, `ocupado` (0/1), `lux`, `luces_nivel`, `equipos_nivel`, `hvac_on` (0/1), `hvac_enable` (0/1), `p_luces_kw`, `p_equipos_kw`, `p_hvac_kw`, `p_total_kw`; lectura frente a real: `temp_c` / `temp_real_c`, `hr_pct` / `hr_real_pct`, `ocupado` / `ocupado_real`, `sensor_forzado` (0/1); mientras el sensor está forzado: `sensor_temp_offset_c`, `sensor_temp_fijo_c`, `sensor_hr_fijo_pct`, `sensor_presencia` (0/1), `sensor_congelado` (0/1), `sensor_restante_min` (−1 = sin vencimiento) |
 | `unidad` | `edificio`, `unidad`, `tipo` (`vrf`/`ptac`), `escenario` | `p_kw`, `q_frio_kw`, `carga_pct`, `cop` (sólo con compresor en marcha), `modo` (string), `encendido`, `capacidad_pct`, `setpoint_c` (sólo si está fijado), `cop_factor`, `forzado`, `restante_min` (−1 = sin vencimiento; sólo si `forzado`), `falla`, `sin_energia` (booleanos 0/1) |
-| `medidor` | `edificio`, `escenario` | todos los campos numéricos de `medidor/general` |
+| `medidor` | `edificio`, `escenario` | todos los campos numéricos de `medidor/general`. Planta de respaldo: `modo_energia_cod` (1 red, 2 planta, 3 UPS, 0 sin energía; en MQTT `modo_energia` = `red`/`generador`/`ups`/`sin_energia`), `p_gen_kw`, `gen_carga_pct`, `gen_combustible_l`, `gen_combustible_pct`, `gen_consumo_l_h`, `gen_autonomia_h`, `e_gen_kwh`, `p_fv_recortada_kw`; durante un corte `ups_kw` y `ups_min` |
+| `auditoria` | `edificio`, `tipo`, `resultado` (`aceptada`/`rechazada`) | `usuario`, `objetivo`, `codigo`, `ip`, `detalle`: cada orden recibida por `POST /ems/control` |
 | `ems` | `edificio`, `escenario`, `modo` | `dr_activo` (0/1), `limite_kw`, `n_alarmas`, `latencia_ms`; actividad de las reglas (dashboard «Reglas del EMS»): `r_precool`, `r_fuera_horario` (0/1), `r_ocupadas`, `r_vacancia`, `r_setback`, `r_apagadas`, `r_proteccion_alta`, `r_proteccion_baja`, `r_luz_natural`, `r_standby`, `r_rampa_setpoint`, `r_arranque_espera`, `r_arranques`, `r_rotacion_compresores`, `r_dr_etapa`, `r_modo_seguro`, `r_manual` (zonas) |
 | `alarma` | `edificio`, `escenario`, `nivel`, `codigo`, `zona` | `mensaje` (string), `valor` |
 | `pronostico` | `edificio`, `modelo` | `p_kw_pred`, `p_kw_real` |
@@ -193,8 +194,9 @@ el medidor informa `ocupacion_forzada: [zonas]` mientras dure.
 ### Eventos simulados (panel → Node-RED → gemelo)
 
 `POST /ems/control` con `{tipo: "evento", accion: "iniciar", id, evento, zona?, unidad?, duracion_min, intensidad?}`
-o `{tipo: "evento", accion: "detener", id | "*"}`. Tipos: `incendio`, `corte_energia` (intensidad = autonomía
-del UPS en min), `falla_vrf` (unidad: cualquier id de `sistemas_vrf`, incluidos los PTAC), `falla_terminal`, `puerta_abierta` (%), `sensor`,
+o `{tipo: "evento", accion: "detener", id | "*"}`. Tipos: `incendio`, `corte_energia` (la planta de respaldo toma el tablero
+de emergencia; ver `docs/PLANTA_RESPALDO.md`), `falla_generador` (la planta no está disponible: en un corte sólo
+queda el UPS de los servidores), `falla_vrf` (unidad: cualquier id de `sistemas_vrf`, incluidos los PTAC), `falla_terminal`, `puerta_abierta` (%), `sensor`,
 `ola_calor` (°C), `sobreocupacion` (% sobre el aforo), `pico_carga` (kW). Alarmas nuevas: `INCENDIO`,
-`CORTE_ENERGIA`, `EN_UPS`, `UPS_AGOTADO`, `FALLA_VRF`, `FALLA_TERMINAL`, `PUERTA_ABIERTA`, `OLA_CALOR`,
+`CORTE_ENERGIA`, `EN_PLANTA`, `FALLA_GENERADOR`, `EN_UPS`, `UPS_AGOTADO`, `FALLA_VRF`, `FALLA_TERMINAL`, `PUERTA_ABIERTA`, `OLA_CALOR`,
 `SOBREOCUPACION`, `CARGA_EXTRA`, `AJUSTE_CRITICO`. Rango de `limite_kw` en `parametros`: 42–561 kW.

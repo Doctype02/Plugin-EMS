@@ -17,7 +17,7 @@ CAMPOS_MEDIDOR = ["p_total_kw", "p_critica_kw", "p_no_critica_kw", "p_hvac_kw", 
                   "p_fija_kw", "q_kvar", "s_kva", "fp", "v_ll", "i_a", "e_kwh", "demanda_15min_kw", "t_ext_c",
                   "hr_pct", "irr_wm2", "precio_usd_kwh", "p_fv_kw", "p_red_kw", "e_fv_kwh", "red_ok", "ups_kw", "ups_min",
                   # planta de respaldo (docs/PLANTA_RESPALDO.md)
-                  "modo_energia", "p_gen_kw", "gen_carga_pct", "gen_combustible_l", "gen_combustible_pct",
+                  "modo_energia_cod", "p_gen_kw", "gen_carga_pct", "gen_combustible_l", "gen_combustible_pct",
                   "gen_consumo_l_h", "gen_autonomia_h", "e_gen_kwh", "p_fv_recortada_kw"]
 
 
@@ -73,6 +73,9 @@ class Escritor:
 
     def medidor(self, ts, m: dict, escenario: str = "live"):
         if self.habilitado:
+            if "modo_energia" in m:
+                # como número para no mezclar tipos en las consultas: 1 red, 2 planta de respaldo, 3 UPS, 0 sin energía
+                m = {**m, "modo_energia_cod": {"red": 1, "generador": 2, "ups": 3}.get(m["modo_energia"], 0)}
             self._p("medidor", ts, {"escenario": escenario}, {k: m[k] for k in CAMPOS_MEDIDOR if k in m})
 
     def ems(self, ts, est: dict, escenario: str = "live"):

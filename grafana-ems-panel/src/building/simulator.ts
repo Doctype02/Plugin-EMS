@@ -18,6 +18,7 @@
  * capacidad y con uno bajo dejan de enfriar; un sensor congelado se detecta a los 30 min (modo seguro).
  */
 import {
+  BACKUP,
   BUILDING,
   EMS_RULES,
   HVAC_SYSTEMS,
@@ -277,6 +278,8 @@ interface ZoneEvents {
   fire?: SimEvent;
   fireAnywhere?: SimEvent;
   outage?: SimEvent;
+  /** Corte de red con la planta de respaldo en marcha (tablero de emergencia con servicio). */
+  backup: boolean;
   /** El UPS se agotó: las cargas críticas también se apagan. */
   upsDepleted: boolean;
   doorFlow: number;
@@ -285,16 +288,27 @@ interface ZoneEvents {
   sensor: boolean;
 }
 
+/** Corte de red con la planta de respaldo disponible (sin el evento «falla_generador»). */
+function backupOn(act: SimEvent[]): boolean {
+  return BACKUP.enabled && act.some((e) => e.kind === 'corte_energia') && !act.some((e) => e.kind === 'falla_generador');
+}
+
+const PTAC_SYSTEMS = new Set(HVAC_SYSTEMS.filter((u) => u.kind === 'ptac').map((u) => u.id));
+const isPtac = (z: Zone) => PTAC_SYSTEMS.has(z.system);
+
 function zoneEvents(z: Zone, t: number, events?: SimEvent[]): ZoneEvents {
   const act = activeEvents(events, t);
   const mine = act.filter((e) => affectsZone(e, z.id));
   const fireAnywhere = act.find((e) => e.kind === 'incendio');
   const outage = act.find((e) => e.kind === 'corte_energia');
-  const upsDepleted = !!outage && t - outage.start > (outage.intensity ?? 30) * MIN;
+  const backup = backupOn(act);
+  const upsDepleted = !!outage && !backup && t - outage.start > BACKUP.upsMinutes * MIN;
+  // con la planta en marcha sólo quedan sin frío los equipos fuera del tablero de emergencia (PTAC)
+  const outageCutsCooling = !!outage && (!backup || isPtac(z));
   const starts = [
     ...mine.filter((e) => e.kind === 'falla_terminal' || e.kind === 'falla_vrf').map((e) => e.start),
     ...(fireAnywhere ? [fireAnywhere.start] : []),
-    ...(outage ? [outage.start] : []),
+    ...(outage && outageCutsCooling ? [outage.start] : []),
   ];
   return {
     kinds: [...new Set(mine.map((e) => e.kind))],
@@ -302,6 +316,7 @@ function zoneEvents(z: Zone, t: number, events?: SimEvent[]): ZoneEvents {
     fire: mine.find((e) => e.kind === 'incendio'),
     fireAnywhere,
     outage,
+    backup,
     upsDepleted,
     doorFlow: mine
       .filter((e) => e.kind === 'puerta_abierta')
@@ -471,10 +486,22 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     hvacEnable = false;
   }
 
+  // ---- emergencia (planta de respaldo): consigna de emergencia y pasillos sin aire
+  const emergency = ev.backup && !baseline && z.fixedSetpoint === undefined;
+  if (emergency) {
+    if (occupied || precool) {
+      setpoint = Math.max(setpoint, BACKUP.setpoint, BACKUP.setpointMin);
+    }
+    if (BACKUP.noHvacTypes.includes(z.type)) {
+      hvacEnable = false;
+    }
+  }
+
   // ---- control manual del operador
   const ov = activeOverride(z, t, opts);
   if (ov?.setpoint !== undefined) {
-    setpoint = ov.setpoint;
+    // en emergencia nadie puede pedir más frío que el mínimo (protege la planta)
+    setpoint = emergency ? Math.max(ov.setpoint, BACKUP.setpointMin) : ov.setpoint;
   }
   if (ov?.hvac === 'off') {
     hvacEnable = false;
@@ -515,15 +542,21 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
   if (ev.fireAnywhere && !ev.outage) {
     lights = 1; // iluminación plena para la evacuación
   }
-  const sinRed = !!ev.outage;
+  const sinRed = !!ev.outage && !ev.backup;
+  if (emergency) {
+    lights = Math.min(lights, BACKUP.lights);
+  }
   const plugs = z.critical || baseline ? 1 : (ov?.plugs ?? (occupied ? 1 : EMS_RULES.plugsUnoccupied));
   const fEq = scheduleValue(z.schedules.equipment, c.dow, c.h);
   let pPlugs =
     ((z.epd * z.area) / 1000) * fEq * Math.max(plugs, 0.1) +
     (z.itKw ?? 0) * (1 + 0.02 * Math.sin((c.h / 24) * 2 * Math.PI)) +
     ev.extraKw;
+  if (ev.backup && !z.critical) {
+    pPlugs = 0; // los tomacorrientes de oficina no están en el tablero de emergencia
+  }
   if (sinRed) {
-    // sin red: sólo las cargas críticas siguen (UPS) hasta agotar su autonomía
+    // sin red ni planta: sólo las cargas críticas siguen (UPS) hasta agotar su autonomía
     pPlugs = z.critical && !ev.upsDepleted ? pPlugs : 0;
     lights = z.critical && !ev.upsDepleted ? 0.3 : 0;
   }
@@ -689,12 +722,15 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
 /** Cargas sin zona (ascensor, extractores de los baños): kW × horario del modelo E+. */
 function fixedLoads(t: number, opts: SimOptions) {
   const c = clock(t);
-  const outage = activeEvents(opts.events, t).some((e) => e.kind === 'corte_energia');
+  const act = activeEvents(opts.events, t);
+  const outage = act.some((e) => e.kind === 'corte_energia');
+  const backup = backupOn(act);
   let total = 0;
   let critical = 0;
   let q = 0;
   for (const f of FIXED_LOADS) {
-    const p = outage && !f.critical ? 0 : f.kw * scheduleValue(f.schedule, c.dow, c.h);
+    const fed = !outage || f.critical || (backup && f.backup);
+    const p = fed ? f.kw * scheduleValue(f.schedule, c.dow, c.h) : 0;
     total += p;
     critical += f.critical ? p : 0;
     q += p * Math.tan(Math.acos(f.pf));
@@ -712,7 +748,10 @@ interface Core {
 
 /** Fotovoltaica del instante: área × fracción activa × eficiencia × G horizontal × inversor. */
 export function pvKw(t: number, opts: SimOptions): number {
-  if (!opts.pv || activeEvents(opts.events, t).some((e) => e.kind === 'corte_energia')) {
+  const act = activeEvents(opts.events, t);
+  const outage = act.find((e) => e.kind === 'corte_energia');
+  // en un corte el inversor sólo sigue si la planta forma la red, y se reconecta unos minutos después
+  if (!opts.pv || (outage && (!backupOn(act) || t - outage.start < BACKUP.pvReconnectMin * MIN))) {
     return 0;
   }
   return pvPowerKw(weather(t, opts.events).irr);
@@ -812,14 +851,22 @@ export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
       pCritical += s.pTotal;
     }
   }
-  // durante un corte el medidor de la acometida lee cero; el UPS alimenta las cargas críticas
-  const upsKw = outage ? now.pTotal : 0;
-  const pTotal = outage ? 0 : now.pTotal;
-  if (outage) {
+  // sin red ni planta el medidor lee cero (el UPS alimenta las cargas críticas); con la planta de respaldo el
+  // edificio sigue consumiendo, de la planta y de los paneles (recortados para respetar su carga mínima)
+  const backup = !!outage && backupOn(act);
+  const dark = !!outage && !backup;
+  const upsKw = dark ? now.pTotal : pCritical;
+  const pTotal = dark ? 0 : now.pTotal;
+  if (dark) {
     q = 0;
   }
+  const pvUsed = backup ? Math.max(0, Math.min(now.pPv, pTotal - BACKUP.loadMin * BACKUP.genKw)) : dark ? 0 : now.pPv;
+  const pGen = backup ? pTotal - pvUsed : 0;
+  const lPerH = backup ? BACKUP.idleLPerHKw * BACKUP.genKw + BACKUP.lPerKwh * pGen : 0;
+  // sin estado: el diésel gastado se estima con el consumo actual durante lo que lleva el corte
+  const fuelL = outage && backup ? Math.max(0, BACKUP.tankL - (lPerH * (t - outage.start)) / HOUR) : BACKUP.tankL;
   const s = Math.hypot(pTotal, q);
-  const vll = outage ? 0 : BUILDING.vll * (1 - 0.0002 * pTotal) + 1.5 * Math.sin(t / (7 * MIN));
+  const vll = dark ? 0 : BUILDING.vll * (1 - 0.0002 * pTotal) + 1.5 * Math.sin(t / (7 * MIN));
   const punta = c.weekday && c.h >= TARIFF.peakHours[0] && c.h < TARIFF.peakHours[1];
   const dayStart = Math.floor((t + TZ_OFFSET) / DAY) * DAY - TZ_OFFSET;
 
@@ -844,15 +891,26 @@ export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
     price: punta ? TARIFF.peakUsdKwh : TARIFF.offPeakUsdKwh,
     ...(opts.pv
       ? {
-          pPv: now.pPv,
-          pGrid: pTotal - now.pPv,
+          pPv: pvUsed,
+          pGrid: outage ? 0 : pTotal - now.pPv,
           ePv: lite ? 0 : energySince(dayStart, t, opts, (k) => k.pPv),
         }
       : {}),
     updatedAt: t,
     gridOk: !outage,
+    powerMode: !outage ? 'red' : backup ? 'generador' : (t - outage.start) / MIN < BACKUP.upsMinutes ? 'ups' : 'sin_energia',
     upsKw: outage ? upsKw : undefined,
-    upsMinutes: outage ? Math.max(0, (outage.intensity ?? 30) - (t - outage.start) / MIN) : undefined,
+    upsMinutes: outage ? (backup ? BACKUP.upsMinutes : Math.max(0, BACKUP.upsMinutes - (t - outage.start) / MIN)) : undefined,
+    ...(BACKUP.enabled
+      ? {
+          pGen,
+          genLoadPct: (100 * pGen) / BACKUP.genKw,
+          genFuelL: fuelL,
+          genFuelPct: (100 * fuelL) / BACKUP.tankL,
+          genAutonomyH: lPerH > 0 ? fuelL / lPerH : 0,
+          pPvCurtailed: backup ? now.pPv - pvUsed : 0,
+        }
+      : {}),
   };
   // la línea base no tiene limitador: sólo el supervisor avisa del pico (PICO_DEMANDA)
   const drActive = opts.controller !== 'baseline' && (now.forced > 0 || demand15 > opts.limitKw);
@@ -877,6 +935,7 @@ export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
 export function unitStatuses(t: number, k: Core, opts: SimOptions): Record<string, UnitStatus> {
   const act = activeEvents(opts.events, t);
   const outage = act.some((e) => e.kind === 'corte_energia');
+  const backup = backupOn(act);
   const out: Record<string, UnitStatus> = {};
   for (const u of HVAC_SYSTEMS) {
     const zs = u.zones.map((id) => k.zones[id]).filter(Boolean);
@@ -897,7 +956,7 @@ export function unitStatuses(t: number, k: Core, opts: SimOptions): Record<strin
       forced: !!adj,
       remainingMin: adj && Number.isFinite(adj.until) ? (adj.until - t) / MIN : undefined,
       fault: act.some((e) => e.kind === 'falla_vrf' && e.unit === u.id),
-      noPower: outage,
+      noPower: outage && (!backup || u.kind === 'ptac'),
       updatedAt: t,
     };
   }
@@ -1123,8 +1182,22 @@ function eventAlarms(t: number, zones: Record<string, ZoneState>, meter: MeterSt
           level: 'crit',
           code: 'CORTE_ENERGIA',
           zone: 'EDIF',
-          message: 'Sin tensión en la acometida: VRF, iluminación y tomacorrientes sin servicio',
+          message:
+            meter.powerMode === 'generador'
+              ? 'Sin tensión en la acometida: transferencia automática a la planta de respaldo'
+              : 'Sin tensión en la acometida y sin planta: VRF, iluminación y tomacorrientes sin servicio',
         });
+        if (meter.powerMode === 'generador') {
+          out.push({
+            ts: e.start,
+            level: 'warn',
+            code: 'EN_PLANTA',
+            zone: 'EDIF',
+            message: `Planta de respaldo en marcha (${(meter.pGen ?? 0).toFixed(0)} kW, diésel ${(meter.genFuelPct ?? 0).toFixed(0)} %): VRF, ascensor, iluminación y servidores`,
+            value: meter.pGen,
+          });
+          break;
+        }
         const left = meter.upsMinutes ?? 0;
         out.push({
           ts: e.start,

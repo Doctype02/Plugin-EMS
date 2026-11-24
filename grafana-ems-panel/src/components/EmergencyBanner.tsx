@@ -35,6 +35,16 @@ export function emergencyMessage(
     };
   }
   const m = snapshot.meter;
+  if (m && m.gridOk === false && m.powerMode === 'generador') {
+    return {
+      level: 'warn',
+      glyph: 'bolt',
+      title: 'CORTE DE RED — edificio alimentado por la planta de respaldo',
+      detail:
+        `Planta ${(m.pGen ?? 0).toFixed(0)} kW (${(m.genLoadPct ?? 0).toFixed(0)} %) · paneles ${(m.pPv ?? 0).toFixed(0)} kW · ` +
+        `diésel ${(m.genFuelPct ?? 0).toFixed(0)} % (≈ ${(m.genAutonomyH ?? 0).toFixed(0)} h) · luces al 70 %, consigna 25 °C · UPS de servidores en línea`,
+    };
+  }
   if (m && m.gridOk === false) {
     return {
       level: 'crit',

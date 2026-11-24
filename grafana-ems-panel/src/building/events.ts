@@ -16,6 +16,7 @@ import type { GlyphName } from '../components/Glyph';
 export type EventKind =
   | 'incendio'
   | 'corte_energia'
+  | 'falla_generador'
   | 'falla_vrf'
   | 'falla_terminal'
   | 'puerta_abierta'
@@ -68,9 +69,17 @@ export const EVENTS: Record<EventKind, EventDef> = {
     glyph: 'bolt',
     level: 'crit',
     target: 'edificio',
-    description: 'Se pierde la red. El cuarto de servidores sigue con el UPS durante su autonomía, sin climatización.',
+    description:
+      'Se pierde la red. La planta de respaldo alimenta los VRF, el ascensor, la iluminación y los servidores; los paneles solares siguen aportando.',
     defaultMinutes: 60,
-    intensity: { label: 'Autonomía del UPS', min: 5, max: 120, step: 5, value: 30, unit: 'min' },
+  },
+  falla_generador: {
+    label: 'Falla de la planta de respaldo',
+    glyph: 'wrench',
+    level: 'crit',
+    target: 'edificio',
+    description: 'La planta no arranca: si además hay un corte de red, sólo queda el UPS de los servidores.',
+    defaultMinutes: 60,
   },
   falla_vrf: {
     label: 'Falla de unidad VRF / PTAC',

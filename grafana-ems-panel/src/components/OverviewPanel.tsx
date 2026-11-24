@@ -7,6 +7,7 @@ import { Snapshot, Status } from 'building/telemetry';
 import { dayPeriod, localParts } from 'building/clock';
 import { MiniChart } from './MiniChart';
 import { DemandGauge } from './DemandGauge';
+import { EnergyFlow } from './EnergyFlow';
 
 interface Props {
   snapshot: Snapshot;
@@ -99,6 +100,15 @@ export const OverviewPanel: React.FC<Props> = ({
         </div>
         <DemandGauge meter={m} ems={snapshot.ems} limit={snapshot.ems?.limitKw || limitKw} pv={hasPv} />
       </section>
+
+      {m && (
+        <section className={styles.card} data-testid="ems-overview-energy">
+          <div className={styles.cardHead}>
+            <span>Fuentes de energía</span>
+          </div>
+          <EnergyFlow meter={m} pv={hasPv} />
+        </section>
+      )}
 
       <section className={styles.card}>
         <div className={styles.cardHead}>

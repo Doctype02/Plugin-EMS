@@ -167,6 +167,15 @@ export interface MeterState {
   /** Carga alimentada por el UPS (kW) y autonomía restante (min). */
   upsKw?: number;
   upsMinutes?: number;
+  /** De dónde se alimenta el edificio: red, planta de respaldo, sólo UPS o sin energía. */
+  powerMode?: 'red' | 'generador' | 'ups' | 'sin_energia';
+  /** Planta de respaldo: potencia (kW), carga (%), diésel (L y %), autonomía (h) y FV recortada (kW). */
+  pGen?: number;
+  genLoadPct?: number;
+  genFuelL?: number;
+  genFuelPct?: number;
+  genAutonomyH?: number;
+  pPvCurtailed?: number;
   /** Fotovoltaica (sólo en la variante con FV): generación AC, importación neta de la red (negativa =
    * exportación) y energía FV del día. */
   pPv?: number;
@@ -277,7 +286,16 @@ const METER_FIELDS: Record<string, keyof MeterState> = {
   p_fv_kw: 'pPv',
   p_red_kw: 'pGrid',
   e_fv_kwh: 'ePv',
+  ups_kw: 'upsKw',
+  ups_min: 'upsMinutes',
+  p_gen_kw: 'pGen',
+  gen_carga_pct: 'genLoadPct',
+  gen_combustible_l: 'genFuelL',
+  gen_combustible_pct: 'genFuelPct',
+  gen_autonomia_h: 'genAutonomyH',
+  p_fv_recortada_kw: 'pPvCurtailed',
 };
+const POWER_MODES: Array<NonNullable<MeterState['powerMode']>> = ['sin_energia', 'red', 'generador', 'ups'];
 
 const EMS_FIELDS: Record<string, keyof EmsState> = {
   dr_activo: 'drActive',
@@ -443,6 +461,11 @@ export function snapshotFromFrames(series: DataFrame[]): { snapshot: Snapshot; h
       for (const [k, v] of Object.entries(row.values)) {
         const key = METER_FIELDS[k];
         const n = asNumber(v);
+        if (k === 'red_ok' && n !== undefined) {
+          meter.gridOk = n > 0;
+        } else if (k === 'modo_energia_cod' && n !== undefined) {
+          meter.powerMode = POWER_MODES[n] ?? 'red';
+        }
         if (key && n !== undefined) {
           rec[key] = n;
           push('EDIF', key, row.time, n);

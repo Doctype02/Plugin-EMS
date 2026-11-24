@@ -41,6 +41,7 @@ CAMPOS = {
     "r_rotacion_compresores": ("Rotación de compresores", "#E0752D"),
     "r_dr_etapa": ("Etapa de deslastre", "#C4162A"),
     "r_modo_seguro": ("Modo seguro", "#F2495C"),
+    "r_emergencia": ("Emergencia (planta)", "#FF780A"),
     "r_manual": ("Control manual", "#8AB8FF"),
 }
 VIVO = 'r._measurement == "ems" and r.escenario == "live"'
@@ -196,6 +197,7 @@ def reglas(cfg: dict) -> list[dict]:
     ent, sal = o["hora_entrada"], o["hora_salida"]
     hh = lambda x: f"{int(x):02d}:{int(round((x % 1) * 60)):02d}"  # noqa: E731
     comp = ed.get("rampa_compresor_por_min", 0.1) * 100
+    gen, em = cfg["respaldo"]["generador"], cfg["respaldo"]["emergencia"]
     R = lambda g, n, c, a, p, w: {"grupo": g, "nombre": n, "cuando": c, "accion": a, "param": p, "para": w}  # noqa: E731
     return [
         R("horario", "Horario laboral", f"Lunes a viernes, {hh(ent - 0.5)}–{hh(sal + 0.5)}",
@@ -244,6 +246,10 @@ def reglas(cfg: dict) -> list[dict]:
           "Ventila con aire exterior, sin compresor", f"{e['confort_min_c'] + 1:g} °C", "Evitar el sobreenfriamiento"),
         R("proteccion", "Sensores y modo seguro", "Sensor fuera de rango, congelado o con saltos",
           "Capacidad fija (55 %; 100 % en zonas críticas) y alarma", "6 lecturas", "No decidir con un dato falso"),
+        R("proteccion", "Modo emergencia (planta de respaldo)", "Corte de red: el edificio pasa a la planta de respaldo",
+          f"Luces al {em['luces_nivel'] * 100:g} %, consigna {em['setpoint_c']:g} °C (mínimo {em['setpoint_min_c']:g} °C), pasillos sin "
+          f"aire, arranque escalonado y límite de {gen['potencia_kw'] * gen['carga_max']:g} kW sobre la planta; los paneles siguen aportando",
+          f"{gen['potencia_kw']:g} kW", "Mantener el edificio operando sin sobrecargar la planta"),
         R("proteccion", "Zonas críticas", "Cuarto de servidores", "Nunca se deslastra ni se apaga; consigna fija",
           "22 °C", "Continuidad del servicio"),
     ]
@@ -302,10 +308,10 @@ def dashboard(cfg: dict) -> dict:
                  pasos=[{"color": "#73BF69", "value": None}, {"color": "#FF9830", "value": lim * 0.85}, {"color": "#F2495C", "value": lim}])
     todas = ["r_ocupadas", "r_vacancia", "r_setback", "r_apagadas", "r_rampa_setpoint", "r_arranque_espera",
              "r_luz_natural", "r_standby", "r_rotacion_compresores", "r_proteccion_alta", "r_proteccion_baja",
-             "r_modo_seguro", "r_manual"]
+             "r_modo_seguro", "r_emergencia", "r_manual"]
     numeros = {"r_apagadas": 3, "r_ocupadas": 4, "r_vacancia": 5, "r_setback": 6, "r_rampa_setpoint": 7,
                "r_arranque_espera": 8, "r_luz_natural": 11, "r_standby": 12, "r_rotacion_compresores": 13,
-               "r_proteccion_alta": 15, "r_proteccion_baja": 16, "r_modo_seguro": 17}
+               "r_proteccion_alta": 15, "r_proteccion_baja": 16, "r_modo_seguro": 17, "r_emergencia": 18}
     orden = sorted([c for c in todas if c in numeros], key=numeros.get) + ["r_manual"]
     barras = T.barras("Zonas que maneja cada regla ahora",
                       "Número de zonas (de 25 no críticas) a las que se aplica cada regla en el último paso de 5 min. "
@@ -411,8 +417,8 @@ def dashboard(cfg: dict) -> dict:
     txt = T.texto("Reglas de protección y seguridad", tarjetas_md(
         "Protección y seguridad", "Tienen prioridad sobre todas las demás.", por("proteccion"), inicio["proteccion"]))
     prot = T.serie("Zonas en protección, modo seguro o control manual", "Zonas afectadas por cada regla de protección.",
-                   [flux_serie(["r_proteccion_alta", "r_proteccion_baja", "r_modo_seguro", "r_manual"])],
-                   [color(CAMPOS[c][0], CAMPOS[c][1]) for c in ("r_proteccion_alta", "r_proteccion_baja", "r_modo_seguro", "r_manual")],
+                   [flux_serie(["r_proteccion_alta", "r_proteccion_baja", "r_modo_seguro", "r_emergencia", "r_manual"])],
+                   [color(CAMPOS[c][0], CAMPOS[c][1]) for c in ("r_proteccion_alta", "r_proteccion_baja", "r_modo_seguro", "r_emergencia", "r_manual")],
                    escalon=True, extra={"min": 0})
     extremos = T.serie("Zona más caliente y más fría",
                        f"Temperatura de la zona más caliente y la más fría frente a los límites de protección "
@@ -425,7 +431,7 @@ def dashboard(cfg: dict) -> dict:
     tabs.append(("Protección", auto([txt, prot, extremos], 3)))
 
     # ---------- Catálogo
-    cat = T.texto("Las 18 reglas del EMS", (
+    cat = T.texto("Las 19 reglas del EMS", (
         "Reglas con las que se construyó el EMS, con sus parámetros actuales (`config/edificio.yaml`).\n\n"
         + tabla_md(rs, con_grupo=True) +
         "\n\n*Orden de prioridad:* protección y seguridad → control manual → limitador de demanda → secuencia → "

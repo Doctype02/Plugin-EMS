@@ -457,7 +457,7 @@
     {
       "type": "stat",
       "title": "Red eléctrica",
-      "description": "Verde: hay suministro de la red. Rojo: corte; el cuarto de servidores sigue con UPS.",
+      "description": "Verde: suministro de la red. Naranja: corte de red, el edificio funciona con la planta de respaldo y los paneles. Rojo: sin planta, sólo el UPS de los servidores.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -469,7 +469,7 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"red_ok\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+          "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"modo_energia_cod\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
         }
       ],
       "gridPos": {
@@ -502,14 +502,24 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "Normal",
+                  "text": "Red normal",
                   "color": "#73BF69",
                   "index": 0
                 },
-                "0": {
-                  "text": "Corte · con UPS",
-                  "color": "#F2495C",
+                "2": {
+                  "text": "Planta de respaldo",
+                  "color": "#FF9830",
                   "index": 1
+                },
+                "3": {
+                  "text": "Sólo UPS",
+                  "color": "#F2495C",
+                  "index": 2
+                },
+                "0": {
+                  "text": "Sin energía",
+                  "color": "#C4162A",
+                  "index": 3
                 }
               }
             }
@@ -830,7 +840,7 @@
     {
       "type": "timeseries",
       "title": "¿De dónde viene la energía?",
-      "description": "Morado: energía comprada a la red. Dorado: energía de los paneles solares. Apiladas suman el consumo del edificio.",
+      "description": "Las tres fuentes del edificio. Morado: red eléctrica. Naranja: planta de respaldo (sólo durante un corte). Dorado: paneles solares. Apiladas suman el consumo.",
       "datasource": {
         "type": "influxdb",
         "uid": "ems-influx"
@@ -842,7 +852,7 @@
             "type": "influxdb",
             "uid": "ems-influx"
           },
-          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_red_kw\" or r._field == \"p_fv_kw\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+          "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_red_kw\" or r._field == \"p_fv_kw\" or r._field == \"p_gen_kw\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ],
       "gridPos": {
@@ -939,6 +949,25 @@
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "#E8B10C"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p_gen_kw"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Planta de respaldo"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF780A"
                 }
               }
             ]
@@ -4015,6 +4044,828 @@
         }
       ],
       "id": 30
+    },
+    {
+      "type": "row",
+      "title": "Respaldo",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 1
+      },
+      "id": 49,
+      "panels": [
+        {
+          "type": "stat",
+          "title": "Fuente de energía",
+          "description": "De dónde se alimenta el edificio ahora.",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"modo_energia_cod\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+            }
+          ],
+          "gridPos": {
+            "x": 0,
+            "y": 35,
+            "w": 4,
+            "h": 6
+          },
+          "id": 40,
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "En espera",
+              "unit": "none",
+              "decimals": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "1": {
+                      "text": "Red normal",
+                      "color": "#73BF69",
+                      "index": 0
+                    },
+                    "2": {
+                      "text": "Planta de respaldo",
+                      "color": "#FF9830",
+                      "index": 1
+                    },
+                    "3": {
+                      "text": "Sólo UPS",
+                      "color": "#F2495C",
+                      "index": 2
+                    },
+                    "0": {
+                      "text": "Sin energía",
+                      "color": "#C4162A",
+                      "index": 3
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#8AB8FF",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background_solid",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "textMode": "value",
+            "wideLayout": true,
+            "showPercentChange": false,
+            "percentChangeColorMode": "standard",
+            "text": {
+              "titleSize": 14,
+              "valueSize": 28
+            }
+          }
+        },
+        {
+          "type": "gauge",
+          "title": "Planta de respaldo",
+          "description": "Potencia que entrega la planta (110 kW continuos). El EMS la mantiene por debajo del 80 %.",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"p_gen_kw\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+            }
+          ],
+          "gridPos": {
+            "x": 4,
+            "y": 35,
+            "w": 4,
+            "h": 6
+          },
+          "id": 41,
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "En espera",
+              "unit": "kwatt",
+              "decimals": 1,
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#73BF69",
+                    "value": null
+                  },
+                  {
+                    "color": "#FF9830",
+                    "value": 88.0
+                  },
+                  {
+                    "color": "#F2495C",
+                    "value": 110
+                  }
+                ]
+              },
+              "min": 0,
+              "max": 110
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "auto",
+            "showThresholdLabels": false,
+            "showThresholdMarkers": true
+          }
+        },
+        {
+          "type": "gauge",
+          "title": "Combustible",
+          "description": "Diésel en el tanque de 600 L.",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"gen_combustible_pct\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+            }
+          ],
+          "gridPos": {
+            "x": 8,
+            "y": 35,
+            "w": 4,
+            "h": 6
+          },
+          "id": 42,
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "En espera",
+              "unit": "percent",
+              "decimals": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#F2495C",
+                    "value": null
+                  },
+                  {
+                    "color": "#FF9830",
+                    "value": 20
+                  },
+                  {
+                    "color": "#73BF69",
+                    "value": 40
+                  }
+                ]
+              },
+              "min": 0,
+              "max": 100
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "auto",
+            "showThresholdLabels": false,
+            "showThresholdMarkers": true
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Autonomía",
+          "description": "Horas que quedan de diésel al consumo actual (sólo durante un corte).",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"gen_autonomia_h\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+            }
+          ],
+          "gridPos": {
+            "x": 12,
+            "y": 35,
+            "w": 4,
+            "h": 6
+          },
+          "id": 43,
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "En espera",
+              "unit": "h",
+              "decimals": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "En espera",
+                      "color": "#8E8E8E",
+                      "index": 0
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#8AB8FF",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "textMode": "value",
+            "wideLayout": true,
+            "showPercentChange": false,
+            "percentChangeColorMode": "standard",
+            "text": {
+              "titleSize": 14,
+              "valueSize": 28
+            }
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Paneles solares",
+          "description": "Potencia solar que el edificio está usando.",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"p_fv_kw\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+            }
+          ],
+          "gridPos": {
+            "x": 16,
+            "y": 35,
+            "w": 4,
+            "h": 6
+          },
+          "id": 44,
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "En espera",
+              "unit": "kwatt",
+              "decimals": 1,
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#E8B10C",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "textMode": "value",
+            "wideLayout": true,
+            "showPercentChange": false,
+            "percentChangeColorMode": "standard",
+            "text": {
+              "titleSize": 14,
+              "valueSize": 28
+            }
+          }
+        },
+        {
+          "type": "stat",
+          "title": "UPS de servidores",
+          "description": "Autonomía del UPS de los servidores (2.7 kW). Con la planta en marcha el UPS está en línea; sin ella se descarga.",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"ups_min\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+            }
+          ],
+          "gridPos": {
+            "x": 20,
+            "y": 35,
+            "w": 4,
+            "h": 6
+          },
+          "id": 45,
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "En espera",
+              "unit": "m",
+              "decimals": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#F2495C",
+                    "value": null
+                  },
+                  {
+                    "color": "#FF9830",
+                    "value": 5
+                  },
+                  {
+                    "color": "#73BF69",
+                    "value": 10
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "textMode": "value",
+            "wideLayout": true,
+            "showPercentChange": false,
+            "percentChangeColorMode": "standard",
+            "text": {
+              "titleSize": 14,
+              "valueSize": 28
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Las tres fuentes: red, planta y paneles",
+          "description": "Potencia que aporta cada fuente. En un corte la red cae a cero, la planta toma la carga en rampa y los paneles vuelven a los 5 minutos para ahorrar diésel.",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and (r._field == \"p_red_kw\" or r._field == \"p_gen_kw\" or r._field == \"p_fv_kw\" or r._field == \"p_fv_recortada_kw\"))\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+            }
+          ],
+          "gridPos": {
+            "x": 0,
+            "y": 41,
+            "w": 14,
+            "h": 10
+          },
+          "id": 46,
+          "fieldConfig": {
+            "defaults": {
+              "unit": "kwatt",
+              "decimals": 1,
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": 1800000,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "barAlignment": 0,
+                "insertNulls": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                },
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineStyle": {
+                  "fill": "solid"
+                }
+              },
+              "noValue": "Sin datos en el rango",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "p_red_kw"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Red eléctrica"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#A352CC"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "p_gen_kw"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Planta de respaldo"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#FF780A"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "p_fv_kw"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Paneles solares"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#E8B10C"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "p_fv_recortada_kw"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Solar no aprovechada"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#8E8E8E"
+                    }
+                  },
+                  {
+                    "id": "custom.lineStyle",
+                    "value": {
+                      "fill": "dash",
+                      "dash": [
+                        6,
+                        6
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.lineWidth",
+                    "value": 1
+                  },
+                  {
+                    "id": "custom.fillOpacity",
+                    "value": 0
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Diésel: nivel del tanque y consumo",
+          "description": "Litros en el tanque y consumo por hora de la planta.",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ems-influx"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "influxdb",
+                "uid": "ems-influx"
+              },
+              "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and (r._field == \"gen_combustible_l\" or r._field == \"gen_consumo_l_h\"))\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+            }
+          ],
+          "gridPos": {
+            "x": 14,
+            "y": 41,
+            "w": 10,
+            "h": 10
+          },
+          "id": 47,
+          "fieldConfig": {
+            "defaults": {
+              "unit": "litre",
+              "decimals": 1,
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": 1800000,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "barAlignment": 0,
+                "insertNulls": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                },
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineStyle": {
+                  "fill": "solid"
+                }
+              },
+              "noValue": "Sin datos en el rango",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "gen_combustible_l"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Tanque (L)"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#73BF69"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "litre"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "gen_consumo_l_h"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Consumo (L/h)"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#F2495C"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "none"
+                  },
+                  {
+                    "id": "custom.axisPlacement",
+                    "value": "right"
+                  },
+                  {
+                    "id": "custom.axisLabel",
+                    "value": "L/h"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "type": "text",
+          "title": "Ficha de diseño",
+          "gridPos": {
+            "x": 0,
+            "y": 51,
+            "w": 24,
+            "h": 11
+          },
+          "id": 48,
+          "options": {
+            "mode": "markdown",
+            "content": "**Planta de respaldo del edificio** · diseño completo en `docs/PLANTA_RESPALDO.md`\n\n| Elemento | Selección | Criterio |\n|---|---|---|\n| Generador diésel | **110 kW continuos · 137.5 kVA** (480 V, 3 fases) | Carga de emergencia del día de diseño (33,5 °C): 87,7 kW → 80 % de la planta. Sin EMS: 103,5 kW |\n| Transferencia automática | Interruptor de 250 A, arranque en 15 s | Corriente de la planta: 165 A |\n| Tanque de diésel | **600 L** | 2 días del día de diseño sin sol (≈ 285 L/día); con paneles ≈ 215 L/día |\n| UPS de servidores | **3 kVA · 2.7 kW**, en línea, 20 min | Cubre los 15 s de arranque y un apagado ordenado si la planta falla |\n| Paneles solares | Siguen en paralelo con la planta | Se reconectan a los 5 min y se recortan para que la planta no baje de 33 kW (30 %) |\n\n**Qué alimenta la planta:** los 6 sistemas VRF, el ascensor, la iluminación de todas las zonas y el cuarto de servidores. Quedan fuera los tomacorrientes de oficina, los aires de los baños y los extractores.\n\n**Qué hace el EMS en emergencia:** luces al 70 %, consigna de 25 °C (nadie puede pedir menos de 24 °C), terminales de pasillo apagados, arranque escalonado de los compresores y límite de 88 kW sobre la planta."
+          }
+        }
+      ]
     }
   ]
 }

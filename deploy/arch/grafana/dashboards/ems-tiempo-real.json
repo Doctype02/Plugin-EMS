@@ -145,7 +145,7 @@
         "spec": {
           "id": 11,
           "title": "¿De dónde viene la energía?",
-          "description": "Morado: energía comprada a la red. Dorado: energía de los paneles solares. Apiladas suman el consumo del edificio.",
+          "description": "Las tres fuentes del edificio. Morado: red eléctrica. Naranja: planta de respaldo (sólo durante un corte). Dorado: paneles solares. Apiladas suman el consumo.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -162,7 +162,7 @@
                         "name": "ems-influx"
                       },
                       "spec": {
-                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_red_kw\" or r._field == \"p_fv_kw\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\")\n  |> filter(fn: (r) => r._field == \"p_red_kw\" or r._field == \"p_fv_kw\" or r._field == \"p_gen_kw\")\n  // Mediana de 15 min (3 muestras de 5 min): quita el pico aislado de ~120 kW que deja cada\n  // reinicio del simulador sin recortar picos reales (pico físico de 28 días: 137,9 kW tras el filtro)\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 15m) then v.windowPeriod else 15m, fn: median, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
                       }
                     },
                     "refId": "A",
@@ -280,6 +280,25 @@
                         "id": "color",
                         "value": {
                           "fixedColor": "#E8B10C",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "p_gen_kw"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Planta de respaldo"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#FF780A",
                           "mode": "fixed"
                         }
                       }
@@ -4059,6 +4078,962 @@
           }
         }
       },
+      "panel-40": {
+        "kind": "Panel",
+        "spec": {
+          "id": 40,
+          "title": "Fuente de energía",
+          "description": "De dónde se alimenta el edificio ahora.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"modo_energia_cod\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "colorMode": "background_solid",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {
+                  "titleSize": 14,
+                  "valueSize": 28
+                },
+                "textMode": "value",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "decimals": 0,
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Sin energía",
+                          "color": "#C4162A",
+                          "index": 3
+                        },
+                        "1": {
+                          "text": "Red normal",
+                          "color": "#73BF69",
+                          "index": 0
+                        },
+                        "2": {
+                          "text": "Planta de respaldo",
+                          "color": "#FF9830",
+                          "index": 1
+                        },
+                        "3": {
+                          "text": "Sólo UPS",
+                          "color": "#F2495C",
+                          "index": 2
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#8AB8FF"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "En espera"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-41": {
+        "kind": "Panel",
+        "spec": {
+          "id": 41,
+          "title": "Planta de respaldo",
+          "description": "Potencia que entrega la planta (110 kW continuos). El EMS la mantiene por debajo del 80 %.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"p_gen_kw\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "gauge",
+            "version": "",
+            "spec": {
+              "options": {
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "kwatt",
+                  "decimals": 1,
+                  "min": 0,
+                  "max": 110,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#73BF69"
+                      },
+                      {
+                        "value": 88,
+                        "color": "#FF9830"
+                      },
+                      {
+                        "value": 110,
+                        "color": "#F2495C"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "En espera"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-42": {
+        "kind": "Panel",
+        "spec": {
+          "id": 42,
+          "title": "Combustible",
+          "description": "Diésel en el tanque de 600 L.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"gen_combustible_pct\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "gauge",
+            "version": "",
+            "spec": {
+              "options": {
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "decimals": 0,
+                  "min": 0,
+                  "max": 100,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#F2495C"
+                      },
+                      {
+                        "value": 20,
+                        "color": "#FF9830"
+                      },
+                      {
+                        "value": 40,
+                        "color": "#73BF69"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "En espera"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-43": {
+        "kind": "Panel",
+        "spec": {
+          "id": 43,
+          "title": "Autonomía",
+          "description": "Horas que quedan de diésel al consumo actual (sólo durante un corte).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"gen_autonomia_h\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {
+                  "titleSize": 14,
+                  "valueSize": 28
+                },
+                "textMode": "value",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "h",
+                  "decimals": 0,
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "En espera",
+                          "color": "#8E8E8E",
+                          "index": 0
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#8AB8FF"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "En espera"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-44": {
+        "kind": "Panel",
+        "spec": {
+          "id": 44,
+          "title": "Paneles solares",
+          "description": "Potencia solar que el edificio está usando.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"p_fv_kw\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {
+                  "titleSize": 14,
+                  "valueSize": 28
+                },
+                "textMode": "value",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "kwatt",
+                  "decimals": 1,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#E8B10C"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "En espera"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-45": {
+        "kind": "Panel",
+        "spec": {
+          "id": 45,
+          "title": "UPS de servidores",
+          "description": "Autonomía del UPS de los servidores (2.7 kW). Con la planta en marcha el UPS está en línea; sin ella se descarga.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"ups_min\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {
+                  "titleSize": 14,
+                  "valueSize": 28
+                },
+                "textMode": "value",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "m",
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#F2495C"
+                      },
+                      {
+                        "value": 5,
+                        "color": "#FF9830"
+                      },
+                      {
+                        "value": 10,
+                        "color": "#73BF69"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "En espera"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-46": {
+        "kind": "Panel",
+        "spec": {
+          "id": 46,
+          "title": "Las tres fuentes: red, planta y paneles",
+          "description": "Potencia que aporta cada fuente. En un corte la red cae a cero, la planta toma la carga en rampa y los paneles vuelven a los 5 minutos para ahorrar diésel.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and (r._field == \"p_red_kw\" or r._field == \"p_gen_kw\" or r._field == \"p_fv_kw\" or r._field == \"p_fv_recortada_kw\"))\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "kwatt",
+                  "decimals": 1,
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "green"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "noValue": "Sin datos en el rango",
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 10,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "smooth",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 2,
+                    "pointSize": 4,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "never",
+                    "spanNulls": 1800000,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "p_red_kw"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Red eléctrica"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#A352CC",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "p_gen_kw"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Planta de respaldo"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#FF780A",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "p_fv_kw"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Paneles solares"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#E8B10C",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "p_fv_recortada_kw"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Solar no aprovechada"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#8E8E8E",
+                          "mode": "fixed"
+                        }
+                      },
+                      {
+                        "id": "custom.lineStyle",
+                        "value": {
+                          "dash": [
+                            6,
+                            6
+                          ],
+                          "fill": "dash"
+                        }
+                      },
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 1
+                      },
+                      {
+                        "id": "custom.fillOpacity",
+                        "value": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-47": {
+        "kind": "Panel",
+        "spec": {
+          "id": 47,
+          "title": "Diésel: nivel del tanque y consumo",
+          "description": "Litros en el tanque y consumo por hora de la planta.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ems-influx"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"ems\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and (r._field == \"gen_combustible_l\" or r._field == \"gen_consumo_l_h\"))\n  |> aggregateWindow(every: if int(v: v.windowPeriod) > int(v: 5m) then v.windowPeriod else 5m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "litre",
+                  "decimals": 1,
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "green"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "noValue": "Sin datos en el rango",
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 10,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "smooth",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 2,
+                    "pointSize": 4,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "never",
+                    "spanNulls": 1800000,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "gen_combustible_l"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Tanque (L)"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#73BF69",
+                          "mode": "fixed"
+                        }
+                      },
+                      {
+                        "id": "unit",
+                        "value": "litre"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "gen_consumo_l_h"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Consumo (L/h)"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "#F2495C",
+                          "mode": "fixed"
+                        }
+                      },
+                      {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "custom.axisPlacement",
+                        "value": "right"
+                      },
+                      {
+                        "id": "custom.axisLabel",
+                        "value": "L/h"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-48": {
+        "kind": "Panel",
+        "spec": {
+          "id": 48,
+          "title": "Ficha de diseño",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "text",
+            "version": "",
+            "spec": {
+              "options": {
+                "content": "**Planta de respaldo del edificio** · diseño completo en `docs/PLANTA_RESPALDO.md`\n\n| Elemento | Selección | Criterio |\n|---|---|---|\n| Generador diésel | **110 kW continuos · 137.5 kVA** (480 V, 3 fases) | Carga de emergencia del día de diseño (33,5 °C): 87,7 kW → 80 % de la planta. Sin EMS: 103,5 kW |\n| Transferencia automática | Interruptor de 250 A, arranque en 15 s | Corriente de la planta: 165 A |\n| Tanque de diésel | **600 L** | 2 días del día de diseño sin sol (≈ 285 L/día); con paneles ≈ 215 L/día |\n| UPS de servidores | **3 kVA · 2.7 kW**, en línea, 20 min | Cubre los 15 s de arranque y un apagado ordenado si la planta falla |\n| Paneles solares | Siguen en paralelo con la planta | Se reconectan a los 5 min y se recortan para que la planta no baje de 33 kW (30 %) |\n\n**Qué alimenta la planta:** los 6 sistemas VRF, el ascensor, la iluminación de todas las zonas y el cuarto de servidores. Quedan fuera los tomacorrientes de oficina, los aires de los baños y los extractores.\n\n**Qué hace el EMS en emergencia:** luces al 70 %, consigna de 25 °C (nadie puede pedir menos de 24 °C), terminales de pasillo apagados, arranque escalonado de los compresores y límite de 88 kW sobre la planta.",
+                "mode": "markdown"
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
       "panel-5": {
         "kind": "Panel",
         "spec": {
@@ -4183,7 +5158,7 @@
         "spec": {
           "id": 6,
           "title": "Red eléctrica",
-          "description": "Verde: hay suministro de la red. Rojo: corte; el cuarto de servidores sigue con UPS.",
+          "description": "Verde: suministro de la red. Naranja: corte de red, el edificio funciona con la planta de respaldo y los paneles. Rojo: sin planta, sólo el UPS de los servidores.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4200,7 +5175,7 @@
                         "name": "ems-influx"
                       },
                       "spec": {
-                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"red_ok\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
+                        "query": "from(bucket: \"ems\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"medidor\" and r.escenario == \"live\" and r._field == \"modo_energia_cod\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])"
                       }
                     },
                     "refId": "A",
@@ -4245,14 +5220,24 @@
                       "type": "value",
                       "options": {
                         "0": {
-                          "text": "Corte · con UPS",
-                          "color": "#F2495C",
-                          "index": 1
+                          "text": "Sin energía",
+                          "color": "#C4162A",
+                          "index": 3
                         },
                         "1": {
-                          "text": "Normal",
+                          "text": "Red normal",
                           "color": "#73BF69",
                           "index": 0
+                        },
+                        "2": {
+                          "text": "Planta de respaldo",
+                          "color": "#FF9830",
+                          "index": 1
+                        },
+                        "3": {
+                          "text": "Sólo UPS",
+                          "color": "#F2495C",
+                          "index": 2
                         }
                       }
                     }
@@ -5011,6 +5996,136 @@
                         "element": {
                           "kind": "ElementReference",
                           "name": "panel-39"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "title": "Respaldo",
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 4,
+                        "height": 6,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-40"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 4,
+                        "y": 0,
+                        "width": 4,
+                        "height": 6,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-41"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 8,
+                        "y": 0,
+                        "width": 4,
+                        "height": 6,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-42"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 12,
+                        "y": 0,
+                        "width": 4,
+                        "height": 6,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-43"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 16,
+                        "y": 0,
+                        "width": 4,
+                        "height": 6,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-44"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 20,
+                        "y": 0,
+                        "width": 4,
+                        "height": 6,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-45"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 6,
+                        "width": 14,
+                        "height": 10,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-46"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 14,
+                        "y": 6,
+                        "width": 10,
+                        "height": 10,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-47"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 16,
+                        "width": 24,
+                        "height": 11,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-48"
                         }
                       }
                     }

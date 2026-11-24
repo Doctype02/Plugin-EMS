@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.7.0
+
+Planta de respaldo: el corte de red ya no deja el edificio a oscuras.
+
+- **La planta se ve**: en la vista de conjunto, el patio técnico junto al edificio muestra el grupo electrógeno
+  (con humo en el escape cuando está en marcha), el tanque de diésel con su nivel y el tablero de transferencia.
+  La tarjeta «Fuentes de energía» del resumen dibuja el flujo de red, planta y paneles hacia el edificio y el
+  UPS de los servidores.
+- **En vivo**: lee del medidor el modo de energía, la potencia y carga de la planta, el diésel, la autonomía y
+  la solar recortada; el aviso de corte distingue «en planta de respaldo» de «sólo UPS».
+- **Modo demostración**: en un corte la planta alimenta los VRF, el ascensor, la iluminación y los servidores;
+  los paneles se reconectan a los 5 min y se recortan para respetar la carga mínima de la planta; reglas de
+  emergencia (luces al 70 %, consigna 25 °C, pasillos sin aire). Evento nuevo «Falla de la planta de respaldo».
+
 ## 1.6.3
 
 - **Órdenes seguras con HTTPS**: cuando Grafana se sirve por HTTPS, las órdenes de control van al mismo origen

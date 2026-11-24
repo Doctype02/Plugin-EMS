@@ -916,9 +916,35 @@ export const SCHEDULES: Record<string, Schedule> = {
 
 /** Cargas sin zona acondicionada (kW × horario). */
 export const FIXED_LOADS: FixedLoad[] = [
-  { name: 'Ascensor', kw: 14.86, schedule: 'elevador', pf: 0.85, critical: false },
-  { name: 'Extractores de baños', kw: 0.075, schedule: 'extractores', pf: 0.85, critical: false },
+  { name: 'Ascensor', kw: 14.86, schedule: 'elevador', pf: 0.85, critical: false, backup: true },
+  {
+    name: 'Extractores de baños',
+    kw: 0.075,
+    schedule: 'extractores',
+    pf: 0.85,
+    critical: false,
+    backup: false,
+  },
 ];
+
+/** Planta de respaldo: generador, UPS y reglas de emergencia (config/edificio.yaml → respaldo). */
+export const BACKUP = {
+  enabled: true,
+  genKw: 110,
+  loadMax: 0.8,
+  loadMin: 0.3,
+  startSeconds: 15,
+  idleLPerHKw: 0.03,
+  lPerKwh: 0.24,
+  tankL: 600,
+  upsKw: 2.7,
+  upsMinutes: 20,
+  pvReconnectMin: 5,
+  setpoint: 25,
+  setpointMin: 24,
+  lights: 0.7,
+  noHvacTypes: ['pasillo'],
+};
 
 /** Parámetros del EMS por reglas (config/edificio.yaml → ems, ocupacion). */
 export const EMS_RULES = {

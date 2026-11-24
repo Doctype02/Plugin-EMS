@@ -23,6 +23,7 @@ import {
   shortZoneName,
 } from 'building/layout';
 import { blend, faceColor, floorFinish, lit, materials, zoneMark } from 'building/materials';
+import { BackupPlant, plantScreenPoints } from './BackupPlant';
 import { Rooftop } from './Rooftop';
 import { SLAB, ZoneInterior, tagAnchor } from './ZoneInterior';
 import { SceneDefs, ZoneChip, chipSize, faceQuad, onFace, segments } from './IsoPrimitives';
@@ -178,9 +179,19 @@ export const Building3D: React.FC<Props> = ({
   // --- encuadre: la geometría de la vista ocupa el área libre (px) sin recortarse
   const compactLabels = size.w < 760 || size.h < 420;
   const sideLabelW = compactLabels ? 150 : 178;
+  const geomBuilding = (): Box => {
+    // el encuadre incluye el patio técnico de la planta de respaldo, al costado del edificio
+    const b = projectedBox(cfg, [0, roofZ + ROOF_DECK + ROOF_TOP], 0);
+    const pts = plantScreenPoints(cfg);
+    const x0 = Math.min(b.x, ...pts.map((p) => p.x));
+    const y0 = Math.min(b.y, ...pts.map((p) => p.y));
+    const x1 = Math.max(b.x + b.w, ...pts.map((p) => p.x));
+    const y1 = Math.max(b.y + b.h, ...pts.map((p) => p.y));
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  };
   const geom =
     mode === 'building'
-      ? projectedBox(cfg, [0, roofZ + ROOF_DECK + ROOF_TOP], 0)
+      ? geomBuilding()
       : mode === 'roof'
         ? projectedBox(cfg, [0, ROOF_DECK + ROOF_TOP])
         : projectedBox(cfg, [0, interior ? TAG_Z : BUILDING.floorHeight]);
@@ -910,6 +921,21 @@ export const Building3D: React.FC<Props> = ({
             onLeaveUnit={onLeaveUnit}
           />
         </g>
+      )}
+
+      {mode === 'building' && (
+        <BackupPlant
+          iso={cfg}
+          meter={snapshot.meter}
+          M={M}
+          dark={dark}
+          ink={ink}
+          ink2={ink2}
+          surface={surface}
+          border={theme.colors.border.medium}
+          animate={animate}
+          u={u}
+        />
       )}
 
       {/* marcadores de eventos simulados sobre las zonas (en la vista de conjunto van en el rótulo de la planta) */}
