@@ -5,6 +5,7 @@ import { useStyles2, useTheme2 } from '@grafana/ui';
 import { EmsState, History, MeterState } from 'building/telemetry';
 import { Sparkline } from './Sparkline';
 import { LimitBar } from './DemandGauge';
+import { meterLines } from './PhaseLines';
 
 interface Props {
   meter?: MeterState;
@@ -37,6 +38,12 @@ export const MeterCard: React.FC<Props> = ({ meter, ems, limitKw, history }) => 
     ['Factor de potencia', meter.pf.toFixed(3)],
     ['Tensión L-L', `${meter.vll.toFixed(1)} V`],
     ['Corriente', `${meter.i.toFixed(1)} A`],
+    ...meterLines(meter).map(
+      (l) => [`Línea ${l.name}`, `${l.i.toFixed(1)} A · ${l.v.toFixed(0)} V · ${l.p.toFixed(1)} kW`] as [string, string]
+    ),
+    ...(meter.unbalancePct !== undefined
+      ? ([['Desbalance de corriente', `${meter.unbalancePct.toFixed(1)} %`]] as Array<[string, string]>)
+      : []),
     ['Crítica / no crítica', `${meter.pCritical.toFixed(1)} / ${meter.pNonCritical.toFixed(1)} kW`],
     ['Energía del día', `${meter.eKwh.toFixed(0)} kWh`],
     ...(meter.pPv !== undefined

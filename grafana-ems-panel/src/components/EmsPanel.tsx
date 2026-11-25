@@ -47,6 +47,7 @@ import { sensorForceOf } from 'building/controllers';
 import { Header, Kpi } from './Header';
 import { Legend } from './Legend';
 import { MeterCard } from './MeterCard';
+import { LineCurves } from './PhaseLines';
 import { ZoneDetail } from './ZoneDetail';
 import { ZoneTooltip } from './ZoneTooltip';
 import { TimeBar } from './TimeBar';
@@ -605,21 +606,25 @@ export const EmsPanel: React.FC<Props> = (props) => {
   // en vivo la curva sale de la tendencia; en demostración sólo depende del día y de las opciones (antes se
   // recalculaba con cada tendencia, ~100 llamadas al modelo cada 200 s simulados)
   const liveHistory = options.demoMode ? undefined : history;
-  const { dayCurve, pvCurve } = useMemo(() => {
+  const { dayCurve, pvCurve, lineCurves } = useMemo(() => {
     if (!options.demoMode) {
+      const e = liveHistory?.EDIF;
       return {
-        dayCurve: (liveHistory?.EDIF?.pTotal ?? []) as Array<[number, number]>,
-        pvCurve: liveHistory?.EDIF?.pPv as Array<[number, number]> | undefined,
+        dayCurve: (e?.pTotal ?? []) as Array<[number, number]>,
+        pvCurve: e?.pPv as Array<[number, number]> | undefined,
+        lineCurves: e?.iL1 ? ([e.iL1, e.iL2 ?? [], e.iL3 ?? []] as LineCurves) : undefined,
       };
     }
     const out: Array<[number, number]> = [];
     const pvOut: Array<[number, number]> = [];
+    const lines: LineCurves = [[], [], []];
     for (let t = dayStart; t <= dayStart + 86_400_000; t += 900_000) {
       const k = instant(t, sim);
       out.push([t, k.pTotal]);
       pvOut.push([t, k.pPv]);
+      k.iLines.forEach((a, n) => lines[n].push([t, a]));
     }
-    return { dayCurve: out, pvCurve: sim.pv ? pvOut : undefined };
+    return { dayCurve: out, pvCurve: sim.pv ? pvOut : undefined, lineCurves: lines };
   }, [options.demoMode, dayStart, sim, liveHistory]);
   const activeEventCount = events.filter((e) => e.start <= now && e.end > now).length;
   const selected = selectedId ? ZONE_BY_ID[selectedId] : undefined;
@@ -700,6 +705,7 @@ export const EmsPanel: React.FC<Props> = (props) => {
           limitKw={params.limitKw}
           dayCurve={dayCurve}
           pvCurve={pvVisible ? pvCurve : undefined}
+          lineCurves={lineCurves}
           now={now}
           onSelectZone={selectZone}
           meter={<MeterCard meter={snapshot.meter} ems={snapshot.ems} limitKw={params.limitKw} history={history} />}

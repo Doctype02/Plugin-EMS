@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { GrafanaTheme2 } from '@grafana/data';
 import { css } from '@emotion/css';
 import { useStyles2 } from '@grafana/ui';
@@ -55,6 +55,7 @@ export const MiniChart: React.FC<Props> = ({
   step,
 }) => {
   const styles = useStyles2(getStyles);
+  const [hoverX, setHoverX] = useState<number | undefined>(undefined);
   const W = 280;
   const H = height;
   const pad = { l: 30, r: 8, t: 14, b: 18 };
@@ -75,9 +76,29 @@ export const MiniChart: React.FC<Props> = ({
   const sy = (y: number) => pad.t + (1 - (y - y0) / (y1 - y0)) * (H - pad.t - pad.b);
   const ticks = [0, 0.5, 1].map((k) => y0 + (y1 - y0) * k);
   const xt = xTicks ?? [0, 0.25, 0.5, 0.75, 1].map((k) => x0 + (x1 - x0) * k);
+  // lectura al pasar el cursor: el valor de cada serie en ese instante
+  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / Math.max(r.width, 1)) * W;
+    const x = x0 + ((px - pad.l) / (W - pad.l - pad.r)) * (x1 - x0);
+    setHoverX(x < x0 || x > x1 ? undefined : x);
+  };
+  const readout =
+    hoverX === undefined
+      ? []
+      : series
+          .map((s) => ({ s, v: valueAt(s.points, hoverX, !!step) }))
+          .filter((r): r is { s: ChartSeries; v: number } => r.v !== undefined);
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" className={styles.svg} role="img">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        className={styles.svg}
+        role="img"
+        onMouseMove={onMove}
+        onMouseLeave={() => setHoverX(undefined)}
+      >
         {ticks.map((y) => (
           <g key={y}>
             <line x1={pad.l} x2={W - pad.r} y1={sy(y)} y2={sy(y)} className={styles.grid} />
@@ -143,25 +164,63 @@ export const MiniChart: React.FC<Props> = ({
             strokeWidth={2}
             strokeDasharray={s.dashed ? '5 4' : undefined}
             strokeLinejoin="round"
-            points={(step ? stepped(s.points) : s.points).map(([x, y]) => `${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(' ')}
+            points={(step ? stepped(s.points) : s.points)
+              .map(([x, y]) => `${sx(x).toFixed(1)},${sy(y).toFixed(1)}`)
+              .join(' ')}
           />
         ))}
         <text x={2} y={8} className={styles.axis}>
           {yUnit}
         </text>
+        {readout.length > 0 && (
+          <g pointerEvents="none">
+            <line x1={sx(hoverX!)} x2={sx(hoverX!)} y1={pad.t} y2={H - pad.b} className={styles.cross} />
+            {readout.map(({ s, v }) => (
+              <circle key={s.name} cx={sx(hoverX!)} cy={sy(v)} r={3} fill={s.color} className={styles.dot} />
+            ))}
+          </g>
+        )}
       </svg>
-      {series.length > 1 && (
-        <div className={styles.legend}>
-          {series.map((s) => (
+      {readout.length > 0 ? (
+        <div className={styles.legend} data-testid="ems-chart-readout">
+          <b>{xLabel(hoverX!)}</b>
+          {readout.map(({ s, v }) => (
             <span key={s.name}>
-              <i style={{ background: s.color }} /> {s.name}
+              <i style={{ background: s.color }} /> {s.name} <b>{v.toFixed(Math.abs(v) < 10 ? 1 : 0)}</b> {yUnit}
             </span>
           ))}
         </div>
+      ) : (
+        series.length > 1 && (
+          <div className={styles.legend}>
+            {series.map((s) => (
+              <span key={s.name}>
+                <i style={{ background: s.color }} /> {s.name}
+              </span>
+            ))}
+          </div>
+        )
       )}
     </div>
   );
 };
+
+/** Valor de una serie en x: el último punto anterior (escalones) o la interpolación lineal. */
+function valueAt(points: Array<[number, number]>, x: number, step: boolean): number | undefined {
+  if (!points.length || x < points[0][0] || x > points[points.length - 1][0]) {
+    return undefined;
+  }
+  let i = 0;
+  while (i < points.length - 1 && points[i + 1][0] <= x) {
+    i++;
+  }
+  const [xa, ya] = points[i];
+  const next = points[i + 1];
+  if (step || !next || next[0] === xa) {
+    return ya;
+  }
+  return ya + ((next[1] - ya) * (x - xa)) / (next[0] - xa);
+}
 
 const getStyles = (theme: GrafanaTheme2) => ({
   svg: css`
@@ -183,11 +242,26 @@ const getStyles = (theme: GrafanaTheme2) => ({
   rule: css`
     font-size: 9px;
   `,
+  cross: css`
+    stroke: ${theme.colors.text.secondary};
+    stroke-width: 1;
+  `,
+  dot: css`
+    stroke: ${theme.colors.background.secondary};
+    stroke-width: 1.5;
+  `,
   legend: css`
     display: flex;
-    gap: ${theme.spacing(1.5)};
+    flex-wrap: wrap;
+    gap: ${theme.spacing(0, 1.5)};
+    min-height: 17px;
     font-size: 11px;
+    font-variant-numeric: tabular-nums;
     color: ${theme.colors.text.secondary};
+    b {
+      color: ${theme.colors.text.primary};
+      font-weight: 500;
+    }
     i {
       display: inline-block;
       width: 10px;

@@ -8,6 +8,7 @@ import { dayPeriod, localParts } from 'building/clock';
 import { MiniChart } from './MiniChart';
 import { DemandGauge } from './DemandGauge';
 import { EnergyFlow } from './EnergyFlow';
+import { LineCurves, PhaseLines } from './PhaseLines';
 
 interface Props {
   snapshot: Snapshot;
@@ -18,6 +19,8 @@ interface Props {
   dayCurve: Array<[number, number]>;
   /** Generación FV del día (t, kW), sólo en la variante con fotovoltaica. */
   pvCurve?: Array<[number, number]>;
+  /** Corriente de cada línea (L1, L2, L3) a lo largo del día (t, A). */
+  lineCurves?: LineCurves;
   now: number;
   onSelectZone: (id: string) => void;
   /** Detalle del medidor eléctrico (P, Q, S, FP, V, I). */
@@ -42,6 +45,7 @@ export const OverviewPanel: React.FC<Props> = ({
   limitKw,
   dayCurve,
   pvCurve,
+  lineCurves,
   now,
   onSelectZone,
   meter,
@@ -65,7 +69,12 @@ export const OverviewPanel: React.FC<Props> = ({
       ]
     : [];
   const total = parts.reduce((a, x) => a + x.v, 0) || 1;
-  const hourFmt = (t: number) => `${Math.round((t - p.dayStart) / 3_600_000)}h`;
+  const hourFmt = (t: number) => {
+    const h = (t - p.dayStart) / 3_600_000;
+    return Number.isInteger(h) ? `${h}h` : `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+  };
+  const dayDomain: [number, number] = [p.dayStart, p.dayStart + 86_400_000];
+  const dayTicks = [0, 6, 12, 18, 24].map((h) => p.dayStart + h * 3_600_000);
   const hasPv = m?.pPv !== undefined;
   // energía comprada a la red: consumo menos lo generado (la FV inyectada se paga a precio de excedente)
   const eNet = m ? m.eKwh - (m.ePv ?? 0) : 0;
@@ -128,12 +137,22 @@ export const OverviewPanel: React.FC<Props> = ({
           ]}
           rules={[{ y: limitKw, label: `${limitKw} kW`, color: theme.colors.warning.text }]}
           marker={{ x: now, label: 'ahora' }}
-          xDomain={[p.dayStart, p.dayStart + 86_400_000]}
-          xTicks={[0, 6, 12, 18, 24].map((h) => p.dayStart + h * 3_600_000)}
+          xDomain={dayDomain}
+          xTicks={dayTicks}
           xLabel={hourFmt}
           yUnit="kW"
         />
       </section>
+
+      {m?.iL1 !== undefined && (
+        <section className={styles.card} data-testid="ems-overview-lines">
+          <div className={styles.cardHead}>
+            <span>Las 3 líneas (corriente)</span>
+            <span className={styles.muted}>desbalance {(m.unbalancePct ?? 0).toFixed(0)} %</span>
+          </div>
+          <PhaseLines meter={m} curves={lineCurves} now={now} xDomain={dayDomain} xTicks={dayTicks} xLabel={hourFmt} />
+        </section>
+      )}
 
       <div className={styles.stats}>
         <Stat label="Energía hoy" value={m ? `${m.eKwh.toFixed(0)} kWh` : '—'} />
@@ -416,6 +435,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
     border-radius: 50%;
   `,
   muted: css`
+    white-space: nowrap;
     font-size: 11px;
     font-weight: ${theme.typography.fontWeightRegular};
     color: ${theme.colors.text.secondary};

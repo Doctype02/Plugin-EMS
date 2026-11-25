@@ -51,6 +51,25 @@ describe('simulador del edificio', () => {
     expect(m.pf).toBeLessThanOrEqual(1);
   });
 
+  it('las tres líneas: la suma de L1, L2 y L3 es la potencia total y la corriente media coincide con la del medidor', () => {
+    const m = simulate(at(11), opts).meter!;
+    expect(m.pL1! + m.pL2! + m.pL3!).toBeCloseTo(m.pTotal, 3);
+    for (const i of [m.iL1!, m.iL2!, m.iL3!]) {
+      expect(i).toBeGreaterThan(20);
+      expect(i).toBeLessThan(300);
+    }
+    // cargas monofásicas repartidas: las líneas no van idénticas, pero el desbalance es moderado de día
+    expect(new Set([m.iL1!.toFixed(1), m.iL2!.toFixed(1), m.iL3!.toFixed(1)]).size).toBeGreaterThan(1);
+    expect(m.unbalancePct!).toBeGreaterThan(0);
+    expect(m.unbalancePct!).toBeLessThan(25);
+    expect((m.iL1! + m.iL2! + m.iL3!) / 3).toBeCloseTo(m.i, -1);
+    expect(m.vL1!).toBeGreaterThan(265);
+    expect(m.vL1!).toBeLessThan(277.2);
+    // la curva del día y la tendencia traen las tres líneas
+    expect(instant(at(11), opts).iLines).toEqual([m.iL1, m.iL2, m.iL3]);
+    expect(simulateHistory(at(11), 2 * 3600_000, 5, opts).EDIF.iL2).toHaveLength(5);
+  });
+
   it('cada día laborable tiene un incidente que genera alarma', () => {
     for (const day of [2, 3, 4]) {
       const inc = [...Array(48).keys()].map((i) => incident(at(0, i * 30, day))).find(Boolean);

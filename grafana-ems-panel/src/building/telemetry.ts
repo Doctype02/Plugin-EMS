@@ -176,6 +176,18 @@ export interface MeterState {
   genFuelPct?: number;
   genAutonomyH?: number;
   pPvCurtailed?: number;
+  /** Las tres líneas (L1, L2, L3): corriente (A), tensión línea-neutro (V) y potencia activa (kW) de cada
+   * una, y desbalance de corriente (%, máxima desviación respecto de la media). */
+  iL1?: number;
+  iL2?: number;
+  iL3?: number;
+  vL1?: number;
+  vL2?: number;
+  vL3?: number;
+  pL1?: number;
+  pL2?: number;
+  pL3?: number;
+  unbalancePct?: number;
   /** Fotovoltaica (sólo en la variante con FV): generación AC, importación neta de la red (negativa =
    * exportación) y energía FV del día. */
   pPv?: number;
@@ -294,6 +306,16 @@ const METER_FIELDS: Record<string, keyof MeterState> = {
   gen_combustible_pct: 'genFuelPct',
   gen_autonomia_h: 'genAutonomyH',
   p_fv_recortada_kw: 'pPvCurtailed',
+  i_l1_a: 'iL1',
+  i_l2_a: 'iL2',
+  i_l3_a: 'iL3',
+  v_l1_v: 'vL1',
+  v_l2_v: 'vL2',
+  v_l3_v: 'vL3',
+  p_l1_kw: 'pL1',
+  p_l2_kw: 'pL2',
+  p_l3_kw: 'pL3',
+  desbalance_pct: 'unbalancePct',
 };
 const POWER_MODES: Array<NonNullable<MeterState['powerMode']>> = ['sin_energia', 'red', 'generador', 'ups'];
 
@@ -560,6 +582,8 @@ function emptyZone(z: Zone): ZoneState {
 function fillMeter(m: Partial<MeterState>): MeterState {
   const z = (v?: number) => v ?? 0;
   return {
+    // lo opcional (modo de energía, planta, UPS, las tres líneas) pasa tal cual; lo básico se completa con ceros
+    ...m,
     pTotal: z(m.pTotal),
     pCritical: z(m.pCritical),
     pNonCritical: z(m.pNonCritical),

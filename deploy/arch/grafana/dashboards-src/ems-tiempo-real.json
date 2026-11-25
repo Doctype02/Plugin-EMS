@@ -1266,7 +1266,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#F2495C"
+                  "fixedColor": "#3987e5"
                 }
               }
             ]
@@ -1285,7 +1285,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FADE2A"
+                  "fixedColor": "#d95926"
                 }
               }
             ]
@@ -1304,7 +1304,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#5794F2"
+                  "fixedColor": "#199e70"
                 }
               }
             ]
@@ -1419,7 +1419,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#F2495C"
+                  "fixedColor": "#3987e5"
                 }
               }
             ]
@@ -1438,7 +1438,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FADE2A"
+                  "fixedColor": "#d95926"
                 }
               }
             ]
@@ -1457,7 +1457,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#5794F2"
+                  "fixedColor": "#199e70"
                 }
               }
             ]
@@ -5282,7 +5282,7 @@
                     "id": "color",
                     "value": {
                       "mode": "fixed",
-                      "fixedColor": "#F2495C"
+                      "fixedColor": "#3987e5"
                     }
                   }
                 ]
@@ -5301,7 +5301,7 @@
                     "id": "color",
                     "value": {
                       "mode": "fixed",
-                      "fixedColor": "#FADE2A"
+                      "fixedColor": "#d95926"
                     }
                   }
                 ]
@@ -5320,7 +5320,7 @@
                     "id": "color",
                     "value": {
                       "mode": "fixed",
-                      "fixedColor": "#5794F2"
+                      "fixedColor": "#199e70"
                     }
                   }
                 ]

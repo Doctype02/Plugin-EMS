@@ -374,7 +374,9 @@ function zoneEvents(z: Zone, t: number, events?: SimEvent[]): ZoneEvents {
       (events ?? []).some((e) => e.kind === 'corte_energia' && e.end === transferAt) &&
       !(events ?? []).some((e) => e.kind === 'falla_generador' && e.start < transferAt && e.end >= transferAt),
     recoverSince:
-      restartAt !== undefined && !waiting && !outageCutsCooling && t < restartAt + 5 * RECOVERY_MIN * MIN ? restartAt : undefined,
+      restartAt !== undefined && !waiting && !outageCutsCooling && t < restartAt + 5 * RECOVERY_MIN * MIN
+        ? restartAt
+        : undefined,
     upsDepleted,
     doorFlow: mine
       .filter((e) => e.kind === 'puerta_abierta')
@@ -661,7 +663,8 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
     // parte de la temperatura que tenía la zona: la de consigna si estaba climatizada, o la de deriva si el
     // aire ya estaba apagado por horario (así el corte no produce un salto)
     const scheduledOff = !occupied && !precool && !workHours && z.fixedSetpoint === undefined && !baseline;
-    const spBefore = z.fixedSetpoint ?? (baseline ? setpoint : occupied || precool ? (opts.spOccupied ?? SP_OCC) : SP_UNOCC);
+    const spBefore =
+      z.fixedSetpoint ?? (baseline ? setpoint : occupied || precool ? (opts.spOccupied ?? SP_OCC) : SP_UNOCC);
     const from = scheduledOff
       ? offTemp(z, ev.noCoolingSince)
       : ev.afterBackup && !baseline && z.fixedSetpoint === undefined && !ev.outage
@@ -726,7 +729,8 @@ function zoneCore(z: Zone, t: number, opts: SimOptions, buildingOccupied: boolea
   // lo que se calentó mientras esperaba su turno, con el compresor entrando en rampa y luego a más carga
   if (ev.recoverSince !== undefined && ev.transferAt !== undefined && hvacOn && ev.noCoolingSince === undefined) {
     const offHours = (ev.recoverSince - ev.transferAt) / HOUR;
-    const start = ev.afterBackup && !baseline && z.fixedSetpoint === undefined ? Math.max(spPhys, BACKUP.setpoint) : spPhys;
+    const start =
+      ev.afterBackup && !baseline && z.fixedSetpoint === undefined ? Math.max(spPhys, BACKUP.setpoint) : spPhys;
     const rise = Math.max(0, Math.min(4, freeFloat(z, start, offHours, ffGains, w.tExt) - spPhys));
     const k = Math.exp(-(t - ev.recoverSince) / (RECOVERY_MIN * MIN));
     temp += rise * k;
@@ -891,6 +895,8 @@ export function instant(
   pHvac: number;
   pPv: number;
   zones: Record<string, { temp: number; pHvac: number }>;
+  /** Corriente de cada línea (A). */
+  iLines: [number, number, number];
 } {
   const c = core(t, opts);
   const zones: Record<string, { temp: number; pHvac: number }> = {};
@@ -899,11 +905,64 @@ export function instant(
     zones[id] = { temp: z.temp, pHvac: z.pHvac };
     pHvac += z.pHvac;
   }
-  return { pTotal: c.pTotal, pHvac, pPv: c.pPv, zones };
+  return { pTotal: c.pTotal, pHvac, pPv: c.pPv, zones, iLines: phaseLines(t, opts, c).i };
 }
 
-const PF = { hvac: 0.9, lights: 0.95, plugs: 0.92 };
+const PF = { hvac: 0.9, lights: 0.95, plugs: 0.92, it: 0.97 };
 const tanPhi = (pf: number) => Math.tan(Math.acos(pf));
+
+/** Las tres líneas del servicio (L1, L2, L3). */
+export interface PhaseLines {
+  /** Corriente (A), tensión línea-neutro (V) y potencia activa (kW) de cada línea. */
+  i: [number, number, number];
+  v: [number, number, number];
+  p: [number, number, number];
+  /** Desbalance de corriente (%): máxima desviación respecto de la media (NEMA). */
+  unbalancePct: number;
+}
+
+/**
+ * Reparto de la carga entre las tres líneas, igual que el gemelo (ems/edificio.py → `_lineas`): climatización,
+ * ascensor y cargas fijas son trifásicas equilibradas; la iluminación y los tomacorrientes de cada zona son
+ * monofásicos (zona i → línea i mod 3) y el UPS de los servidores cuelga de L1.
+ */
+function phaseLines(t: number, opts: SimOptions, k: Core): PhaseLines {
+  const act = activeEvents(opts.events, t);
+  const energized = !act.some((e) => e.kind === 'corte_energia') || backupOn(act, t);
+  const p = [0, 0, 0];
+  const q = [0, 0, 0];
+  if (energized) {
+    ZONES.forEach((z, iz) => {
+      const s = k.zones[z.id];
+      const it = Math.min(s.pPlugs, z.itKw ?? 0);
+      const plugs = s.pPlugs - it;
+      for (let n = 0; n < 3; n++) {
+        p[n] += s.pHvac / 3;
+        q[n] += (s.pHvac * tanPhi(PF.hvac)) / 3;
+      }
+      p[iz % 3] += s.pLights + plugs;
+      q[iz % 3] += s.pLights * tanPhi(PF.lights) + plugs * tanPhi(PF.plugs);
+      p[0] += it;
+      q[0] += it * tanPhi(PF.it);
+    });
+    const fixed = fixedLoads(t, opts);
+    for (let n = 0; n < 3; n++) {
+      p[n] += fixed.total / 3;
+      q[n] += fixed.q / 3;
+    }
+  }
+  const vln = BUILDING.vll / Math.sqrt(3);
+  const i = p.map((pk, n) => (Math.hypot(pk, q[n]) * 1000) / vln);
+  // caída de tensión del alimentador: ≈ 3 % a 300 A
+  const v = i.map((ik) => (energized ? vln * (1 - 0.03 * Math.min(ik / 300, 1.5)) : 0));
+  const mean = (i[0] + i[1] + i[2]) / 3;
+  return {
+    i: i as PhaseLines['i'],
+    v: v as PhaseLines['v'],
+    p: p as PhaseLines['p'],
+    unbalancePct: mean > 1e-6 ? (100 * Math.max(...i.map((ik) => Math.abs(ik - mean)))) / mean : 0,
+  };
+}
 
 /** `lite` omite la energía acumulada del día (para series históricas). */
 export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
@@ -950,6 +1009,7 @@ export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
   const fuelL = outage && backup ? Math.max(0, BACKUP.tankL - (lPerH * (t - outage.start)) / HOUR) : BACKUP.tankL;
   const s = Math.hypot(pTotal, q);
   const vll = dark ? 0 : BUILDING.vll * (1 - 0.0002 * pTotal) + 1.5 * Math.sin(t / (7 * MIN));
+  const lines = phaseLines(t, opts, now);
   const punta = c.weekday && c.h >= TARIFF.peakHours[0] && c.h < TARIFF.peakHours[1];
   const dayStart = Math.floor((t + TZ_OFFSET) / DAY) * DAY - TZ_OFFSET;
 
@@ -981,9 +1041,29 @@ export function simulate(t: number, opts: SimOptions, lite = false): Snapshot {
       : {}),
     updatedAt: t,
     gridOk: !outage,
-    powerMode: !outage ? 'red' : backup ? 'generador' : (t - outage.start) / MIN < BACKUP.upsMinutes ? 'ups' : 'sin_energia',
+    powerMode: !outage
+      ? 'red'
+      : backup
+        ? 'generador'
+        : (t - outage.start) / MIN < BACKUP.upsMinutes
+          ? 'ups'
+          : 'sin_energia',
+    iL1: lines.i[0],
+    iL2: lines.i[1],
+    iL3: lines.i[2],
+    vL1: lines.v[0],
+    vL2: lines.v[1],
+    vL3: lines.v[2],
+    pL1: lines.p[0],
+    pL2: lines.p[1],
+    pL3: lines.p[2],
+    unbalancePct: lines.unbalancePct,
     upsKw: outage ? upsKw : undefined,
-    upsMinutes: outage ? (backup ? BACKUP.upsMinutes : Math.max(0, BACKUP.upsMinutes - (t - outage.start) / MIN)) : undefined,
+    upsMinutes: outage
+      ? backup
+        ? BACKUP.upsMinutes
+        : Math.max(0, BACKUP.upsMinutes - (t - outage.start) / MIN)
+      : undefined,
     ...(BACKUP.enabled
       ? {
           pGen,
@@ -1407,8 +1487,8 @@ export function simulateHistory(end: number, span: number, points: number, opts:
       }
     }
     const m = (history.EDIF ??= {});
-    for (const k of ['pTotal', 'demand15', 'pHvac', 'tExt'] as const) {
-      (m[k] ??= []).push([t, snap.meter![k]]);
+    for (const k of ['pTotal', 'demand15', 'pHvac', 'tExt', 'iL1', 'iL2', 'iL3'] as const) {
+      (m[k] ??= []).push([t, snap.meter![k] ?? 0]);
     }
     if (snap.meter?.pPv !== undefined) {
       (m.pPv ??= []).push([t, snap.meter.pPv]);

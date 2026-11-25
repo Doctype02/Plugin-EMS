@@ -25,6 +25,9 @@ describe('eventos simulados', () => {
     const m = a.meter!;
     expect(m.gridOk).toBe(false);
     expect(m.powerMode).toBe('generador');
+    // con la planta las tres líneas siguen con tensión y se reparten la carga del tablero de emergencia
+    expect(m.pL1! + m.pL2! + m.pL3!).toBeCloseTo(m.pTotal, 3);
+    expect(m.vL2!).toBeGreaterThan(260);
     expect(m.pGrid).toBe(0);
     expect(m.pTotal).toBeGreaterThan(10);
     // carga = planta + paneles, y la planta no baja de su carga mínima por los paneles
@@ -50,6 +53,8 @@ describe('eventos simulados', () => {
     expect(a.meter!.gridOk).toBe(false);
     expect(a.meter!.powerMode).toBe('ups');
     expect(a.meter!.upsKw).toBeGreaterThan(1);
+    // sin red ni planta las tres líneas quedan sin tensión ni corriente
+    expect([a.meter!.iL1, a.meter!.iL2, a.meter!.iL3, a.meter!.vL1]).toEqual([0, 0, 0, 0]);
     expect(a.alarms!.find((x) => x.code === 'EN_UPS')?.zone).toBe('EDIF');
     const b = simulate(at(10, 50), { ...base, events: evs });
     expect(b.alarms!.some((x) => x.code === 'UPS_AGOTADO')).toBe(true);

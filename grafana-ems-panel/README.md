@@ -40,9 +40,16 @@ una prueba compara los parámetros térmicos del panel con los de `ems/config.py
 | ---------------------------------------------- | ---------------------------------------------- |
 | ![Controladores](docs/vista_controladores.png) | ![Qué pasaría si](docs/vista_que_pasaria.png)  |
 
-| Vista exterior de noche                 |
-| --------------------------------------- |
-| ![Noche](docs/vista_exterior_noche.png) |
+| Las 3 líneas (L1, L2, L3): corriente, tensión y potencia | Vista exterior de noche                 |
+| -------------------------------------------------------- | --------------------------------------- |
+| ![Las 3 líneas](docs/vista_tres_lineas.png)              | ![Noche](docs/vista_exterior_noche.png) |
+
+La tarjeta «Las 3 líneas» de la pestaña Resumen muestra la corriente, la tensión línea-neutro y la potencia de
+L1, L2 y L3, el desbalance y la corriente por línea a lo largo del día (en escalones; al pasar el cursor se lee
+el valor de cada línea). En vivo salen del medidor (`i_l1_a`…`i_l3_a`, `v_l*_v`, `p_l*_kw`, `desbalance_pct`); en
+demostración se calculan con el mismo reparto que el gemelo: climatización y ascensor trifásicos equilibrados,
+iluminación y tomacorrientes monofásicos por zona y el UPS de los servidores en L1. Los colores de las líneas
+son los mismos que en el dashboard «Tiempo real».
 
 Capturas de la versión 1.7 (modo demostración). La planta de respaldo (grupo electrógeno, tanque de diésel con su
 nivel y tablero de transferencia) aparece junto al edificio en la vista de conjunto, y la tarjeta «Fuentes de

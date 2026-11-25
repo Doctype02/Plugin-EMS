@@ -61,6 +61,37 @@ describe('lectura de data frames (contrato InfluxDB)', () => {
     expect(snapshot.zones.Z06.temp).toBe(27.4);
   });
 
+  it('lee las tres líneas y el modo de energía del medidor (y su tendencia)', () => {
+    const frame = toDataFrame({
+      fields: [
+        { name: '_time', type: FieldType.time, values: [t0 - 300000, t0] },
+        { name: 'p_total_kw', type: FieldType.number, values: [80, 84] },
+        { name: 'i_l1_a', type: FieldType.number, values: [118, 124.5] },
+        { name: 'i_l2_a', type: FieldType.number, values: [101, 104] },
+        { name: 'i_l3_a', type: FieldType.number, values: [99, 102] },
+        { name: 'v_l1_v', type: FieldType.number, values: [274, 273.6] },
+        { name: 'p_l1_kw', type: FieldType.number, values: [30, 31.2] },
+        { name: 'desbalance_pct', type: FieldType.number, values: [11, 12.9] },
+        { name: 'modo_energia_cod', type: FieldType.number, values: [1, 2] },
+        { name: 'red_ok', type: FieldType.number, values: [1, 0] },
+        { name: 'p_gen_kw', type: FieldType.number, values: [0, 84] },
+      ],
+    });
+    const { snapshot, history } = snapshotFromFrames([frame]);
+    const m = snapshot.meter!;
+    expect([m.iL1, m.iL2, m.iL3]).toEqual([124.5, 104, 102]);
+    expect(m.vL1).toBe(273.6);
+    expect(m.pL1).toBe(31.2);
+    expect(m.unbalancePct).toBe(12.9);
+    expect(m.powerMode).toBe('generador');
+    expect(m.gridOk).toBe(false);
+    expect(m.pGen).toBe(84);
+    expect(history.EDIF.iL2).toEqual([
+      [t0 - 300000, 101],
+      [t0, 104],
+    ]);
+  });
+
   it('lee la fotovoltaica del medidor sólo si viene (variante con FV)', () => {
     const medidor = (extra: Record<string, number>) =>
       toDataFrame({

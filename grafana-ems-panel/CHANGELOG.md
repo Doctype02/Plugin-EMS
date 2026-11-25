@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.4
+
+- **Las 3 líneas (L1, L2, L3) en el panel**: tarjeta «Las 3 líneas» en la pestaña Resumen, con
+  la corriente, la tensión y la potencia de cada línea, el desbalance y la gráfica de corriente por línea del día
+  (en escalones). El «Medidor general» también las detalla. En vivo salen del medidor (`i_l1_a`…`i_l3_a`,
+  `v_l*_v`, `p_l*_kw`, `desbalance_pct`); en demostración se calculan con el mismo reparto que el gemelo.
+- Las gráficas del panel muestran el valor de cada serie al pasar el cursor.
+- Corrección: en vivo el panel descartaba el modo de energía, la planta y el UPS del medidor (sólo se veían en
+  demostración).
+
 ## 1.7.3
 
 - Modo demostración con el **encendido escalonado por planta** del EMS (PB 7:00, P1 7:15, P2 7:30, P3 7:45, P4 8:00,
